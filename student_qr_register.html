@@ -146,8 +146,13 @@
   </div>
 
   <label for="qrData">② QRコードの中身</label>
-  <input type="text" id="qrData" placeholder="ここにカーソルを合わせてQRをスキャン" autocomplete="off">
-  <div class="hint">スキャナーでQRを読み取ると、自動でこの欄に文字が入ります。手入力も可能です。</div>
+  <input type="text" id="qrData" placeholder="下のボタンでカメラ起動、または手入力" autocomplete="off">
+  <div class="hint">手入力も可能です。</div>
+
+  <button id="scanBtn" type="button" onclick="toggleScanner()" style="background:#3b6ea5;">📷 カメラでQRをスキャン</button>
+  <div id="readerWrap" style="display:none; margin-top:14px;">
+    <div id="reader" style="width:100%; border-radius:8px; overflow:hidden;"></div>
+  </div>
 
   <button id="saveBtn" onclick="saveQr()">登録する</button>
 
@@ -159,9 +164,10 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
-const API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+const API_URL = "ここにGASのデプロイURLを貼り付け";
 
 const studentCodeEl = document.getElementById('studentCode');
 const qrDataEl = document.getElementById('qrData');
@@ -246,6 +252,7 @@ async function saveQr() {
       studentCodeEl.value = '';
       qrDataEl.value = '';
       studentInfoEl.classList.remove('show');
+      if (scanning) await stopScanner();
       studentCodeEl.focus();
     } else {
       showMsg(res.message || '登録に失敗しました。', 'error');
@@ -273,6 +280,65 @@ qrDataEl.addEventListener('keydown', (e) => {
     saveQr();
   }
 });
+
+// ===================================================================
+// カメラでのQRスキャン機能
+// ===================================================================
+let html5QrCode = null;
+let scanning = false;
+
+async function toggleScanner() {
+  const wrap = document.getElementById('readerWrap');
+  const btn = document.getElementById('scanBtn');
+
+  if (scanning) {
+    await stopScanner();
+    return;
+  }
+
+  wrap.style.display = 'block';
+  btn.textContent = '■ スキャンを停止';
+  scanning = true;
+
+  html5QrCode = new Html5Qrcode("reader");
+  try {
+    await html5QrCode.start(
+      { facingMode: "environment" }, // 背面カメラ優先
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      (decodedText) => {
+        // 読み取り成功
+        qrDataEl.value = decodedText;
+        stopScanner();
+        showMsg('QRコードを読み取りました。内容を確認して「登録する」を押してください。', 'success');
+      },
+      (errorMessage) => {
+        // 読み取り中のフレームごとのエラーは無視（QRが写っていないだけ）
+      }
+    );
+  } catch (err) {
+    showMsg('カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。', 'error');
+    scanning = false;
+    btn.textContent = '📷 カメラでQRをスキャン';
+    wrap.style.display = 'none';
+  }
+}
+
+async function stopScanner() {
+  const wrap = document.getElementById('readerWrap');
+  const btn = document.getElementById('scanBtn');
+  if (html5QrCode && scanning) {
+    try {
+      await html5QrCode.stop();
+      html5QrCode.clear();
+    } catch (e) {
+      // 既に停止している場合は無視
+    }
+  }
+  scanning = false;
+  btn.textContent = '📷 カメラでQRをスキャン';
+  wrap.style.display = 'none';
+}
+
 </script>
 
 </body>
