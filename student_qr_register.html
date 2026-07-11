@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生徒QR登録 | Step個別指導ステップ</title>
+<style>
+  :root {
+    --main-color: #2e7d5b;
+    --bg-color: #f5f7f6;
+    --border-color: #d8e0dc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: var(--bg-color);
+    margin: 0;
+    padding: 20px;
+    color: #333;
+  }
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 18px;
+    color: var(--main-color);
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: bold;
+    margin: 16px 0 6px;
+    color: #555;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #fafcfb;
+  }
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--main-color);
+  }
+  .student-info {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: #eef6f1;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+  .student-info.show { display: block; }
+  .student-info .name {
+    font-weight: bold;
+    font-size: 16px;
+    color: var(--main-color);
+  }
+  .qr-status {
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    background: var(--main-color);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:disabled {
+    background: #b8c7c0;
+  }
+  .msg {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+  .msg.success {
+    background: #e6f4ea;
+    color: #1e7e34;
+    display: block;
+  }
+  .msg.error {
+    background: #fdecea;
+    color: #c0392b;
+    display: block;
+  }
+  .history {
+    margin-top: 24px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 14px;
+  }
+  .history h2 {
+    font-size: 13px;
+    color: #888;
+    margin: 0 0 8px;
+  }
+  .history-item {
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px dashed #eee;
+    display: flex;
+    justify-content: space-between;
+  }
+  .hint {
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>生徒QR登録</h1>
+  <div class="subtitle">既存の入退くんQRカードを、生徒マスタに登録します</div>
+
+  <label for="studentCode">① 生徒番号</label>
+  <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
+  <div id="studentInfo" class="student-info">
+    <div class="name" id="studentName"></div>
+    <div id="studentSchool"></div>
+    <div class="qr-status" id="qrStatus"></div>
+  </div>
+
+  <label for="qrData">② QRコードの中身</label>
+  <input type="text" id="qrData" placeholder="ここにカーソルを合わせてQRをスキャン" autocomplete="off">
+  <div class="hint">スキャナーでQRを読み取ると、自動でこの欄に文字が入ります。手入力も可能です。</div>
+
+  <button id="saveBtn" onclick="saveQr()">登録する</button>
+
+  <div id="msg" class="msg"></div>
+
+  <div class="history">
+    <h2>今回のセッションで登録した生徒</h2>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script>
+// ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
+const API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+
+const studentCodeEl = document.getElementById('studentCode');
+const qrDataEl = document.getElementById('qrData');
+const studentInfoEl = document.getElementById('studentInfo');
+const studentNameEl = document.getElementById('studentName');
+const studentSchoolEl = document.getElementById('studentSchool');
+const qrStatusEl = document.getElementById('qrStatus');
+const msgEl = document.getElementById('msg');
+const historyListEl = document.getElementById('historyList');
+
+let currentStudent = null;
+
+function jsonp(params) {
+  return new Promise((resolve, reject) => {
+    const cb = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+    const script = document.createElement('script');
+    window[cb] = (data) => {
+      resolve(data);
+      delete window[cb];
+      script.remove();
+    };
+    const query = new URLSearchParams({ ...params, callback: cb }).toString();
+    script.src = API_URL + "?" + query;
+    script.onerror = () => reject(new Error("通信エラーが発生しました"));
+    document.body.appendChild(script);
+  });
+}
+
+function showMsg(text, type) {
+  msgEl.textContent = text;
+  msgEl.className = 'msg ' + type;
+}
+
+// 生徒番号を入力したら自動で情報を照会
+let lookupTimer = null;
+studentCodeEl.addEventListener('input', () => {
+  clearTimeout(lookupTimer);
+  const code = studentCodeEl.value.trim();
+  studentInfoEl.classList.remove('show');
+  currentStudent = null;
+  if (!code) return;
+
+  lookupTimer = setTimeout(async () => {
+    try {
+      const res = await jsonp({ action: 'getStudent', code });
+      if (res.ok) {
+        currentStudent = res;
+        studentNameEl.textContent = res.name || '(氏名なし)';
+        studentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        qrStatusEl.textContent = res.qrData ? '登録済みQRあり（上書きされます）' : '未登録';
+        studentInfoEl.classList.add('show');
+      } else {
+        studentNameEl.textContent = res.message;
+        studentSchoolEl.textContent = '';
+        qrStatusEl.textContent = '';
+        studentInfoEl.classList.add('show');
+      }
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});
+
+async function saveQr() {
+  const code = studentCodeEl.value.trim();
+  const qrData = qrDataEl.value.trim();
+
+  if (!code || !qrData) {
+    showMsg('生徒番号とQRコードの両方を入力してください。', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+
+  try {
+    const res = await jsonp({ action: 'saveQrData', code, qrData });
+    if (res.ok) {
+      showMsg(`${res.name} さんのQRを登録しました。`, 'success');
+      addHistory(code, res.name);
+      studentCodeEl.value = '';
+      qrDataEl.value = '';
+      studentInfoEl.classList.remove('show');
+      studentCodeEl.focus();
+    } else {
+      showMsg(res.message || '登録に失敗しました。', 'error');
+    }
+  } catch (e) {
+    showMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '登録する';
+  }
+}
+
+function addHistory(code, name) {
+  const item = document.createElement('div');
+  item.className = 'history-item';
+  const time = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  item.innerHTML = `<span>${code} ${name}</span><span>${time}</span>`;
+  historyListEl.prepend(item);
+}
+
+// QRコード欄でEnterキーを押したら自動で登録
+qrDataEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveQr();
+  }
+});
+</script>
+
+</body>
+</html>
