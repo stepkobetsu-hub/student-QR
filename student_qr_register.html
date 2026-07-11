@@ -129,45 +129,175 @@
     margin-top: 4px;
     line-height: 1.5;
   }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--main-color);
+    background: #eef6f1;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .tab-btn.active {
+    color: #fff;
+    background: var(--main-color);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .qr-card {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    text-align: center;
+    background: #fff;
+  }
+  .qr-card.show { display: block; }
+  .qr-card .school-name {
+    font-size: 15px;
+    color: #2a5da0;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .qr-card .card-code {
+    font-size: 20px;
+    color: #b5651d;
+    font-weight: bold;
+  }
+  .qr-card .card-name {
+    font-size: 16px;
+    color: #2e7d5b;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .qr-card img {
+    width: 160px;
+    height: 160px;
+    margin-top: 6px;
+  }
+  #printBtn {
+    background: #6a4fa0;
+  }
+
+  @media print {
+    body * { visibility: hidden; }
+    .qr-card, .qr-card * { visibility: visible; }
+    .qr-card {
+      position: absolute;
+      top: 40px; left: 50%;
+      transform: translateX(-50%);
+      border: 1px solid #999;
+    }
+  }
 </style>
 </head>
 <body>
 
 <div class="container">
   <h1>生徒QR登録</h1>
-  <div class="subtitle">既存の入退くんQRカードを、生徒マスタに登録します</div>
+  <div class="subtitle">既存カードの登録・新規QRの発行ができます</div>
 
-  <label for="studentCode">① 生徒番号</label>
-  <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
-  <div id="studentInfo" class="student-info">
-    <div class="name" id="studentName"></div>
-    <div id="studentSchool"></div>
-    <div class="qr-status" id="qrStatus"></div>
+  <div class="tabs">
+    <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
+    <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
+    <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
   </div>
 
-  <label for="qrData">② QRコードの中身</label>
-  <input type="text" id="qrData" placeholder="下のボタンでカメラ起動、または手入力" autocomplete="off">
-  <div class="hint">手入力も可能です。</div>
+  <!-- ① 既存の入退くんQRを登録するパネル -->
+  <div class="tab-panel active" id="panelExisting">
+    <label for="studentCode">① 生徒番号</label>
+    <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
+    <div id="studentInfo" class="student-info">
+      <div class="name" id="studentName"></div>
+      <div id="studentSchool"></div>
+      <div class="qr-status" id="qrStatus"></div>
+    </div>
 
-  <button id="scanBtn" type="button" onclick="toggleScanner()" style="background:#3b6ea5;">📷 カメラでQRをスキャン</button>
-  <div id="readerWrap" style="display:none; margin-top:14px;">
-    <div id="reader" style="width:100%; border-radius:8px; overflow:hidden;"></div>
+    <label for="qrData">② QRコードの中身</label>
+    <input type="text" id="qrData" placeholder="下のボタンでカメラ起動、または手入力" autocomplete="off">
+    <div class="hint">手入力も可能です。</div>
+
+    <button id="scanBtn" type="button" onclick="toggleScanner()" style="background:#3b6ea5;">📷 カメラでQRをスキャン</button>
+    <div id="readerWrap" style="display:none; margin-top:14px;">
+      <div id="reader" style="width:100%; border-radius:8px; overflow:hidden;"></div>
+    </div>
+
+    <button id="saveBtn" onclick="saveQr()">登録する</button>
+
+    <div id="msg" class="msg"></div>
+
+    <div class="history">
+      <h2>今回のセッションで登録した生徒</h2>
+      <div id="historyList"></div>
+    </div>
   </div>
 
-  <button id="saveBtn" onclick="saveQr()">登録する</button>
+  <!-- ② 新規生徒のQRを発行するパネル -->
+  <div class="tab-panel" id="panelNew">
+    <label for="newStudentCode">生徒番号</label>
+    <input type="text" id="newStudentCode" placeholder="例: 1250" inputmode="numeric" autocomplete="off">
+    <div id="newStudentInfo" class="student-info">
+      <div class="name" id="newStudentName"></div>
+      <div id="newStudentSchool"></div>
+    </div>
 
-  <div id="msg" class="msg"></div>
+    <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;">🆕 QRを発行する</button>
 
-  <div class="history">
-    <h2>今回のセッションで登録した生徒</h2>
-    <div id="historyList"></div>
+    <div id="newMsg" class="msg"></div>
+
+    <div class="qr-card" id="qrCard">
+      <div class="school-name">個別指導ステップ</div>
+      <div class="card-code" id="cardCode"></div>
+      <div class="card-name" id="cardName"></div>
+      <img id="cardQrImg" src="" alt="QRコード">
+    </div>
+
+    <button id="printBtn" style="display:none;" onclick="window.print()">🖨 このカードを印刷する</button>
+  </div>
+
+  <!-- ③ 通知先メールを登録するパネル -->
+  <div class="tab-panel" id="panelEmail">
+    <label for="emailStudentCode">生徒番号</label>
+    <input type="text" id="emailStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
+    <div id="emailStudentInfo" class="student-info">
+      <div class="name" id="emailStudentName"></div>
+      <div class="hint" id="emailGuardianHint"></div>
+    </div>
+
+    <div class="hint" style="margin-top:14px;">
+      入力した分だけ、入退室のたびに全員へメールが届きます。<br>
+      <strong>すべて空欄のままなら、今まで通り保護者メール（1件）に届きます。</strong>
+    </div>
+
+    <label for="notifyEmail1">通知先メール ①</label>
+    <input type="text" id="notifyEmail1" placeholder="例: parent1@example.com" autocomplete="off">
+    <label for="notifyEmail2">通知先メール ②</label>
+    <input type="text" id="notifyEmail2" placeholder="任意" autocomplete="off">
+    <label for="notifyEmail3">通知先メール ③</label>
+    <input type="text" id="notifyEmail3" placeholder="任意" autocomplete="off">
+    <label for="notifyEmail4">通知先メール ④</label>
+    <input type="text" id="notifyEmail4" placeholder="任意" autocomplete="off">
+
+    <button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;">通知先メールを保存する</button>
+
+    <div id="emailMsg" class="msg"></div>
   </div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
-const API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
 
 const studentCodeEl = document.getElementById('studentCode');
 const qrDataEl = document.getElementById('qrData');
@@ -337,6 +467,187 @@ async function stopScanner() {
   scanning = false;
   btn.textContent = '📷 カメラでQRをスキャン';
   wrap.style.display = 'none';
+}
+
+// ===================================================================
+// タブ切り替え
+// ===================================================================
+function switchTab(tab) {
+  const isExisting = tab === 'existing';
+  const isNew = tab === 'new';
+  const isEmail = tab === 'email';
+
+  document.getElementById('tabExistingBtn').classList.toggle('active', isExisting);
+  document.getElementById('tabNewBtn').classList.toggle('active', isNew);
+  document.getElementById('tabEmailBtn').classList.toggle('active', isEmail);
+  document.getElementById('panelExisting').classList.toggle('active', isExisting);
+  document.getElementById('panelNew').classList.toggle('active', isNew);
+  document.getElementById('panelEmail').classList.toggle('active', isEmail);
+
+  if (!isExisting && scanning) {
+    stopScanner();
+  }
+}
+
+// ===================================================================
+// 新規生徒QR発行
+// ===================================================================
+const newStudentCodeEl = document.getElementById('newStudentCode');
+const newStudentInfoEl = document.getElementById('newStudentInfo');
+const newStudentNameEl = document.getElementById('newStudentName');
+const newStudentSchoolEl = document.getElementById('newStudentSchool');
+const newMsgEl = document.getElementById('newMsg');
+const qrCardEl = document.getElementById('qrCard');
+const cardCodeEl = document.getElementById('cardCode');
+const cardNameEl = document.getElementById('cardName');
+const cardQrImgEl = document.getElementById('cardQrImg');
+const printBtnEl = document.getElementById('printBtn');
+
+let newLookupTimer = null;
+newStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(newLookupTimer);
+  const code = newStudentCodeEl.value.trim();
+  newStudentInfoEl.classList.remove('show');
+  qrCardEl.classList.remove('show');
+  printBtnEl.style.display = 'none';
+  if (!code) return;
+
+  newLookupTimer = setTimeout(async () => {
+    try {
+      const res = await jsonp({ action: 'getStudent', code });
+      if (res.ok) {
+        newStudentNameEl.textContent = res.name || '(氏名なし)';
+        newStudentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        if (res.qrData) {
+          newStudentSchoolEl.textContent += '（すでにQR登録済み・再発行すると上書きされます）';
+        }
+      } else {
+        newStudentNameEl.textContent = res.message;
+        newStudentSchoolEl.textContent = '';
+      }
+      newStudentInfoEl.classList.add('show');
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});
+
+function showNewMsg(text, type) {
+  newMsgEl.textContent = text;
+  newMsgEl.className = 'msg ' + type;
+}
+
+async function issueQr() {
+  const code = newStudentCodeEl.value.trim();
+  if (!code) {
+    showNewMsg('生徒番号を入力してください。', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('issueBtn');
+  btn.disabled = true;
+  btn.textContent = '発行中...';
+
+  try {
+    const res = await jsonp({ action: 'issueNewQr', code });
+    if (res.ok) {
+      showNewMsg(`${res.name} さんのQRを発行し、登録しました。`, 'success');
+      cardCodeEl.textContent = code;
+      cardNameEl.textContent = res.name;
+      cardQrImgEl.src = res.qrImageUrl;
+      qrCardEl.classList.add('show');
+      printBtnEl.style.display = 'block';
+    } else {
+      showNewMsg(res.message || '発行に失敗しました。', 'error');
+      qrCardEl.classList.remove('show');
+      printBtnEl.style.display = 'none';
+    }
+  } catch (e) {
+    showNewMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🆕 QRを発行する';
+  }
+}
+
+// ===================================================================
+// 通知先メール登録
+// ===================================================================
+const emailStudentCodeEl = document.getElementById('emailStudentCode');
+const emailStudentInfoEl = document.getElementById('emailStudentInfo');
+const emailStudentNameEl = document.getElementById('emailStudentName');
+const emailGuardianHintEl = document.getElementById('emailGuardianHint');
+const emailMsgEl = document.getElementById('emailMsg');
+const notifyEmailEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEmail' + n));
+
+let emailLookupTimer = null;
+emailStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(emailLookupTimer);
+  const code = emailStudentCodeEl.value.trim();
+  emailStudentInfoEl.classList.remove('show');
+  notifyEmailEls.forEach(el => el.value = '');
+  if (!code) return;
+
+  emailLookupTimer = setTimeout(async () => {
+    try {
+      const res = await jsonp({ action: 'getNotifyEmails', code });
+      if (res.ok) {
+        emailStudentNameEl.textContent = res.name || '(氏名なし)';
+        emailGuardianHintEl.textContent = res.guardianEmail
+          ? '保護者メール（X列）: ' + res.guardianEmail + '（通知先が空欄の場合はこちらに届きます）'
+          : '保護者メール（X列）は未登録です';
+        res.emails.forEach((v, i) => {
+          if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
+        });
+      } else {
+        emailStudentNameEl.textContent = res.message;
+        emailGuardianHintEl.textContent = '';
+      }
+      emailStudentInfoEl.classList.add('show');
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});
+
+function showEmailMsg(text, type) {
+  emailMsgEl.textContent = text;
+  emailMsgEl.className = 'msg ' + type;
+}
+
+async function saveNotifyEmails() {
+  const code = emailStudentCodeEl.value.trim();
+  if (!code) {
+    showEmailMsg('生徒番号を入力してください。', 'error');
+    return;
+  }
+
+  const emails = notifyEmailEls.map(el => el.value.trim());
+
+  // 簡易的なメール形式チェック（空欄はOK）
+  const invalid = emails.find(v => v !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
+  if (invalid) {
+    showEmailMsg(`メールアドレスの形式が正しくありません: ${invalid}`, 'error');
+    return;
+  }
+
+  const btn = document.getElementById('saveEmailBtn');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  try {
+    const res = await jsonp({ action: 'saveNotifyEmails', code, emails: JSON.stringify(emails) });
+    if (res.ok) {
+      showEmailMsg(`${res.name} さんの通知先メールを保存しました。`, 'success');
+    } else {
+      showEmailMsg(res.message || '保存に失敗しました。', 'error');
+    }
+  } catch (e) {
+    showEmailMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '通知先メールを保存する';
+  }
 }
 
 </script>
