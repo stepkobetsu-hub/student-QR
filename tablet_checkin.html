@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>入退室 | Step個別指導ステップ</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #111;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    overflow: hidden;
+  }
+  #cameraWrap {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  canvas { display: none; }
+
+  #scanFrame {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(70vw, 70vh);
+    height: min(70vw, 70vh);
+    border: 4px solid rgba(255,255,255,0.7);
+    border-radius: 16px;
+    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+  }
+
+  #topBar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 20px;
+    text-align: center;
+    color: #fff;
+    background: linear-gradient(rgba(0,0,0,0.5), transparent);
+  }
+  #topBar .clock {
+    font-size: 22px;
+    font-weight: bold;
+  }
+  #topBar .hint {
+    font-size: 14px;
+    opacity: 0.85;
+    margin-top: 4px;
+  }
+
+  #resultOverlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    text-align: center;
+    padding: 30px;
+  }
+  #resultOverlay.show { display: flex; }
+  #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
+  #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
+
+  #resultIcon { font-size: 90px; margin-bottom: 10px; }
+  #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
+  #resultType { font-size: 26px; margin-bottom: 4px; }
+  #resultSub { font-size: 15px; opacity: 0.85; }
+
+  #statusDot {
+    position: absolute;
+    bottom: 20px; right: 20px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #4caf50;
+  }
+  #statusDot.error { background: #e53935; }
+</style>
+</head>
+<body>
+
+<div id="cameraWrap">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <canvas id="photoCanvas"></canvas>
+
+  <div id="scanFrame"></div>
+
+  <div id="topBar">
+    <div class="clock" id="clock">--:--</div>
+    <div class="hint">QRコードを枠の中にかざしてください</div>
+  </div>
+
+  <div id="resultOverlay">
+    <div id="resultIcon"></div>
+    <div id="resultName"></div>
+    <div id="resultType"></div>
+    <div id="resultSub"></div>
+  </div>
+
+  <div id="statusDot"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+// ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
+const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const photoCanvas = document.getElementById('photoCanvas');
+const photoCtx = photoCanvas.getContext('2d');
+const resultOverlay = document.getElementById('resultOverlay');
+const resultIcon = document.getElementById('resultIcon');
+const resultName = document.getElementById('resultName');
+const resultType = document.getElementById('resultType');
+const resultSub = document.getElementById('resultSub');
+const statusDot = document.getElementById('statusDot');
+const clockEl = document.getElementById('clock');
+
+let scanning = true;
+let lastScannedCode = null;
+let lastScannedTime = 0;
+const RESCAN_COOLDOWN_MS = 15000; // 同じQRの連続読み取り防止（15秒）
+
+// 時計表示
+function updateClock() {
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// カメラ起動
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    statusDot.classList.remove('error');
+    requestAnimationFrame(scanLoop);
+  } catch (err) {
+    statusDot.classList.add('error');
+    alert('カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。\n' + err.message);
+  }
+}
+
+// QRスキャンループ
+function scanLoop() {
+  if (!scanning) {
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+    if (code && code.data) {
+      const now = Date.now();
+      if (code.data === lastScannedCode && (now - lastScannedTime) < RESCAN_COOLDOWN_MS) {
+        // 直近で同じQRを読み取り済みなのでスキップ
+      } else {
+        lastScannedCode = code.data;
+        lastScannedTime = now;
+        handleQrDetected(code.data);
+      }
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+
+// QR検出時の処理
+async function handleQrDetected(qrData) {
+  scanning = false;
+
+  // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
+  photoCanvas.width = video.videoWidth;
+  photoCanvas.height = video.videoHeight;
+  photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.7);
+
+  showProcessing();
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // GAS側のCORS制約を避けるためtext/plainで送信
+      body: JSON.stringify({ action: 'checkIn', qrData: qrData, photoBase64: photoBase64 })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      showResult(true, data.name, data.type, data.mailSent);
+    } else {
+      showResult(false, null, null, false, data.message);
+    }
+  } catch (err) {
+    showResult(false, null, null, false, '通信エラーが発生しました');
+  }
+
+  setTimeout(() => {
+    resultOverlay.classList.remove('show', 'success', 'error');
+    scanning = true;
+  }, 3500);
+}
+
+function showProcessing() {
+  resultOverlay.className = 'show';
+  resultIcon.textContent = '⏳';
+  resultName.textContent = '確認中...';
+  resultType.textContent = '';
+  resultSub.textContent = '';
+}
+
+function showResult(ok, name, type, mailSent, errorMsg) {
+  if (ok) {
+    resultOverlay.className = 'show success';
+    resultIcon.textContent = type === '入室' ? '👋' : '🏠';
+    resultName.textContent = name + ' さん';
+    resultType.textContent = type + 'しました';
+    resultSub.textContent = mailSent ? '保護者にメールを送信しました' : '（メール送信は失敗しました）';
+  } else {
+    resultOverlay.className = 'show error';
+    resultIcon.textContent = '⚠️';
+    resultName.textContent = '読み取れませんでした';
+    resultType.textContent = '';
+    resultSub.textContent = errorMsg || 'もう一度お試しください';
+  }
+}
+
+startCamera();
+</script>
+
+</body>
+</html>
