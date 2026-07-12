@@ -291,7 +291,7 @@ function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg, isTe
     resultOverlay.className = 'show success';
     resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
     resultName.textContent = name + ' 先生';
-    resultType.textContent = type === '出勤' ? 'おはようございます！' : 'お疲れ様でした！';
+    resultType.textContent = type === '出勤' ? 'こんにちは！' : 'お疲れ様でした！';
     resultTime.textContent = label + (type === '出勤' ? '出勤' : '退勤');
     resultSub.textContent = mailSent ? '勤怠を記録し、確認メールを送信しました' : '勤怠を記録しました（メール送信は失敗）';
     resultPoints.style.display = 'none';
