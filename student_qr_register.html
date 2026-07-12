@@ -209,6 +209,7 @@
 
   <div class="tabs">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
+    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
@@ -240,6 +241,32 @@
     <div class="history">
       <h2>今回のセッションで登録した生徒</h2>
       <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- ② 現在登録されているQRを確認するパネル -->
+  <div class="tab-panel" id="panelCheck">
+    <label for="checkStudentCode">生徒番号</label>
+    <input type="text" id="checkStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
+    <div id="checkStudentInfo" class="student-info">
+      <div class="name" id="checkStudentName"></div>
+      <div id="checkStudentSchool"></div>
+    </div>
+
+    <div class="qr-card" id="checkQrCard">
+      <div class="school-name">個別指導ステップ</div>
+      <div class="card-code" id="checkCardCode"></div>
+      <div class="card-name" id="checkCardName"></div>
+      <img id="checkCardQrImg" src="" alt="QRコード">
+    </div>
+
+    <button id="checkPrintBtn" style="display:none;" onclick="window.print()">🖨 このカードを印刷する</button>
+
+    <div id="checkPdfEmailWrap" style="display:none; margin-top:16px;">
+      <label for="checkPdfEmail">このQRをPDFでメール送信</label>
+      <input type="text" id="checkPdfEmail" placeholder="送信先メールアドレス" autocomplete="off">
+      <button id="checkSendPdfBtn" onclick="sendCheckQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
+      <div id="checkPdfMsg" class="msg"></div>
     </div>
   </div>
 
@@ -508,15 +535,18 @@ async function stopScanner() {
 // ===================================================================
 function switchTab(tab) {
   const isExisting = tab === 'existing';
+  const isCheck = tab === 'check';
   const isNew = tab === 'new';
   const isEmail = tab === 'email';
   const isPoints = tab === 'points';
 
   document.getElementById('tabExistingBtn').classList.toggle('active', isExisting);
+  document.getElementById('tabCheckBtn').classList.toggle('active', isCheck);
   document.getElementById('tabNewBtn').classList.toggle('active', isNew);
   document.getElementById('tabEmailBtn').classList.toggle('active', isEmail);
   document.getElementById('tabPointsBtn').classList.toggle('active', isPoints);
   document.getElementById('panelExisting').classList.toggle('active', isExisting);
+  document.getElementById('panelCheck').classList.toggle('active', isCheck);
   document.getElementById('panelNew').classList.toggle('active', isNew);
   document.getElementById('panelEmail').classList.toggle('active', isEmail);
   document.getElementById('panelPoints').classList.toggle('active', isPoints);
@@ -525,6 +555,125 @@ function switchTab(tab) {
     stopScanner();
   }
 }
+
+// ===================================================================
+// QR確認（現在登録されているQRを表示・印刷・PDF送信）
+// ===================================================================
+const checkStudentCodeEl = document.getElementById('checkStudentCode');
+const checkStudentInfoEl = document.getElementById('checkStudentInfo');
+const checkStudentNameEl = document.getElementById('checkStudentName');
+const checkStudentSchoolEl = document.getElementById('checkStudentSchool');
+const checkQrCardEl = document.getElementById('checkQrCard');
+const checkCardCodeEl = document.getElementById('checkCardCode');
+const checkCardNameEl = document.getElementById('checkCardName');
+const checkCardQrImgEl = document.getElementById('checkCardQrImg');
+const checkPrintBtnEl = document.getElementById('checkPrintBtn');
+let currentCheckedCode = null;
+
+let checkLookupTimer = null;
+checkStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(checkLookupTimer);
+  const code = checkStudentCodeEl.value.trim();
+  checkStudentInfoEl.classList.remove('show');
+  checkQrCardEl.classList.remove('show');
+  checkPrintBtnEl.style.display = 'none';
+  document.getElementById('checkPdfEmailWrap').style.display = 'none';
+  currentCheckedCode = null;
+  if (!code) return;
+
+  checkLookupTimer = setTimeout(async () => {
+    try {
+      const res = await jsonp({ action: 'getStudent', code });
+      if (res.ok) {
+        checkStudentNameEl.textContent = res.name || '(氏名なし)';
+        checkStudentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        checkStudentInfoEl.classList.add('show');
+
+        if (res.qrData) {
+          currentCheckedCode = code;
+          checkCardCodeEl.textContent = code;
+          checkCardNameEl.textContent = res.name;
+          checkCardQrImgEl.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(res.qrData);
+          checkQrCardEl.classList.add('show');
+          checkPrintBtnEl.style.display = 'block';
+          document.getElementById('checkPdfEmailWrap').style.display = 'block';
+        } else {
+          checkStudentSchoolEl.textContent += '（QR未登録です。「既存QR登録」または「新規QR発行」タブから登録してください）';
+        }
+      } else {
+        checkStudentNameEl.textContent = res.message;
+        checkStudentSchoolEl.textContent = '';
+        checkStudentInfoEl.classList.add('show');
+      }
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});
+
+async function sendCheckQrPdf() {
+  const email = document.getElementById('checkPdfEmail').value.trim();
+  const pdfMsgEl = document.getElementById('checkPdfMsg');
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    pdfMsgEl.textContent = '正しいメールアドレスを入力してください。';
+    pdfMsgEl.className = 'msg error';
+    return;
+  }
+  if (!currentCheckedCode) {
+    pdfMsgEl.textContent = '生徒番号を確認してください。';
+    pdfMsgEl.className = 'msg error';
+    return;
+  }
+
+  const btn = document.getElementById('checkSendPdfBtn');
+  btn.disabled = true;
+  btn.textContent = 'PDF作成中...';
+
+  try {
+    const qrDataUrl = await loadImageAsDataUrl(checkCardQrImgEl.src);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a6' });
+    doc.setFontSize(14);
+    doc.text('個別指導ステップ', 10, 15);
+    doc.setFontSize(20);
+    doc.text(checkCardCodeEl.textContent, 10, 28);
+    doc.setFontSize(16);
+    doc.text(checkCardNameEl.textContent, 10, 38);
+    doc.addImage(qrDataUrl, 'PNG', 25, 45, 55, 55);
+
+    const pdfBase64 = doc.output('datauristring');
+
+    btn.textContent = '送信中...';
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'sendQrPdf',
+        code: currentCheckedCode,
+        toEmail: email,
+        pdfBase64: pdfBase64
+      })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      pdfMsgEl.textContent = `${data.name} さんのQR PDFを ${email} に送信しました。`;
+      pdfMsgEl.className = 'msg success';
+    } else {
+      pdfMsgEl.textContent = data.message || '送信に失敗しました。';
+      pdfMsgEl.className = 'msg error';
+    }
+  } catch (e) {
+    pdfMsgEl.textContent = 'PDF作成または送信中にエラーが発生しました。';
+    pdfMsgEl.className = 'msg error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📧 PDFをメールで送る';
+  }
+}
+
 
 // ===================================================================
 // 新規生徒QR発行
