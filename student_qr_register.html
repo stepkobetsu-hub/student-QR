@@ -264,6 +264,13 @@
     </div>
 
     <button id="printBtn" style="display:none;" onclick="window.print()">🖨 このカードを印刷する</button>
+
+    <div id="pdfEmailWrap" style="display:none; margin-top:16px;">
+      <label for="pdfEmail">このQRをPDFでメール送信</label>
+      <input type="text" id="pdfEmail" placeholder="送信先メールアドレス" autocomplete="off">
+      <button id="sendPdfBtn" onclick="sendQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
+      <div id="pdfMsg" class="msg"></div>
+    </div>
   </div>
 
   <!-- ③ 通知先メールを登録するパネル -->
@@ -312,10 +319,16 @@
     <button id="savePointsBtn" onclick="addPoints()" style="background:#e08e0b;">⭐ ポイントを付与する</button>
 
     <div id="pointsMsg" class="msg"></div>
+
+    <div class="history">
+      <h2>ポイント履歴（新しい順・最大20件）</h2>
+      <div id="pointsHistoryList"></div>
+    </div>
   </div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
 const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
@@ -526,6 +539,7 @@ const cardCodeEl = document.getElementById('cardCode');
 const cardNameEl = document.getElementById('cardName');
 const cardQrImgEl = document.getElementById('cardQrImg');
 const printBtnEl = document.getElementById('printBtn');
+let currentIssuedCode = null;
 
 let newLookupTimer = null;
 newStudentCodeEl.addEventListener('input', () => {
@@ -581,10 +595,13 @@ async function issueQr() {
       cardQrImgEl.src = res.qrImageUrl;
       qrCardEl.classList.add('show');
       printBtnEl.style.display = 'block';
+      document.getElementById('pdfEmailWrap').style.display = 'block';
+      currentIssuedCode = code;
     } else {
       showNewMsg(res.message || '発行に失敗しました。', 'error');
       qrCardEl.classList.remove('show');
       printBtnEl.style.display = 'none';
+      document.getElementById('pdfEmailWrap').style.display = 'none';
     }
   } catch (e) {
     showNewMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
@@ -593,6 +610,88 @@ async function issueQr() {
     btn.textContent = '🆕 QRを発行する';
   }
 }
+
+// 画像URLを読み込んでBase64（DataURL）に変換する
+function loadImageAsDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function sendQrPdf() {
+  const email = document.getElementById('pdfEmail').value.trim();
+  const pdfMsgEl = document.getElementById('pdfMsg');
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    pdfMsgEl.textContent = '正しいメールアドレスを入力してください。';
+    pdfMsgEl.className = 'msg error';
+    return;
+  }
+  if (!currentIssuedCode) {
+    pdfMsgEl.textContent = '先にQRを発行してください。';
+    pdfMsgEl.className = 'msg error';
+    return;
+  }
+
+  const btn = document.getElementById('sendPdfBtn');
+  btn.disabled = true;
+  btn.textContent = 'PDF作成中...';
+
+  try {
+    // QR画像を読み込んでPDFに埋め込む
+    const qrDataUrl = await loadImageAsDataUrl(cardQrImgEl.src);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a6' });
+    doc.setFontSize(14);
+    doc.text('個別指導ステップ', 10, 15);
+    doc.setFontSize(20);
+    doc.text(cardCodeEl.textContent, 10, 28);
+    doc.setFontSize(16);
+    doc.text(cardNameEl.textContent, 10, 38);
+    doc.addImage(qrDataUrl, 'PNG', 25, 45, 55, 55);
+
+    const pdfBase64 = doc.output('datauristring');
+
+    btn.textContent = '送信中...';
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'sendQrPdf',
+        code: currentIssuedCode,
+        toEmail: email,
+        pdfBase64: pdfBase64
+      })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      pdfMsgEl.textContent = `${data.name} さんのQR PDFを ${email} に送信しました。`;
+      pdfMsgEl.className = 'msg success';
+    } else {
+      pdfMsgEl.textContent = data.message || '送信に失敗しました。';
+      pdfMsgEl.className = 'msg error';
+    }
+  } catch (e) {
+    pdfMsgEl.textContent = 'PDF作成または送信中にエラーが発生しました。';
+    pdfMsgEl.className = 'msg error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📧 PDFをメールで送る';
+  }
+}
+
 
 // ===================================================================
 // 通知先メール登録
@@ -618,11 +717,17 @@ emailStudentCodeEl.addEventListener('input', () => {
       if (res.ok) {
         emailStudentNameEl.textContent = res.name || '(氏名なし)';
         emailGuardianHintEl.textContent = res.guardianEmail
-          ? '保護者メール（X列）: ' + res.guardianEmail + '（通知先が空欄の場合はこちらに届きます）'
+          ? '保護者メール（X列）: ' + res.guardianEmail
           : '保護者メール（X列）は未登録です';
+
+        const hasAnyRegistered = res.emails.some(v => v && v.trim() !== '');
         res.emails.forEach((v, i) => {
           if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
         });
+        // まだ何も登録されていなければ、①に保護者メールを自動で入れておく（保存前なら上書き可能）
+        if (!hasAnyRegistered && res.guardianEmail && notifyEmailEls[0]) {
+          notifyEmailEls[0].value = res.guardianEmail;
+        }
       } else {
         emailStudentNameEl.textContent = res.message;
         emailGuardianHintEl.textContent = '';
@@ -684,30 +789,46 @@ const pointsCurrentTotalEl = document.getElementById('pointsCurrentTotal');
 const pointsValueEl = document.getElementById('pointsValue');
 const pointsReasonEl = document.getElementById('pointsReason');
 const pointsMsgEl = document.getElementById('pointsMsg');
+const pointsHistoryListEl = document.getElementById('pointsHistoryList');
 
 let pointsLookupTimer = null;
 pointsStudentCodeEl.addEventListener('input', () => {
   clearTimeout(pointsLookupTimer);
   const code = pointsStudentCodeEl.value.trim();
   pointsStudentInfoEl.classList.remove('show');
+  pointsHistoryListEl.innerHTML = '';
   if (!code) return;
 
-  pointsLookupTimer = setTimeout(async () => {
-    try {
-      const res = await jsonp({ action: 'getPointsInfo', code });
-      if (res.ok) {
-        pointsStudentNameEl.textContent = res.name || '(氏名なし)';
-        pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
-      } else {
-        pointsStudentNameEl.textContent = res.message;
-        pointsCurrentTotalEl.textContent = '';
-      }
-      pointsStudentInfoEl.classList.add('show');
-    } catch (e) {
-      // 通信中は何もしない
-    }
-  }, 400);
+  pointsLookupTimer = setTimeout(() => loadPointsHistory(code), 400);
 });
+
+async function loadPointsHistory(code) {
+  try {
+    const res = await jsonp({ action: 'getPointsHistory', code });
+    if (res.ok) {
+      pointsStudentNameEl.textContent = res.name || '(氏名なし)';
+      pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
+      pointsHistoryListEl.innerHTML = '';
+      if (res.history.length === 0) {
+        pointsHistoryListEl.innerHTML = '<div class="history-item"><span>まだ履歴がありません</span></div>';
+      } else {
+        res.history.forEach(h => {
+          const item = document.createElement('div');
+          item.className = 'history-item';
+          const sign = h.points > 0 ? '+' : '';
+          item.innerHTML = `<span>${h.date} ${h.reason || ''}</span><span>${sign}${h.points}pt</span>`;
+          pointsHistoryListEl.appendChild(item);
+        });
+      }
+    } else {
+      pointsStudentNameEl.textContent = res.message;
+      pointsCurrentTotalEl.textContent = '';
+    }
+    pointsStudentInfoEl.classList.add('show');
+  } catch (e) {
+    // 通信中は何もしない
+  }
+}
 
 function showPointsMsg(text, type) {
   pointsMsgEl.textContent = text;
@@ -735,6 +856,7 @@ async function addPoints() {
       pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
       pointsValueEl.value = '';
       pointsReasonEl.value = '';
+      loadPointsHistory(code);
     } else {
       showPointsMsg(res.message || '付与に失敗しました。', 'error');
     }
