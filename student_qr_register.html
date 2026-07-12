@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>生徒QR登録 | Step個別指導ステップ</title>
+<title>生徒・講師QR登録 | Step個別指導ステップ</title>
 <style>
   :root {
     --main-color: #2e7d5b;
@@ -215,8 +215,30 @@
 <body>
 
 <div class="container">
-  <h1>生徒QR登録</h1>
-  <div class="subtitle">既存カードの登録・新規QRの発行ができます</div>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div>
+      <h1>生徒・講師QR登録</h1>
+      <div class="subtitle">既存カードの登録・新規QRの発行ができます</div>
+    </div>
+    <button type="button" onclick="toggleSettings()" style="width:auto; margin:0; padding:8px 14px; font-size:13px; background:#555;">⚙️ 設定</button>
+  </div>
+
+  <div id="settingsPanel" style="display:none; margin:14px 0; padding:16px; background:#f5f7f6; border-radius:10px; border:1px solid var(--border-color);">
+    <h2 style="font-size:14px; margin:0 0 10px;">①生徒・講師QR登録アプリ（このページ）</h2>
+    <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsRegisterUrl"></div>
+    <img id="settingsRegisterQr" src="" width="140" height="140">
+
+    <h2 style="font-size:14px; margin:18px 0 10px;">②QR読み取りアプリ（タブレット用）</h2>
+    <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsTabletUrl"></div>
+    <img id="settingsTabletQr" src="" width="140" height="140">
+
+    <div style="margin-top:18px;">
+      <label for="settingsEmail">この情報をメールで送る</label>
+      <input type="text" id="settingsEmail" placeholder="送信先メールアドレス" autocomplete="off">
+      <button id="settingsSendBtn" onclick="sendAppLinksEmail()" style="background:#2a8f7a;">📧 メールで送信</button>
+      <div id="settingsMsg" class="msg"></div>
+    </div>
+  </div>
 
   <div class="tabs">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
@@ -228,7 +250,7 @@
 
   <!-- ① 既存の入退くんQRを登録するパネル -->
   <div class="tab-panel active" id="panelExisting">
-    <label for="studentCode">① 生徒番号</label>
+    <label for="studentCode">① 生徒・講師番号</label>
     <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="studentInfo" class="student-info">
       <div class="name" id="studentName"></div>
@@ -257,7 +279,7 @@
 
   <!-- ② 現在登録されているQRを確認するパネル -->
   <div class="tab-panel" id="panelCheck">
-    <label for="checkStudentCode">生徒番号</label>
+    <label for="checkStudentCode">生徒・講師番号</label>
     <input type="text" id="checkStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="checkStudentInfo" class="student-info">
       <div class="name" id="checkStudentName"></div>
@@ -283,7 +305,7 @@
 
   <!-- ② 新規生徒のQRを発行するパネル -->
   <div class="tab-panel" id="panelNew">
-    <label for="newStudentCode">生徒番号</label>
+    <label for="newStudentCode">生徒・講師番号</label>
     <input type="text" id="newStudentCode" placeholder="例: 1250" inputmode="numeric" autocomplete="off">
     <div id="newStudentInfo" class="student-info">
       <div class="name" id="newStudentName"></div>
@@ -313,7 +335,7 @@
 
   <!-- ③ 通知先メールを登録するパネル -->
   <div class="tab-panel" id="panelEmail">
-    <label for="emailStudentCode">生徒番号</label>
+    <label for="emailStudentCode">生徒・講師番号</label>
     <input type="text" id="emailStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="emailStudentInfo" class="student-info">
       <div class="name" id="emailStudentName"></div>
@@ -341,7 +363,7 @@
 
   <!-- ④ ポイントを手動付与するパネル -->
   <div class="tab-panel" id="panelPoints">
-    <label for="pointsStudentCode">生徒番号</label>
+    <label for="pointsStudentCode">生徒・講師番号</label>
     <input type="text" id="pointsStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="pointsStudentInfo" class="student-info">
       <div class="name" id="pointsStudentName"></div>
@@ -370,6 +392,61 @@
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
 const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
+
+// ===================================================================
+// 設定パネル（アプリのURL・QRコード共有）
+// ===================================================================
+const REGISTER_APP_URL = 'https://stepkobetsu-hub.github.io/student-QR/student_qr_register.html';
+const TABLET_APP_URL = 'https://stepkobetsu-hub.github.io/student-QR/tablet_checkin.html';
+let settingsInitialized = false;
+
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  const show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+
+  if (show && !settingsInitialized) {
+    document.getElementById('settingsRegisterUrl').textContent = REGISTER_APP_URL;
+    document.getElementById('settingsRegisterQr').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(REGISTER_APP_URL);
+    document.getElementById('settingsTabletUrl').textContent = TABLET_APP_URL;
+    document.getElementById('settingsTabletQr').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(TABLET_APP_URL);
+    settingsInitialized = true;
+  }
+}
+
+async function sendAppLinksEmail() {
+  const email = document.getElementById('settingsEmail').value.trim();
+  const msgEl = document.getElementById('settingsMsg');
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msgEl.textContent = '正しいメールアドレスを入力してください。';
+    msgEl.className = 'msg error';
+    return;
+  }
+
+  const btn = document.getElementById('settingsSendBtn');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  try {
+    const res = await jsonp({ action: 'sendAppLinksEmail', toEmail: email });
+    if (res.ok) {
+      msgEl.textContent = `${email} に送信しました。`;
+      msgEl.className = 'msg success';
+    } else {
+      msgEl.textContent = res.message || '送信に失敗しました。';
+      msgEl.className = 'msg error';
+    }
+  } catch (e) {
+    msgEl.textContent = '通信エラーが発生しました。';
+    msgEl.className = 'msg error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📧 メールで送信';
+  }
+}
 
 const studentCodeEl = document.getElementById('studentCode');
 const qrDataEl = document.getElementById('qrData');
@@ -403,7 +480,7 @@ function showMsg(text, type) {
   msgEl.className = 'msg ' + type;
 }
 
-// 生徒番号を入力したら自動で情報を照会
+// 生徒・講師番号を入力したら自動で情報を照会
 let lookupTimer = null;
 studentCodeEl.addEventListener('input', () => {
   clearTimeout(lookupTimer);
@@ -438,7 +515,7 @@ async function saveQr() {
   const qrData = qrDataEl.value.trim();
 
   if (!code || !qrData) {
-    showMsg('生徒番号とQRコードの両方を入力してください。', 'error');
+    showMsg('生徒・講師番号とQRコードの両方を入力してください。', 'error');
     return;
   }
 
@@ -632,7 +709,7 @@ async function sendCheckQrPdf() {
     return;
   }
   if (!currentCheckedCode) {
-    pdfMsgEl.textContent = '生徒番号を確認してください。';
+    pdfMsgEl.textContent = '生徒・講師番号を確認してください。';
     pdfMsgEl.className = 'msg error';
     return;
   }
@@ -748,7 +825,7 @@ function showNewMsg(text, type) {
 async function issueQr() {
   const code = newStudentCodeEl.value.trim();
   if (!code) {
-    showNewMsg('生徒番号を入力してください。', 'error');
+    showNewMsg('生徒・講師番号を入力してください。', 'error');
     return;
   }
 
@@ -928,7 +1005,7 @@ function showEmailMsg(text, type) {
 async function saveNotifyEmails() {
   const code = emailStudentCodeEl.value.trim();
   if (!code) {
-    showEmailMsg('生徒番号を入力してください。', 'error');
+    showEmailMsg('生徒・講師番号を入力してください。', 'error');
     return;
   }
 
@@ -1022,7 +1099,7 @@ async function addPoints() {
   const reason = pointsReasonEl.value.trim();
 
   if (!code || !points) {
-    showPointsMsg('生徒番号とポイント数を入力してください。', 'error');
+    showPointsMsg('生徒・講師番号とポイント数を入力してください。', 'error');
     return;
   }
 
