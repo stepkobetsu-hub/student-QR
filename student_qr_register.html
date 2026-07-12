@@ -495,7 +495,7 @@ studentCodeEl.addEventListener('input', () => {
       if (res.ok) {
         currentStudent = res;
         studentNameEl.textContent = res.name || '(氏名なし)';
-        studentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        studentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
         qrStatusEl.textContent = res.qrData ? '登録済みQRあり（上書きされます）' : '未登録';
         studentInfoEl.classList.add('show');
       } else {
@@ -674,7 +674,7 @@ checkStudentCodeEl.addEventListener('input', () => {
       const res = await jsonp({ action: 'getStudent', code });
       if (res.ok) {
         checkStudentNameEl.textContent = res.name || '(氏名なし)';
-        checkStudentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        checkStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
         checkStudentInfoEl.classList.add('show');
 
         if (res.qrData) {
@@ -796,7 +796,7 @@ newStudentCodeEl.addEventListener('input', () => {
       const res = await jsonp({ action: 'getStudent', code });
       if (res.ok) {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
-        newStudentSchoolEl.textContent = res.school ? res.school + '校' : '';
+        newStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
         if (res.qrData) {
           newTabHasExistingQr = true;
           newTabExistingQrData = res.qrData;
