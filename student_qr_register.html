@@ -689,6 +689,8 @@ const cardNameEl = document.getElementById('cardName');
 const cardQrImgEl = document.getElementById('cardQrImg');
 const printBtnEl = document.getElementById('printBtn');
 let currentIssuedCode = null;
+let newTabHasExistingQr = false;
+let newTabExistingQrData = '';
 
 let newLookupTimer = null;
 newStudentCodeEl.addEventListener('input', () => {
@@ -697,6 +699,8 @@ newStudentCodeEl.addEventListener('input', () => {
   newStudentInfoEl.classList.remove('show');
   qrCardEl.classList.remove('show');
   printBtnEl.style.display = 'none';
+  newTabHasExistingQr = false;
+  newTabExistingQrData = '';
   if (!code) return;
 
   newLookupTimer = setTimeout(async () => {
@@ -706,11 +710,17 @@ newStudentCodeEl.addEventListener('input', () => {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
         newStudentSchoolEl.textContent = res.school ? res.school + '校' : '';
         if (res.qrData) {
-          newStudentSchoolEl.textContent += '（すでにQR登録済み・再発行すると上書きされます）';
+          newTabHasExistingQr = true;
+          newTabExistingQrData = res.qrData;
+          newStudentInfoEl.style.background = '#fdecea';
+          newStudentSchoolEl.innerHTML = '<strong style="color:#c0392b;">⚠️ すでにQRが登録済みです。発行すると古いQRは使えなくなります。</strong>';
+        } else {
+          newStudentInfoEl.style.background = '';
         }
       } else {
         newStudentNameEl.textContent = res.message;
         newStudentSchoolEl.textContent = '';
+        newStudentInfoEl.style.background = '';
       }
       newStudentInfoEl.classList.add('show');
     } catch (e) {
@@ -729,6 +739,17 @@ async function issueQr() {
   if (!code) {
     showNewMsg('生徒番号を入力してください。', 'error');
     return;
+  }
+
+  if (newTabHasExistingQr) {
+    const confirmed = confirm(
+      '⚠️ この生徒には、すでにQRが登録されています。\n\n' +
+      '現在のQR: ' + newTabExistingQrData + '\n\n' +
+      '新しく発行すると、古いQRカードは今後使えなくなります。\n' +
+      '（すでに配布済みのカードがある場合は、そちらが無効になります）\n\n' +
+      '本当に新しく発行しますか？'
+    );
+    if (!confirmed) return;
   }
 
   const btn = document.getElementById('issueBtn');
