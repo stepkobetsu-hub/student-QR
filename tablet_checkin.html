@@ -25,15 +25,28 @@
   }
   canvas { display: none; }
 
+  /* 読み取りエリアを右下に配置（顔が隠れないように） */
   #scanFrame {
     position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(70vw, 70vh);
-    height: min(70vw, 70vh);
-    border: 4px solid rgba(255,255,255,0.7);
+    bottom: 6vh;
+    right: 4vw;
+    width: min(38vw, 38vh);
+    height: min(38vw, 38vh);
+    border: 4px solid rgba(255,255,255,0.8);
     border-radius: 16px;
-    box-shadow: 0 0 0 2000px rgba(0,0,0,0.35);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #scanFrame .label {
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: #fff;
+    font-size: 14px;
+    background: rgba(0,0,0,0.5);
+    padding: 4px 10px;
+    border-radius: 20px;
   }
 
   #topBar {
@@ -71,18 +84,25 @@
 
   #resultIcon { font-size: 90px; margin-bottom: 10px; }
   #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
-  #resultType { font-size: 26px; margin-bottom: 4px; }
+  #resultType { font-size: 30px; margin-bottom: 4px; font-weight: bold; }
   #resultTime {
-    font-size: 60px;
-    font-weight: bold;
+    font-size: 26px;
     margin: 10px 0;
-    letter-spacing: 2px;
   }
   #resultSub { font-size: 15px; opacity: 0.85; }
+  #resultPoints {
+    margin-top: 14px;
+    font-size: 13px;
+    opacity: 0.9;
+    background: rgba(255,255,255,0.15);
+    padding: 4px 14px;
+    border-radius: 20px;
+    display: inline-block;
+  }
 
   #statusDot {
     position: absolute;
-    bottom: 20px; right: 20px;
+    bottom: 20px; left: 20px;
     width: 14px; height: 14px;
     border-radius: 50%;
     background: #4caf50;
@@ -97,11 +117,11 @@
   <canvas id="canvas"></canvas>
   <canvas id="photoCanvas"></canvas>
 
-  <div id="scanFrame"></div>
+  <div id="scanFrame"><div class="label">ここにQRをかざす</div></div>
 
   <div id="topBar">
     <div class="clock" id="clock">--:--</div>
-    <div class="hint">QRコードを枠の中にかざしてください</div>
+    <div class="hint">QRコードを右下の枠にかざしてください</div>
   </div>
 
   <div id="resultOverlay">
@@ -110,6 +130,7 @@
     <div id="resultType"></div>
     <div id="resultTime"></div>
     <div id="resultSub"></div>
+    <div id="resultPoints"></div>
   </div>
 
   <div id="statusDot"></div>
@@ -131,6 +152,7 @@ const resultName = document.getElementById('resultName');
 const resultType = document.getElementById('resultType');
 const resultTime = document.getElementById('resultTime');
 const resultSub = document.getElementById('resultSub');
+const resultPoints = document.getElementById('resultPoints');
 const statusDot = document.getElementById('statusDot');
 const clockEl = document.getElementById('clock');
 
@@ -146,6 +168,27 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// ===================================================================
+// QR検知音（ファイル不要、Web Audioで生成する「ピッ」という電子音）
+// ===================================================================
+let audioCtx = null;
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1300, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.18);
+  } catch (e) {
+    // 音が鳴らせない環境では無視
+  }
+}
 
 // カメラ起動
 async function startCamera() {
@@ -185,6 +228,7 @@ function scanLoop() {
       } else {
         lastScannedCode = code.data;
         lastScannedTime = now;
+        playBeep();
         handleQrDetected(code.data);
       }
     }
@@ -213,12 +257,12 @@ async function handleQrDetected(qrData) {
     const data = await res.json();
 
     if (data.ok) {
-      showResult(true, data.name, data.type, data.time, data.mailSent);
+      showResult(true, data.name, data.type, data.label, data.mailSent, data.totalPoints);
     } else {
-      showResult(false, null, null, null, false, data.message);
+      showResult(false, null, null, null, false, null, data.message);
     }
   } catch (err) {
-    showResult(false, null, null, null, false, '通信エラーが発生しました');
+    showResult(false, null, null, null, false, null, '通信エラーが発生しました');
   }
 
   setTimeout(() => {
@@ -234,16 +278,24 @@ function showProcessing() {
   resultType.textContent = '';
   resultTime.textContent = '';
   resultSub.textContent = '';
+  resultPoints.textContent = '';
+  resultPoints.style.display = 'none';
 }
 
-function showResult(ok, name, type, time, mailSent, errorMsg) {
+function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg) {
   if (ok) {
     resultOverlay.className = 'show success';
     resultIcon.textContent = type === '入室' ? '😊' : '🏠';
     resultName.textContent = name + ' さん';
-    resultType.textContent = type === '入室' ? 'HELLO！ようこそ' : 'また明日！気をつけて';
-    resultTime.textContent = time || '';
-    resultSub.textContent = (type + 'しました') + (mailSent ? '・保護者にメールを送信しました' : '（メール送信は失敗しました）');
+    resultType.textContent = type === '入室' ? 'こんにちは！' : 'さようなら！';
+    resultTime.textContent = label + (type === '入室' ? '入室' : '退室');
+    resultSub.textContent = mailSent ? '保護者にメールを送信しました' : '（メール送信は失敗しました）';
+    if (typeof totalPoints === 'number') {
+      resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
+      resultPoints.style.display = 'inline-block';
+    } else {
+      resultPoints.style.display = 'none';
+    }
   } else {
     resultOverlay.className = 'show error';
     resultIcon.textContent = '⚠️';
@@ -251,6 +303,7 @@ function showResult(ok, name, type, time, mailSent, errorMsg) {
     resultType.textContent = '';
     resultTime.textContent = '';
     resultSub.textContent = errorMsg || 'もう一度お試しください';
+    resultPoints.style.display = 'none';
   }
 }
 
