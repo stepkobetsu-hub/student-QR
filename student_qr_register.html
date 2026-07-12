@@ -340,22 +340,35 @@
     <input type="text" id="emailStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="emailStudentInfo" class="student-info">
       <div class="name" id="emailStudentName"></div>
-      <div class="hint" id="emailGuardianHint"></div>
     </div>
 
     <div class="hint" style="margin-top:14px;">
-      入力した分だけ、入退室のたびに全員へメールが届きます。<br>
-      <strong>すべて空欄のままなら、今まで通り保護者メール（1件）に届きます。</strong>
+      チェックが入っているメールにだけ配信されます。①は保護者メール（X列）と共通です。
     </div>
 
-    <label for="notifyEmail1">通知先メール ①</label>
-    <input type="text" id="notifyEmail1" placeholder="例: parent1@example.com" autocomplete="off">
-    <label for="notifyEmail2">通知先メール ②</label>
-    <input type="text" id="notifyEmail2" placeholder="任意" autocomplete="off">
-    <label for="notifyEmail3">通知先メール ③</label>
-    <input type="text" id="notifyEmail3" placeholder="任意" autocomplete="off">
-    <label for="notifyEmail4">通知先メール ④</label>
-    <input type="text" id="notifyEmail4" placeholder="任意" autocomplete="off">
+    <label for="notifyEmail1">通知先メール ①（保護者メール／X列）</label>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="notifyEnabled1" checked style="width:20px; height:20px; flex-shrink:0;">
+      <input type="text" id="notifyEmail1" placeholder="例: parent1@example.com" autocomplete="off" style="flex:1;">
+    </div>
+
+    <label for="notifyEmail2">通知先メール ②（BA列）</label>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="notifyEnabled2" checked style="width:20px; height:20px; flex-shrink:0;">
+      <input type="text" id="notifyEmail2" placeholder="任意" autocomplete="off" style="flex:1;">
+    </div>
+
+    <label for="notifyEmail3">通知先メール ③（BB列）</label>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="notifyEnabled3" checked style="width:20px; height:20px; flex-shrink:0;">
+      <input type="text" id="notifyEmail3" placeholder="任意" autocomplete="off" style="flex:1;">
+    </div>
+
+    <label for="notifyEmail4">通知先メール ④（BC列）</label>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="notifyEnabled4" checked style="width:20px; height:20px; flex-shrink:0;">
+      <input type="text" id="notifyEmail4" placeholder="任意" autocomplete="off" style="flex:1;">
+    </div>
 
     <button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;">通知先メールを保存する</button>
 
@@ -988,9 +1001,9 @@ async function sendQrPdf() {
 const emailStudentCodeEl = document.getElementById('emailStudentCode');
 const emailStudentInfoEl = document.getElementById('emailStudentInfo');
 const emailStudentNameEl = document.getElementById('emailStudentName');
-const emailGuardianHintEl = document.getElementById('emailGuardianHint');
 const emailMsgEl = document.getElementById('emailMsg');
 const notifyEmailEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEmail' + n));
+const notifyEnabledEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEnabled' + n));
 
 let emailLookupTimer = null;
 emailStudentCodeEl.addEventListener('input', () => {
@@ -998,6 +1011,7 @@ emailStudentCodeEl.addEventListener('input', () => {
   const code = emailStudentCodeEl.value.trim();
   emailStudentInfoEl.classList.remove('show');
   notifyEmailEls.forEach(el => el.value = '');
+  notifyEnabledEls.forEach(el => el.checked = true);
   if (!code) return;
 
   emailLookupTimer = setTimeout(async () => {
@@ -1005,21 +1019,14 @@ emailStudentCodeEl.addEventListener('input', () => {
       const res = await jsonp({ action: 'getNotifyEmails', code });
       if (res.ok) {
         emailStudentNameEl.textContent = res.name || '(氏名なし)';
-        emailGuardianHintEl.textContent = res.guardianEmail
-          ? '保護者メール（X列）: ' + res.guardianEmail
-          : '保護者メール（X列）は未登録です';
-
-        const hasAnyRegistered = res.emails.some(v => v && v.trim() !== '');
         res.emails.forEach((v, i) => {
           if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
         });
-        // まだ何も登録されていなければ、①に保護者メールを自動で入れておく（保存前なら上書き可能）
-        if (!hasAnyRegistered && res.guardianEmail && notifyEmailEls[0]) {
-          notifyEmailEls[0].value = res.guardianEmail;
-        }
+        res.enabled.forEach((v, i) => {
+          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
+        });
       } else {
         emailStudentNameEl.textContent = res.message;
-        emailGuardianHintEl.textContent = '';
       }
       emailStudentInfoEl.classList.add('show');
     } catch (e) {
@@ -1041,6 +1048,7 @@ async function saveNotifyEmails() {
   }
 
   const emails = notifyEmailEls.map(el => el.value.trim());
+  const enabled = notifyEnabledEls.map(el => el.checked);
 
   // 簡易的なメール形式チェック（空欄はOK）
   const invalid = emails.find(v => v !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
@@ -1049,14 +1057,27 @@ async function saveNotifyEmails() {
     return;
   }
 
+  // 重複アドレスの警告（保存はできるが、実際の送信では自動的に1件にまとめられる旨を伝える）
+  const nonEmpty = emails.filter(v => v !== '');
+  const lower = nonEmpty.map(v => v.toLowerCase());
+  const hasDuplicate = new Set(lower).size !== lower.length;
+
   const btn = document.getElementById('saveEmailBtn');
   btn.disabled = true;
   btn.textContent = '保存中...';
 
   try {
-    const res = await jsonp({ action: 'saveNotifyEmails', code, emails: JSON.stringify(emails) });
+    const res = await jsonp({
+      action: 'saveNotifyEmails',
+      code,
+      emails: JSON.stringify(emails),
+      enabled: JSON.stringify(enabled)
+    });
     if (res.ok) {
-      showEmailMsg(`${res.name} さんの通知先メールを保存しました。`, 'success');
+      showEmailMsg(
+        `${res.name} さんの通知先メールを保存しました。` + (hasDuplicate ? '（同じアドレスが複数あるため、送信時は1通にまとめられます）' : ''),
+        'success'
+      );
     } else {
       showEmailMsg(res.message || '保存に失敗しました。', 'error');
     }
