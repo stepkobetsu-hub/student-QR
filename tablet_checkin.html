@@ -261,7 +261,7 @@ async function handleQrDetected(qrData) {
     const data = await res.json();
 
     if (data.ok) {
-      showResult(true, data.name, data.type, data.label, data.mailSent, data.totalPoints);
+      showResult(true, data.name, data.type, data.label, data.mailSent, data.totalPoints, null, data.isTeacher);
     } else {
       showResult(false, null, null, null, false, null, data.message);
     }
@@ -286,8 +286,16 @@ function showProcessing() {
   resultPoints.style.display = 'none';
 }
 
-function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg) {
-  if (ok) {
+function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg, isTeacher) {
+  if (ok && isTeacher) {
+    resultOverlay.className = 'show success';
+    resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
+    resultName.textContent = name + ' 先生';
+    resultType.textContent = type === '出勤' ? 'おはようございます！' : 'お疲れ様でした！';
+    resultTime.textContent = label + (type === '出勤' ? '出勤' : '退勤');
+    resultSub.textContent = '勤怠を記録しました';
+    resultPoints.style.display = 'none';
+  } else if (ok) {
     resultOverlay.className = 'show success';
     resultIcon.textContent = type === '入室' ? '😊' : '🏠';
     resultName.textContent = name + ' さん';
