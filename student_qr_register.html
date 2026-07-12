@@ -211,6 +211,7 @@
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
+    <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
   </div>
 
   <!-- ① 既存の入退くんQRを登録するパネル -->
@@ -291,6 +292,26 @@
     <button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;">通知先メールを保存する</button>
 
     <div id="emailMsg" class="msg"></div>
+  </div>
+
+  <!-- ④ ポイントを手動付与するパネル -->
+  <div class="tab-panel" id="panelPoints">
+    <label for="pointsStudentCode">生徒番号</label>
+    <input type="text" id="pointsStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
+    <div id="pointsStudentInfo" class="student-info">
+      <div class="name" id="pointsStudentName"></div>
+      <div id="pointsCurrentTotal"></div>
+    </div>
+
+    <label for="pointsValue">付与するポイント数</label>
+    <input type="text" id="pointsValue" placeholder="例: 5（訂正の場合はマイナスも可: -3）" inputmode="numeric" autocomplete="off">
+
+    <label for="pointsReason">理由（任意）</label>
+    <input type="text" id="pointsReason" placeholder="例: 期末テスト高得点" autocomplete="off">
+
+    <button id="savePointsBtn" onclick="addPoints()" style="background:#e08e0b;">⭐ ポイントを付与する</button>
+
+    <div id="pointsMsg" class="msg"></div>
   </div>
 </div>
 
@@ -476,13 +497,16 @@ function switchTab(tab) {
   const isExisting = tab === 'existing';
   const isNew = tab === 'new';
   const isEmail = tab === 'email';
+  const isPoints = tab === 'points';
 
   document.getElementById('tabExistingBtn').classList.toggle('active', isExisting);
   document.getElementById('tabNewBtn').classList.toggle('active', isNew);
   document.getElementById('tabEmailBtn').classList.toggle('active', isEmail);
+  document.getElementById('tabPointsBtn').classList.toggle('active', isPoints);
   document.getElementById('panelExisting').classList.toggle('active', isExisting);
   document.getElementById('panelNew').classList.toggle('active', isNew);
   document.getElementById('panelEmail').classList.toggle('active', isEmail);
+  document.getElementById('panelPoints').classList.toggle('active', isPoints);
 
   if (!isExisting && scanning) {
     stopScanner();
@@ -647,6 +671,78 @@ async function saveNotifyEmails() {
   } finally {
     btn.disabled = false;
     btn.textContent = '通知先メールを保存する';
+  }
+}
+
+// ===================================================================
+// ポイント手動付与
+// ===================================================================
+const pointsStudentCodeEl = document.getElementById('pointsStudentCode');
+const pointsStudentInfoEl = document.getElementById('pointsStudentInfo');
+const pointsStudentNameEl = document.getElementById('pointsStudentName');
+const pointsCurrentTotalEl = document.getElementById('pointsCurrentTotal');
+const pointsValueEl = document.getElementById('pointsValue');
+const pointsReasonEl = document.getElementById('pointsReason');
+const pointsMsgEl = document.getElementById('pointsMsg');
+
+let pointsLookupTimer = null;
+pointsStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(pointsLookupTimer);
+  const code = pointsStudentCodeEl.value.trim();
+  pointsStudentInfoEl.classList.remove('show');
+  if (!code) return;
+
+  pointsLookupTimer = setTimeout(async () => {
+    try {
+      const res = await jsonp({ action: 'getPointsInfo', code });
+      if (res.ok) {
+        pointsStudentNameEl.textContent = res.name || '(氏名なし)';
+        pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
+      } else {
+        pointsStudentNameEl.textContent = res.message;
+        pointsCurrentTotalEl.textContent = '';
+      }
+      pointsStudentInfoEl.classList.add('show');
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});
+
+function showPointsMsg(text, type) {
+  pointsMsgEl.textContent = text;
+  pointsMsgEl.className = 'msg ' + type;
+}
+
+async function addPoints() {
+  const code = pointsStudentCodeEl.value.trim();
+  const points = pointsValueEl.value.trim();
+  const reason = pointsReasonEl.value.trim();
+
+  if (!code || !points) {
+    showPointsMsg('生徒番号とポイント数を入力してください。', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('savePointsBtn');
+  btn.disabled = true;
+  btn.textContent = '処理中...';
+
+  try {
+    const res = await jsonp({ action: 'addPoints', code, points, reason });
+    if (res.ok) {
+      showPointsMsg(`${res.name} さんに付与しました。現在: ${res.totalPoints}pt`, 'success');
+      pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
+      pointsValueEl.value = '';
+      pointsReasonEl.value = '';
+    } else {
+      showPointsMsg(res.message || '付与に失敗しました。', 'error');
+    }
+  } catch (e) {
+    showPointsMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⭐ ポイントを付与する';
   }
 }
 
