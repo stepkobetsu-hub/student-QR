@@ -522,6 +522,7 @@ function showMsg(text, type) {
 
 // 生徒・講師番号を入力したら自動で情報を照会
 let lookupTimer = null;
+let lookupSeq = 0;
 studentCodeEl.addEventListener('input', () => {
   clearTimeout(lookupTimer);
   const code = studentCodeEl.value.trim();
@@ -529,9 +530,11 @@ studentCodeEl.addEventListener('input', () => {
   currentStudent = null;
   if (!code) return;
 
+  const seq = ++lookupSeq;
   lookupTimer = setTimeout(async () => {
     try {
       const res = await jsonp({ action: 'getStudent', code });
+      if (seq !== lookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         currentStudent = res;
         studentNameEl.textContent = res.name || '(氏名なし)';
@@ -706,6 +709,7 @@ const checkPrintBtnEl = document.getElementById('checkPrintBtn');
 let currentCheckedCode = null;
 
 let checkLookupTimer = null;
+let checkLookupSeq = 0;
 checkStudentCodeEl.addEventListener('input', () => {
   clearTimeout(checkLookupTimer);
   const code = checkStudentCodeEl.value.trim();
@@ -716,9 +720,11 @@ checkStudentCodeEl.addEventListener('input', () => {
   currentCheckedCode = null;
   if (!code) return;
 
+  const seq = ++checkLookupSeq;
   checkLookupTimer = setTimeout(async () => {
     try {
       const res = await jsonp({ action: 'getStudent', code });
+      if (seq !== checkLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         checkStudentNameEl.textContent = res.name || '(氏名なし)';
         checkStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
@@ -828,6 +834,7 @@ let newTabHasExistingQr = false;
 let newTabExistingQrData = '';
 
 let newLookupTimer = null;
+let newLookupSeq = 0;
 newStudentCodeEl.addEventListener('input', () => {
   clearTimeout(newLookupTimer);
   const code = newStudentCodeEl.value.trim();
@@ -838,9 +845,11 @@ newStudentCodeEl.addEventListener('input', () => {
   newTabExistingQrData = '';
   if (!code) return;
 
+  const seq = ++newLookupSeq;
   newLookupTimer = setTimeout(async () => {
     try {
       const res = await jsonp({ action: 'getStudent', code });
+      if (seq !== newLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
         newStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
@@ -1009,6 +1018,7 @@ const notifyEmailEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEmai
 const notifyEnabledEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEnabled' + n));
 
 let emailLookupTimer = null;
+let emailLookupSeq = 0;
 emailStudentCodeEl.addEventListener('input', () => {
   clearTimeout(emailLookupTimer);
   const code = emailStudentCodeEl.value.trim();
@@ -1017,9 +1027,11 @@ emailStudentCodeEl.addEventListener('input', () => {
   notifyEnabledEls.forEach(el => el.checked = true);
   if (!code) return;
 
+  const seq = ++emailLookupSeq;
   emailLookupTimer = setTimeout(async () => {
     try {
       const res = await jsonp({ action: 'getNotifyEmails', code });
+      if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         emailStudentNameEl.textContent = res.name || '(氏名なし)';
         res.emails.forEach((v, i) => {
@@ -1105,6 +1117,7 @@ const pointsMsgEl = document.getElementById('pointsMsg');
 const pointsHistoryListEl = document.getElementById('pointsHistoryList');
 
 let pointsLookupTimer = null;
+let pointsLookupSeq = 0;
 pointsStudentCodeEl.addEventListener('input', () => {
   clearTimeout(pointsLookupTimer);
   const code = pointsStudentCodeEl.value.trim();
@@ -1112,12 +1125,14 @@ pointsStudentCodeEl.addEventListener('input', () => {
   pointsHistoryListEl.innerHTML = '';
   if (!code) return;
 
-  pointsLookupTimer = setTimeout(() => loadPointsHistory(code), 400);
+  const seq = ++pointsLookupSeq;
+  pointsLookupTimer = setTimeout(() => loadPointsHistory(code, seq), 400);
 });
 
-async function loadPointsHistory(code) {
+async function loadPointsHistory(code, seq) {
   try {
     const res = await jsonp({ action: 'getPointsHistory', code });
+    if (seq !== undefined && seq !== pointsLookupSeq) return; // 古いリクエストの結果は無視
     if (res.ok) {
       pointsStudentNameEl.textContent = res.name || '(氏名なし)';
       pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
