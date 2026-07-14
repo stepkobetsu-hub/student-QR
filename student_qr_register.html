@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#2e7d5b">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>生徒・講師QR登録 | Step個別指導ステップ</title>
+<title>生徒・講師QR／入退室管理 | Step個別指導ステップ</title>
 <style>
   :root {
     --main-color: #2e7d5b;
@@ -29,6 +29,25 @@
     padding: 24px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   }
+  .hidden { display: none !important; }
+  .auth-card {
+    max-width: 430px;
+    margin: 8vh auto 0;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .auth-card h1 {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  .auth-note {
+    font-size: 13px;
+    color: #777;
+    line-height: 1.7;
+    margin-bottom: 18px;
+  }
   h1 {
     font-size: 18px;
     color: var(--main-color);
@@ -46,7 +65,8 @@
     margin: 16px 0 6px;
     color: #555;
   }
-  input[type="text"] {
+  input[type="text"],
+  input[type="password"] {
     width: 100%;
     padding: 12px;
     font-size: 16px;
@@ -54,7 +74,8 @@
     border-radius: 8px;
     background: #fafcfb;
   }
-  input[type="text"]:focus {
+  input[type="text"]:focus,
+  input[type="password"]:focus {
     outline: none;
     border-color: var(--main-color);
   }
@@ -191,6 +212,30 @@
   #printBtn {
     background: #6a4fa0;
   }
+  .app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .staff-badge {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .logout-btn {
+    width: auto;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 13px;
+    background: #777;
+  }
 
   #notifyEmail1:not(:placeholder-shown),
   #notifyEmail2:not(:placeholder-shown),
@@ -213,17 +258,52 @@
       border: 1px solid #999;
     }
   }
+  @media (max-width: 560px) {
+    body { padding: 14px; }
+    .container, .auth-card { padding: 18px; }
+    .app-header {
+      display: block;
+    }
+    .header-actions {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tabs {
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      min-width: calc(50% - 4px);
+    }
+  }
 </style>
 </head>
 <body>
 
-<div class="container">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+<div class="auth-card" id="loginPanel">
+  <h1>生徒・講師QR／入退室管理</h1>
+  <div class="auth-note">権限を持つスタッフ専用ページです。</div>
+  <form id="loginForm">
+    <label for="loginId">ID</label>
+    <input type="text" id="loginId" name="username" autocomplete="username" inputmode="numeric">
+    <label for="loginPassword">パスワード</label>
+    <input type="password" id="loginPassword" name="password" autocomplete="current-password">
+    <button type="submit" id="loginBtn">ログイン</button>
+    <div id="loginMsg" class="msg"></div>
+  </form>
+</div>
+
+<div class="container hidden" id="appContainer">
+  <div class="app-header">
     <div>
-      <h1>生徒・講師QR登録</h1>
+      <h1>生徒・講師QR／入退室管理</h1>
       <div class="subtitle">既存カードの登録・新規QRの発行ができます</div>
     </div>
-    <button type="button" onclick="toggleSettings()" style="width:auto; margin:0; padding:8px 14px; font-size:13px; background:#555;">⚙️ 設定</button>
+    <div class="header-actions">
+      <div class="staff-badge" id="loginStaffLabel"></div>
+      <button type="button" class="logout-btn" onclick="logoutStudentQr()">ログアウト</button>
+      <button type="button" onclick="toggleSettings()" style="width:auto; margin:0; padding:8px 14px; font-size:13px; background:#555;">⚙️ 設定</button>
+    </div>
   </div>
 
   <div id="settingsPanel" style="display:none; margin:14px 0; padding:16px; background:#f5f7f6; border-radius:10px; border:1px solid var(--border-color);">
@@ -432,6 +512,202 @@
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
 const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
+const AUTH_API_URL = "https://script.google.com/macros/s/AKfycbypkUc0MqZ07E7pZRglNPeRM56WbCcuWaLpRzi9bVFcPklHDxaaLC7GfzG6ozTGCbEX/exec";
+const LOGIN_ID_KEY = 'studentQrLoginId';
+const LOGIN_NAME_KEY = 'studentQrLoginName';
+const PERMISSION_KEY = 'studentQrPermissionLevel';
+const SESSION_TOKEN_KEY = 'studentQrSessionToken';
+const SESSION_EXPIRES_KEY = 'studentQrSessionExpiresAt';
+const QR_ALLOWED_PERMISSION_LEVELS = ['2', '3', '4'];
+
+let studentQrAuth = null;
+
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  loginStudentQr();
+});
+
+document.addEventListener('DOMContentLoaded', initStudentQrAuth);
+
+async function authApi(payload) {
+  const res = await fetch(AUTH_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+}
+
+function getSavedStudentQrAuth() {
+  const loginId = localStorage.getItem(LOGIN_ID_KEY) || '';
+  const name = localStorage.getItem(LOGIN_NAME_KEY) || '';
+  const permissionLevel = localStorage.getItem(PERMISSION_KEY) || '';
+  const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY) || '';
+  const expiresAt = localStorage.getItem(SESSION_EXPIRES_KEY) || '';
+  if (!loginId || !sessionToken || !expiresAt) return null;
+  return { loginId, name, permissionLevel, sessionToken, expiresAt };
+}
+
+function saveStudentQrAuth(auth) {
+  localStorage.setItem(LOGIN_ID_KEY, auth.loginId || auth.code || '');
+  localStorage.setItem(LOGIN_NAME_KEY, auth.name || '');
+  localStorage.setItem(PERMISSION_KEY, String(auth.permissionLevel || ''));
+  localStorage.setItem(SESSION_TOKEN_KEY, auth.sessionToken || '');
+  localStorage.setItem(SESSION_EXPIRES_KEY, auth.expiresAt || '');
+}
+
+function clearStudentQrAuth() {
+  localStorage.removeItem(LOGIN_ID_KEY);
+  localStorage.removeItem(LOGIN_NAME_KEY);
+  localStorage.removeItem(PERMISSION_KEY);
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_EXPIRES_KEY);
+  studentQrAuth = null;
+}
+
+function showLoginPanel(message) {
+  document.getElementById('appContainer').classList.add('hidden');
+  document.getElementById('loginPanel').classList.remove('hidden');
+  if (message) showLoginMsg(message, 'error');
+}
+
+function showAppPanel(auth) {
+  studentQrAuth = auth;
+  document.getElementById('loginPanel').classList.add('hidden');
+  document.getElementById('appContainer').classList.remove('hidden');
+  document.getElementById('loginStaffLabel').textContent =
+    (auth.name || auth.loginId || '') + (auth.permissionLevel ? ' / 権限' + auth.permissionLevel : '');
+  showLoginMsg('', '');
+}
+
+function showLoginMsg(text, type) {
+  const el = document.getElementById('loginMsg');
+  el.textContent = text || '';
+  el.className = text ? 'msg ' + type : 'msg';
+}
+
+async function initStudentQrAuth() {
+  const saved = getSavedStudentQrAuth();
+  if (saved?.loginId) document.getElementById('loginId').value = saved.loginId;
+  if (!saved || new Date(saved.expiresAt).getTime() <= Date.now()) {
+    clearStudentQrAuth();
+    showLoginPanel();
+    return;
+  }
+
+  showLoginMsg('ログイン状態を確認しています...', 'success');
+  try {
+    const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
+    if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(String(result.permissionLevel || '').trim())) {
+      clearStudentQrAuth();
+      showLoginPanel(result.error || 'この機能を利用する権限がありません。管理者へ確認してください。');
+      return;
+    }
+    const auth = {
+      loginId: result.loginId || saved.loginId,
+      name: result.name || saved.name || '',
+      permissionLevel: String(result.permissionLevel || '').trim(),
+      sessionToken: result.sessionToken || saved.sessionToken,
+      expiresAt: result.expiresAt || saved.expiresAt
+    };
+    saveStudentQrAuth(auth);
+    showAppPanel(auth);
+  } catch (e) {
+    showLoginPanel('ログイン状態を確認できませんでした。もう一度ログインしてください。');
+  }
+}
+
+async function loginStudentQr() {
+  const loginId = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  if (!loginId) {
+    showLoginMsg('IDを入力してください。', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '確認中...';
+  showLoginMsg('確認しています...', 'success');
+  try {
+    const result = await authApi({ action: 'studentQrLogin', code: loginId, password });
+    const permissionLevel = String(result.permissionLevel || '').trim();
+    if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(permissionLevel)) {
+      clearStudentQrAuth();
+      showLoginMsg('ID、パスワード、または利用権限を確認してください。', 'error');
+      return;
+    }
+    const auth = {
+      loginId: result.loginId || result.code || loginId,
+      name: result.name || '',
+      permissionLevel,
+      sessionToken: result.sessionToken || '',
+      expiresAt: result.expiresAt || ''
+    };
+    saveStudentQrAuth(auth);
+    document.getElementById('loginPassword').value = '';
+    showAppPanel(auth);
+  } catch (e) {
+    showLoginMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ログイン';
+  }
+}
+
+async function requireStudentQrAuth() {
+  const saved = studentQrAuth || getSavedStudentQrAuth();
+  if (!saved || !saved.sessionToken || new Date(saved.expiresAt).getTime() <= Date.now()) {
+    clearStudentQrAuth();
+    showLoginPanel('ログインしてください。');
+    throw new Error('ログインしてください。');
+  }
+  const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
+  const permissionLevel = String(result.permissionLevel || '').trim();
+  if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(permissionLevel)) {
+    clearStudentQrAuth();
+    showLoginPanel(result.error || 'この機能を利用する権限がありません。管理者へ確認してください。');
+    throw new Error(result.error || '権限がありません。');
+  }
+  const auth = {
+    loginId: result.loginId || saved.loginId,
+    name: result.name || saved.name || '',
+    permissionLevel,
+    sessionToken: result.sessionToken || saved.sessionToken,
+    expiresAt: result.expiresAt || saved.expiresAt
+  };
+  saveStudentQrAuth(auth);
+  studentQrAuth = auth;
+  return auth;
+}
+
+function getStudentQrAuthParams() {
+  const saved = studentQrAuth || getSavedStudentQrAuth() || {};
+  return {
+    staffLoginId: saved.loginId || '',
+    sessionToken: saved.sessionToken || ''
+  };
+}
+
+async function authorizedJsonp(params) {
+  await requireStudentQrAuth();
+  return jsonp(params);
+}
+
+async function logoutStudentQr() {
+  const saved = getSavedStudentQrAuth();
+  try {
+    if (saved?.sessionToken) {
+      await authApi({ action: 'studentQrLogout', sessionToken: saved.sessionToken });
+    }
+  } catch (e) {
+    // ローカルのログアウトは必ず実行する
+  }
+  clearStudentQrAuth();
+  if (scanning) await stopScanner();
+  document.getElementById('loginPassword').value = '';
+  showLoginPanel();
+}
 
 // ===================================================================
 // 設定パネル（アプリのURL・QRコード共有）
@@ -471,7 +747,7 @@ async function sendAppLinksEmail() {
   btn.textContent = '送信中...';
 
   try {
-    const res = await jsonp({ action: 'sendAppLinksEmail', toEmail: email });
+    const res = await authorizedJsonp({ action: 'sendAppLinksEmail', toEmail: email });
     if (res.ok) {
       msgEl.textContent = `${email} に送信しました。`;
       msgEl.className = 'msg success';
@@ -508,7 +784,7 @@ function jsonp(params) {
       delete window[cb];
       script.remove();
     };
-    const query = new URLSearchParams({ ...params, callback: cb }).toString();
+    const query = new URLSearchParams({ ...params, ...getStudentQrAuthParams(), callback: cb }).toString();
     script.src = API_URL + "?" + query;
     script.onerror = () => reject(new Error("通信エラーが発生しました"));
     document.body.appendChild(script);
@@ -533,7 +809,7 @@ studentCodeEl.addEventListener('input', () => {
   const seq = ++lookupSeq;
   lookupTimer = setTimeout(async () => {
     try {
-      const res = await jsonp({ action: 'getStudent', code });
+      const res = await authorizedJsonp({ action: 'getStudent', code });
       if (seq !== lookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         currentStudent = res;
@@ -567,7 +843,7 @@ async function saveQr() {
   btn.textContent = '登録中...';
 
   try {
-    const res = await jsonp({ action: 'saveQrData', code, qrData });
+    const res = await authorizedJsonp({ action: 'saveQrData', code, qrData });
     if (res.ok) {
       showMsg(`${res.name} さんのQRを登録しました。`, 'success');
       addHistory(code, res.name);
@@ -723,7 +999,7 @@ checkStudentCodeEl.addEventListener('input', () => {
   const seq = ++checkLookupSeq;
   checkLookupTimer = setTimeout(async () => {
     try {
-      const res = await jsonp({ action: 'getStudent', code });
+      const res = await authorizedJsonp({ action: 'getStudent', code });
       if (seq !== checkLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         checkStudentNameEl.textContent = res.name || '(氏名なし)';
@@ -772,6 +1048,7 @@ async function sendCheckQrPdf() {
   btn.textContent = 'PDF作成中...';
 
   try {
+    const auth = await requireStudentQrAuth();
     const qrDataUrl = await loadImageAsDataUrl(checkCardQrImgEl.src);
 
     const { jsPDF } = window.jspdf;
@@ -794,7 +1071,9 @@ async function sendCheckQrPdf() {
         action: 'sendQrPdf',
         code: currentCheckedCode,
         toEmail: email,
-        pdfBase64: pdfBase64
+        pdfBase64: pdfBase64,
+        staffLoginId: auth.loginId,
+        sessionToken: auth.sessionToken
       })
     });
     const data = await res.json();
@@ -848,7 +1127,7 @@ newStudentCodeEl.addEventListener('input', () => {
   const seq = ++newLookupSeq;
   newLookupTimer = setTimeout(async () => {
     try {
-      const res = await jsonp({ action: 'getStudent', code });
+      const res = await authorizedJsonp({ action: 'getStudent', code });
       if (seq !== newLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
@@ -901,7 +1180,7 @@ async function issueQr() {
   btn.textContent = '発行中...';
 
   try {
-    const res = await jsonp({ action: 'issueNewQr', code });
+    const res = await authorizedJsonp({ action: 'issueNewQr', code });
     if (res.ok) {
       showNewMsg(`${res.name} さんのQRを発行し、登録しました。`, 'success');
       cardCodeEl.textContent = code;
@@ -962,6 +1241,7 @@ async function sendQrPdf() {
   btn.textContent = 'PDF作成中...';
 
   try {
+    const auth = await requireStudentQrAuth();
     // QR画像を読み込んでPDFに埋め込む
     const qrDataUrl = await loadImageAsDataUrl(cardQrImgEl.src);
 
@@ -985,7 +1265,9 @@ async function sendQrPdf() {
         action: 'sendQrPdf',
         code: currentIssuedCode,
         toEmail: email,
-        pdfBase64: pdfBase64
+        pdfBase64: pdfBase64,
+        staffLoginId: auth.loginId,
+        sessionToken: auth.sessionToken
       })
     });
     const data = await res.json();
@@ -1030,7 +1312,7 @@ emailStudentCodeEl.addEventListener('input', () => {
   const seq = ++emailLookupSeq;
   emailLookupTimer = setTimeout(async () => {
     try {
-      const res = await jsonp({ action: 'getNotifyEmails', code });
+      const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
       if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         emailStudentNameEl.textContent = res.name || '(氏名なし)';
@@ -1082,7 +1364,7 @@ async function saveNotifyEmails() {
   btn.textContent = '保存中...';
 
   try {
-    const res = await jsonp({
+    const res = await authorizedJsonp({
       action: 'saveNotifyEmails',
       code,
       emails: JSON.stringify(emails),
@@ -1131,7 +1413,7 @@ pointsStudentCodeEl.addEventListener('input', () => {
 
 async function loadPointsHistory(code, seq) {
   try {
-    const res = await jsonp({ action: 'getPointsHistory', code });
+    const res = await authorizedJsonp({ action: 'getPointsHistory', code });
     if (seq !== undefined && seq !== pointsLookupSeq) return; // 古いリクエストの結果は無視
     if (res.ok) {
       pointsStudentNameEl.textContent = res.name || '(氏名なし)';
@@ -1178,7 +1460,7 @@ async function addPoints() {
   btn.textContent = '処理中...';
 
   try {
-    const res = await jsonp({ action: 'addPoints', code, points, reason });
+    const res = await authorizedJsonp({ action: 'addPoints', code, points, reason });
     if (res.ok) {
       showPointsMsg(`${res.name} さんに付与しました。現在: ${res.totalPoints}pt`, 'success');
       pointsCurrentTotalEl.textContent = '現在のポイント: ' + res.totalPoints + 'pt';
@@ -1206,7 +1488,7 @@ async function loadTeacherList() {
   listEl.innerHTML = '<div class="hint">読み込み中...</div>';
 
   try {
-    const res = await jsonp({ action: 'getTeacherList' });
+    const res = await authorizedJsonp({ action: 'getTeacherList' });
     if (res.ok) {
       if (res.teachers.length === 0) {
         listEl.innerHTML = '<div class="hint">講師データが見つかりませんでした。</div>';
@@ -1253,10 +1535,18 @@ async function exportAttendanceCsv() {
   btn.textContent = '出力中...';
 
   try {
+    const auth = await requireStudentQrAuth();
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'exportAttendanceCsv', startDate, endDate, codes })
+      body: JSON.stringify({
+        action: 'exportAttendanceCsv',
+        startDate,
+        endDate,
+        codes,
+        staffLoginId: auth.loginId,
+        sessionToken: auth.sessionToken
+      })
     });
     const data = await res.json();
 
