@@ -1,0 +1,22 @@
+{
+  "name": "QR登録・管理",
+  "short_name": "QR登録",
+  "start_url": "./student_qr_register.html",
+  "display": "standalone",
+  "background_color": "#2e7d5b",
+  "theme_color": "#2e7d5b",
+  "icons": [
+    {
+      "src": "icon-qr-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-qr-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
