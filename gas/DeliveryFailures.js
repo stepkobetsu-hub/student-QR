@@ -7,13 +7,23 @@ const DELIVERY_FAILURE_HEADERS = [
   '送信再開者','送信再開日時','本人確認済み','本人確認内容','最終配信成功日時','元JSON'
 ];
 const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時'];
-const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','error'];
+const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
 const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
 const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock'];
 
 function normalizeDeliveryEmail_(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeBrevoEvent_(value) {
+  const key = String(value || '').trim().replace(/[\s-]/g, '_').toLowerCase();
+  const aliases = {
+    hardbounce: 'hard_bounce', softbounce: 'soft_bounce',
+    invalid: 'invalid_email', invalidemail: 'invalid_email',
+    complaint: 'spam'
+  };
+  return aliases[key] || key;
 }
 
 function ensureDeliveryLogColumns_(sheet) {
@@ -44,7 +54,7 @@ function isBrevoWebhookRequest_(e, body) {
   const expected = String(props.getProperty('BREVO_WEBHOOK_TOKEN') || '');
   const actual = String((e && e.parameter && e.parameter.brevoWebhookToken) || '');
   if (!expected || !constantTimeEquals_(expected, actual)) return false;
-  return body && BREVO_WEBHOOK_EVENTS.indexOf(String(body.event || '')) >= 0;
+  return body && BREVO_WEBHOOK_EVENTS.indexOf(normalizeBrevoEvent_(body.event)) >= 0;
 }
 
 function constantTimeEquals_(a, b) {
@@ -80,7 +90,7 @@ function findDeliveryLogRecord_(messageId, correlationId) {
 }
 
 function handleBrevoWebhook_(body, rawBody) {
-  const event = String(body.event || '');
+  const event = normalizeBrevoEvent_(body.event);
   const email = normalizeDeliveryEmail_(body.email);
   const messageId = String(body['message-id'] || body.messageId || '');
   const correlationId = extractCorrelationId_(body);
@@ -153,7 +163,7 @@ function deliveryEmailFieldName_(col) {
 }
 
 function appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped) {
-  const event = String(body.event || '');
+  const event = normalizeBrevoEvent_(body.event);
   const studentList = matches.map(m => m.id + ' ' + m.name + '（' + m.school + '）').join('\n');
   const fields = matches.map(m => m.id + ':' + m.field).join(', ');
   getDeliveryFailureSheet_().appendRow([
