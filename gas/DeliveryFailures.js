@@ -485,7 +485,7 @@ function handleDeliveryFailureAdminAction_(body) {
   if (action === 'deliveryFailureArchive') return setDeliveryFailureArchive_(body.id, true, staff);
   if (action === 'deliveryFailureUnarchive') return setDeliveryFailureArchive_(body.id, false, staff);
   if (action === 'deliveryFailureDeletePermanent') {
-    if (staff.level !== '4') throw new Error('完全削除はAK=4のみ実行できます');
+    if (['2','3','4'].indexOf(staff.level) < 0) throw new Error('完全削除はAK=2以上の管理者のみ実行できます');
     return deleteDeliveryFailurePermanent_(body.id, staff);
   }
   if (action === 'deliveryFailureStop') return setDeliveryStopForEmail_(body.id, true, staff);
