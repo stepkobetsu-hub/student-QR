@@ -4,16 +4,35 @@ const DELIVERY_FAILURE_HEADERS = [
   '管理ID','イベント重複判定キー','発生日時','登録日時','メールアドレス','イベント種別','表示用状態',
   'BrevoメッセージID','照合ID','件名','理由','タグ','送信元','生徒番号','生徒氏名','校舎',
   '該当通知欄','該当生徒一覧','兄弟を含む関連生徒一覧','送信停止','確認状態','確認者','確認日時',
-  '送信再開者','送信再開日時','本人確認済み','本人確認内容','最終配信成功日時','元JSON'
+  '送信再開者','送信再開日時','本人確認済み','本人確認内容','最終配信成功日時','元JSON',
+  '送信元システム','初回発生日時','最終発生日時','発生回数','再送日時','管理者通知済み','管理者通知日時',
+  'アーカイブ状態','アーカイブ日時','アーカイブ実行者'
 ];
+const DELIVERY_FAILURE_ADMIN_EMAIL = 'mintcocoajasmine@gmail.com';
 const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時'];
 const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
 const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
-const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock'];
+const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock'];
+const WEBHOOK_DIAGNOSTIC_SHEET_NAME = 'Webhook診断';
+const WEBHOOK_DIAGNOSTIC_HEADERS = ['受信日時','tokenMatched','event','recipient','messageId','messageId取得元','照合結果','処理結果','エラー概要'];
 
 function normalizeDeliveryEmail_(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeBrevoMessageId_(value) {
+  return String(value || '').trim().replace(/^<+|>+$/g, '').trim().toLowerCase();
+}
+
+function extractBrevoMessageIdInfo_(body) {
+  const keys = ['message-id', 'messageId', 'message_id'];
+  for (let i = 0; i < keys.length; i++) {
+    if (body && body[keys[i]] != null && String(body[keys[i]]).trim()) {
+      return { value: normalizeBrevoMessageId_(body[keys[i]]), source: keys[i] };
+    }
+  }
+  return { value: '', source: '' };
 }
 
 function normalizeBrevoEvent_(value) {
@@ -37,23 +56,92 @@ function ensureDeliveryLogColumns_(sheet) {
   });
 }
 
+function getDeliveryFailureSpreadsheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const spreadsheetId = String(
+    props.getProperty('DELIVERY_FAILURE_SS_ID') ||
+    props.getProperty('CHECKIN_LOG_SS_ID') ||
+    ''
+  ).trim();
+  if (!spreadsheetId) {
+    throw new Error('DELIVERY_FAILURE_SS_ID または CHECKIN_LOG_SS_ID が設定されていません。');
+  }
+  return SpreadsheetApp.openById(spreadsheetId);
+}
+
+function getDeliveryFailureLogSheet_() {
+  const sheet = getDeliveryFailureSpreadsheet_().getSheetByName('ログ');
+  if (!sheet) throw new Error('不達管理用スプレッドシートに既存の「ログ」シートが見つかりません');
+  return sheet;
+}
+
 function getDeliveryFailureSheet_() {
-  const ss = getCheckInSpreadsheet_();
-  let sheet = ss.getSheetByName(DELIVERY_FAILURE_SHEET_NAME);
+  const ss = getDeliveryFailureSpreadsheet_();
+  const sheet = ss.getSheetByName(DELIVERY_FAILURE_SHEET_NAME);
+  if (!sheet) throw new Error('既存の「' + DELIVERY_FAILURE_SHEET_NAME + '」シートが見つかりません');
+  if (sheet.getMaxColumns() < DELIVERY_FAILURE_HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), DELIVERY_FAILURE_HEADERS.length - sheet.getMaxColumns());
+  const headers = sheet.getRange(1, 1, 1, DELIVERY_FAILURE_HEADERS.length).getValues()[0].map(String);
+  DELIVERY_FAILURE_HEADERS.forEach((header, index) => { if (!headers[index]) sheet.getRange(1, index + 1).setValue(header); });
+  return sheet;
+}
+
+function getWebhookDiagnosticSheet_() {
+  const ss = getDeliveryFailureSpreadsheet_();
+  let sheet = ss.getSheetByName(WEBHOOK_DIAGNOSTIC_SHEET_NAME);
   if (!sheet) {
-    sheet = ss.insertSheet(DELIVERY_FAILURE_SHEET_NAME);
-    if (sheet.getMaxColumns() < DELIVERY_FAILURE_HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), DELIVERY_FAILURE_HEADERS.length - sheet.getMaxColumns());
-    sheet.getRange(1, 1, 1, DELIVERY_FAILURE_HEADERS.length).setValues([DELIVERY_FAILURE_HEADERS]);
+    sheet = ss.insertSheet(WEBHOOK_DIAGNOSTIC_SHEET_NAME);
+    sheet.getRange(1, 1, 1, WEBHOOK_DIAGNOSTIC_HEADERS.length).setValues([WEBHOOK_DIAGNOSTIC_HEADERS]);
     sheet.setFrozenRows(1);
   }
   return sheet;
 }
 
-function isBrevoWebhookRequest_(e, body) {
-  const props = PropertiesService.getScriptProperties();
-  const expected = String(props.getProperty('BREVO_WEBHOOK_TOKEN') || '');
+function setupWebhookDiagnostics() {
+  getWebhookDiagnosticSheet_();
+  return { ok: true };
+}
+
+function isWebhookDiagnosticEnabled_() {
+  return String(PropertiesService.getScriptProperties().getProperty('WEBHOOK_DIAGNOSTIC') || 'false').trim().toLowerCase() === 'true';
+}
+
+function webhookTokenMatched_(e) {
+  const expected = String(PropertiesService.getScriptProperties().getProperty('BREVO_WEBHOOK_TOKEN') || '');
   const actual = String((e && e.parameter && e.parameter.brevoWebhookToken) || '');
-  if (!expected || !constantTimeEquals_(expected, actual)) return false;
+  return Boolean(expected) && constantTimeEquals_(expected, actual);
+}
+
+function isBrevoWebhookCandidate_(e, body) {
+  const hasTokenParameter = Boolean(e && e.parameter && Object.prototype.hasOwnProperty.call(e.parameter, 'brevoWebhookToken'));
+  if (hasTokenParameter) return true;
+  if (!body || typeof body !== 'object') return false;
+  const idInfo = extractBrevoMessageIdInfo_(body);
+  return Boolean(body.event && body.email && (idInfo.value || extractCorrelationId_(body)));
+}
+
+function beginWebhookDiagnostic_(e, body, parseSucceeded) {
+  if (!isWebhookDiagnosticEnabled_()) return null;
+  const idInfo = extractBrevoMessageIdInfo_(body || {});
+  const sheet = getWebhookDiagnosticSheet_();
+  const row = sheet.getLastRow() + 1;
+  sheet.getRange(row, 1, 1, WEBHOOK_DIAGNOSTIC_HEADERS.length).setValues([[
+    new Date(), webhookTokenMatched_(e), normalizeBrevoEvent_((body || {}).event),
+    normalizeDeliveryEmail_((body || {}).email), idInfo.value, idInfo.source,
+    '未照合', '受信', parseSucceeded ? '' : 'JSON.parse失敗'
+  ]]);
+  return { sheet: sheet, row: row };
+}
+
+function updateWebhookDiagnostic_(diagnostic, values) {
+  if (!diagnostic) return;
+  const indexes = { tokenMatched:2, event:3, recipient:4, messageId:5, messageIdSource:6, matched:7, result:8, error:9 };
+  Object.keys(values || {}).forEach(function(key) {
+    if (indexes[key]) diagnostic.sheet.getRange(diagnostic.row, indexes[key]).setValue(values[key]);
+  });
+}
+
+function isBrevoWebhookRequest_(e, body) {
+  if (!webhookTokenMatched_(e)) return false;
   return body && BREVO_WEBHOOK_EVENTS.indexOf(normalizeBrevoEvent_(body.event)) >= 0;
 }
 
@@ -71,48 +159,77 @@ function extractCorrelationId_(body) {
   return match ? match[1] : '';
 }
 
+function normalizedMessageIdsFromLogCell_(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(normalizeBrevoMessageId_).filter(Boolean);
+  } catch (ignore) {}
+  return [normalizeBrevoMessageId_(raw)].filter(Boolean);
+}
+
 function findDeliveryLogRecord_(messageId, correlationId) {
-  const sheet = getLogSheet_();
+  const sheet = getDeliveryFailureLogSheet_();
   if (sheet.getLastRow() < 2) return null;
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
   const messageCol = headers.indexOf('BrevoメッセージID');
   const correlationCol = headers.indexOf('照合ID');
   if (messageCol < 0 || correlationCol < 0) return null;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  const normalizedMessageId = normalizeBrevoMessageId_(messageId);
   for (let i = values.length - 1; i >= 0; i--) {
-    const messageCell = String(values[i][messageCol] || '');
+    const messageIds = normalizedMessageIdsFromLogCell_(values[i][messageCol]);
     const correlationCell = String(values[i][correlationCol] || '');
-    if ((messageId && messageCell.indexOf(messageId) >= 0) || (correlationId && correlationCell.indexOf(correlationId) >= 0)) {
+    if ((normalizedMessageId && messageIds.indexOf(normalizedMessageId) >= 0) || (correlationId && correlationCell.indexOf(correlationId) >= 0)) {
       return { sheet: sheet, row: i + 2, headers: headers, values: values[i] };
     }
   }
   return null;
 }
 
-function handleBrevoWebhook_(body, rawBody) {
+function handleBrevoWebhook_(body, rawBody, diagnostic) {
   const event = normalizeBrevoEvent_(body.event);
   const email = normalizeDeliveryEmail_(body.email);
-  const messageId = String(body['message-id'] || body.messageId || '');
+  const messageIdInfo = extractBrevoMessageIdInfo_(body);
+  const messageId = messageIdInfo.value;
   const correlationId = extractCorrelationId_(body);
-  if (!email || (!messageId && !correlationId)) return { ok: false, message: '必須項目がありません' };
+  updateWebhookDiagnostic_(diagnostic, { event:event, recipient:email, messageId:messageId, messageIdSource:messageIdInfo.source });
+  if (!email || (!messageId && !correlationId)) {
+    updateWebhookDiagnostic_(diagnostic, { matched:'照合不可', result:'処理終了', error:'必須項目なし' });
+    return { ok: false, message: '必須項目がありません' };
+  }
   const logRecord = findDeliveryLogRecord_(messageId, correlationId);
-  if (!logRecord) return { ok: false, message: '実際の送信ログと照合できません' };
+  if (!logRecord) {
+    updateWebhookDiagnostic_(diagnostic, { matched:'messageId一致なし', result:'HTTP 200で終了', error:'' });
+    return { ok: true, matched: false, message: '実際の送信ログと照合できません' };
+  }
+  updateWebhookDiagnostic_(diagnostic, { matched:'ログ' + logRecord.row + '行目' });
   const eventDate = deliveryEventDate_(body);
   const fallback = body.ts_event || body.ts || body.date || rawBody;
   const dedupeKey = deliveryHash_([messageId, event, fallback, email].join('|'));
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    if (deliveryDedupeExists_(dedupeKey)) return { ok: true, duplicate: true };
+    if (deliveryDedupeExists_(dedupeKey)) {
+      updateWebhookDiagnostic_(diagnostic, { result:'重複イベント', error:'' });
+      return { ok: true, duplicate: true };
+    }
     updateDeliveryLogFromWebhook_(logRecord, event, eventDate, String(body.reason || body.error || ''));
     if (event === 'delivered') {
-      updateDeliveredFailureRecords_(email, messageId, eventDate);
+      updateDeliveredFailureRecords_(email, messageId, eventDate, logRecord);
+      updateWebhookDiagnostic_(diagnostic, { result:'配信完了へ更新', error:'' });
       return { ok: true, delivered: true };
     }
     const matches = findStudentsByDeliveryEmail_(email);
     const stopped = DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(event) >= 0 || shouldStopForTemporaryErrors_(email, messageId, event, eventDate);
-    appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped);
+    const upsertResult = appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped, logRecord);
+    notifyDeliveryFailureAdministratorSafely_(upsertResult);
+    updateWebhookDiagnostic_(diagnostic, { result:'不達イベント記録', error:'' });
     return { ok: true, stopped: stopped };
+  } catch (error) {
+    updateWebhookDiagnostic_(diagnostic, { result:'例外終了', error:String(error && error.message || error).slice(0, 300) });
+    throw error;
   } finally {
     lock.releaseLock();
   }
@@ -136,7 +253,7 @@ function deliveryDedupeExists_(key) {
 }
 
 function deliveryDisplayState_(event) {
-  return ({ hard_bounce:'恒久不達', soft_bounce:'一時エラー', deferred:'一時エラー', blocked:'ブロック', invalid_email:'無効アドレス', spam:'迷惑メール報告', error:'送信エラー', delivered:'配信済み' })[event] || event;
+  return ({ hard_bounce:'恒久不達', soft_bounce:'一時エラー', deferred:'一時エラー', blocked:'ブロック', invalid_email:'無効アドレス', spam:'迷惑メール報告', error:'送信エラー', delivered:'配信完了' })[event] || event;
 }
 
 function findStudentsByDeliveryEmail_(email) {
@@ -146,7 +263,7 @@ function findStudentsByDeliveryEmail_(email) {
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
   const result = [];
   data.forEach((row, idx) => {
-    const cols = DELIVERY_EMAIL_COLS.concat(COL_NOTIFY_EMAILS);
+    const cols = EMAIL_COLS;
     cols.forEach(col => {
       if (normalizeDeliveryEmail_(row[col - 1]) !== email) return;
       result.push({ row: idx + 2, id: String(row[COL_STUDENT_ID - 1] || ''), name: String(row[COL_STUDENT_NAME - 1] || ''), school: String(row[COL_SCHOOL - 1] || ''), field: deliveryEmailFieldName_(col) });
@@ -156,22 +273,106 @@ function findStudentsByDeliveryEmail_(email) {
 }
 
 function deliveryEmailFieldName_(col) {
-  const index = DELIVERY_EMAIL_COLS.indexOf(col);
+  const index = EMAIL_COLS.indexOf(col);
   if (index >= 0) return 'メール' + (index + 1);
-  const legacy = COL_NOTIFY_EMAILS.indexOf(col);
-  return legacy >= 0 ? '旧通知メール' + (legacy + 1) : '';
+  return '';
 }
 
-function appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped) {
+function deliveryLogValue_(record, header) {
+  const index = record && record.headers ? record.headers.indexOf(header) : -1;
+  return index >= 0 ? record.values[index] : '';
+}
+
+function appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped, logRecord) {
   const event = normalizeBrevoEvent_(body.event);
+  const sourceSystem = String(deliveryLogValue_(logRecord, '送信元システム') || 'QR_ATTENDANCE');
+  const logStudentId = String(deliveryLogValue_(logRecord, '生徒番号') || '');
+  const logStudentName = String(deliveryLogValue_(logRecord, '生徒氏名') || '');
+  const logSchool = String(deliveryLogValue_(logRecord, '校舎') || '');
+  const logMailType = String(deliveryLogValue_(logRecord, '送信種別') || deliveryLogValue_(logRecord, '種別') || '');
+  const logSubject = String(deliveryLogValue_(logRecord, '件名') || body.subject || '');
+  if (!matches.length && logStudentId) matches = [{id:logStudentId,name:logStudentName,school:logSchool,field:''}];
   const studentList = matches.map(m => m.id + ' ' + m.name + '（' + m.school + '）').join('\n');
   const fields = matches.map(m => m.id + ':' + m.field).join(', ');
-  getDeliveryFailureSheet_().appendRow([
+  const sheet = getDeliveryFailureSheet_();
+  if (sheet.getLastRow() >= 2) {
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_FAILURE_HEADERS.length).getValues();
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const sameEmail = normalizeDeliveryEmail_(rows[i][4]) === normalizeDeliveryEmail_(body.email);
+      const sameEvent = String(rows[i][5]) === event;
+      const sameSource = String(rows[i][29] || 'QR_ATTENDANCE') === sourceSystem;
+      const sameStudent = !logStudentId || String(rows[i][13] || '').split(/\s*,\s*/).indexOf(logStudentId) >= 0;
+      if (sameEmail && sameEvent && sameSource && sameStudent) {
+        const row = i + 2;
+        sheet.getRange(row, 3).setValue(eventDate);
+        sheet.getRange(row, 7).setValue(deliveryDisplayState_(event));
+        sheet.getRange(row, 8).setValue(normalizeBrevoMessageId_(body['message-id'] || body.messageId || body.message_id));
+        sheet.getRange(row, 9).setValue(correlationId);
+        sheet.getRange(row, 10).setValue(logSubject);
+        sheet.getRange(row, 11).setValue(String(body.reason || body.error || ''));
+        sheet.getRange(row, 20).setValue(stopped || rows[i][19]);
+        sheet.getRange(row, 32).setValue(eventDate);
+        sheet.getRange(row, 33).setValue(Math.max(1, Number(rows[i][32]) || 1) + 1);
+        return { row:row, created:false, event:event, stopped:stopped || rows[i][19] };
+      }
+    }
+  }
+  sheet.appendRow([
     Utilities.getUuid(), dedupeKey, eventDate, new Date(), normalizeDeliveryEmail_(body.email), event, deliveryDisplayState_(event),
-    String(body['message-id'] || body.messageId || ''), correlationId, String(body.subject || ''), String(body.reason || body.error || ''),
+    normalizeBrevoMessageId_(body['message-id'] || body.messageId || body.message_id), correlationId, logSubject, String(body.reason || body.error || ''),
     JSON.stringify(body.tags || []), DEFAULT_FROM_EMAIL, matches.map(m => m.id).join(', '), matches.map(m => m.name).join(', '),
-    matches.map(m => m.school).join(', '), fields, studentList, studentList, stopped, '未確認', '', '', '', '', false, '', '', rawBody
+    matches.map(m => m.school).join(', '), fields || logMailType, studentList, studentList, stopped, '未確認', '', '', '', '', false, '', '', sourceSystem === 'STEP_MESSAGE_CENTER' ? '' : rawBody,
+    sourceSystem, eventDate, eventDate, 1, '', false, '', false, '', ''
   ]);
+  return { row:sheet.getLastRow(), created:true, event:event, stopped:stopped };
+}
+
+function deliveryFailureSourceLabel_(value) {
+  return value === 'STEP_MESSAGE_CENTER' ? 'STEP配信' : (value === 'QR_ATTENDANCE' ? '出退くんQR' : 'その他');
+}
+
+function isMajorDeliveryFailure_(event, state, stopped) {
+  const normalized = normalizeBrevoEvent_(event);
+  return stopped || ['hard_bounce','invalid_email','blocked','spam'].indexOf(normalized) >= 0 || ['恒久不達','無効アドレス','ブロック','迷惑メール報告'].indexOf(String(state || '')) >= 0;
+}
+
+function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
+  try {
+    if (!upsertResult || !upsertResult.row) return { ok:true, skipped:true };
+    const sheet = getDeliveryFailureSheet_();
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const row = sheet.getRange(upsertResult.row, 1, 1, headers.length).getValues()[0];
+    const value = name => { const i=headers.indexOf(name); return i >= 0 ? row[i] : ''; };
+    const event=String(value('イベント種別')), state=String(value('表示用状態')), stopped=value('送信停止')===true||String(value('送信停止')).toUpperCase()==='TRUE';
+    const managementId=String(value('管理ID')), messageId=String(value('BrevoメッセージID'));
+    if (!isMajorDeliveryFailure_(event,state,stopped)) return { ok:true, skipped:true };
+    const notificationKey=[managementId,messageId,event].join('|'), notifiedValue=value('管理者通知済み');
+    if(String(notifiedValue)===notificationKey||notifiedValue===true||String(notifiedValue).toUpperCase()==='TRUE')return {ok:true,duplicate:true};
+    const subject='【不達メール通知】'+String(value('生徒氏名')||value('メールアドレス'))+' / '+state;
+    const body=[
+      '重大な不達メールが発生しました。','',
+      '生徒番号：'+String(value('生徒番号')),
+      '生徒氏名：'+String(value('生徒氏名')),
+      '校舎：'+String(value('校舎')),
+      'メールアドレス：'+String(value('メールアドレス')),
+      '送信元システム：'+deliveryFailureSourceLabel_(String(value('送信元システム'))),
+      '件名：'+String(value('件名')),
+      'イベント種別：'+event,
+      '表示用状態：'+state,
+      '理由：'+String(value('理由')),
+      '発生日時：'+String(value('最終発生日時')||value('発生日時')),
+      '管理ID：'+managementId,
+      'Brevo messageId：'+messageId
+    ].join('\n');
+    MailApp.sendEmail({to:DELIVERY_FAILURE_ADMIN_EMAIL,subject:subject,body:body});
+    const notifiedIndex=headers.indexOf('管理者通知済み'), notifiedAtIndex=headers.indexOf('管理者通知日時');
+    if(notifiedIndex>=0)sheet.getRange(upsertResult.row,notifiedIndex+1).setValue(notificationKey);
+    if(notifiedAtIndex>=0)sheet.getRange(upsertResult.row,notifiedAtIndex+1).setValue(new Date());
+    return {ok:true,notified:true,key:notificationKey};
+  } catch(error) {
+    Logger.log('不達メール管理者通知に失敗しました: '+String(error&&error.message||error));
+    return {ok:false,error:String(error&&error.message||error)};
+  }
 }
 
 function updateDeliveryLogFromWebhook_(record, event, eventDate, reason) {
@@ -182,18 +383,24 @@ function updateDeliveryLogFromWebhook_(record, event, eventDate, reason) {
   if (event !== 'delivered') set('最終エラー理由', reason);
 }
 
-function updateDeliveredFailureRecords_(email, messageId, deliveredAt) {
+function updateDeliveredFailureRecords_(email, messageId, deliveredAt, logRecord) {
   const sheet = getDeliveryFailureSheet_();
   if (sheet.getLastRow() < 2) return;
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_FAILURE_HEADERS.length).getValues();
+  const sourceSystem = String(deliveryLogValue_(logRecord, '送信元システム') || 'QR_ATTENDANCE');
+  const studentId = String(deliveryLogValue_(logRecord, '生徒番号') || '');
+  const belongsToDelivery = row => normalizeDeliveryEmail_(row[4]) === email && String(row[29] || 'QR_ATTENDANCE') === sourceSystem && (!studentId || String(row[13] || '').split(/\s*,\s*/).indexOf(studentId) >= 0);
   let permanentStopExists = false;
   values.forEach(row => {
-    if (normalizeDeliveryEmail_(row[4]) === email && DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(String(row[5])) >= 0 && (row[19] === true || String(row[19]).toUpperCase() === 'TRUE')) permanentStopExists = true;
+    if (belongsToDelivery(row) && DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(String(row[5])) >= 0 && (row[19] === true || String(row[19]).toUpperCase() === 'TRUE')) permanentStopExists = true;
   });
   values.forEach((row, i) => {
-    if (normalizeDeliveryEmail_(row[4]) !== email) return;
+    if (!belongsToDelivery(row)) return;
     sheet.getRange(i + 2, 28).setValue(deliveredAt);
-    if (!permanentStopExists && DELIVERY_TEMP_EVENTS.indexOf(String(row[5])) >= 0) sheet.getRange(i + 2, 20).setValue(false);
+    if (!permanentStopExists && DELIVERY_TEMP_EVENTS.indexOf(String(row[5])) >= 0) {
+      sheet.getRange(i + 2, 20).setValue(false);
+      sheet.getRange(i + 2, 7).setValue('配信完了');
+    }
   });
 }
 
@@ -240,7 +447,7 @@ function verifyDeliveryStaff_(body, allowedLevels) {
     if (String(rows[i][0] || '').trim() !== code) continue;
     const saved = String(rows[i][35] || '');
     const level = String(rows[i][36] || '').trim();
-    if (saved && saved !== password) throw new Error('パスワードが違います');
+    if (!saved || saved !== password) throw new Error('パスワードが違います');
     if (allowedLevels.indexOf(level) < 0) throw new Error('この操作を行う権限がありません');
     return { code: code, name: String(rows[i][1] || ''), level: level };
   }
@@ -251,33 +458,173 @@ function handleDeliveryFailureAdminAction_(body) {
   const action = String(body.action || '');
   const viewLevels = ['1','2','3','4'];
   if (action === 'deliveryFailureResume') return deliveryFailureResume_(body, false);
-  if (action === 'deliveryFailureSpamResume' || action === 'deliveryFailureBrevoUnblock') return deliveryFailureResume_(body, true);
+  if (action === 'deliveryFailureSpamResume') return deliveryFailureResume_(body, true);
+  if (action === 'deliveryFailureBrevoUnblock') return deliveryFailureBrevoUnblock_(body);
   const staff = verifyDeliveryStaff_(body, viewLevels);
-  if (action === 'deliveryFailuresList') return { ok:true, items:listDeliveryFailures_(body), staff:{name:staff.name,level:staff.level} };
+  if (action === 'deliveryFailuresList') {
+    const sheet = getDeliveryFailureSheet_();
+    const values = sheet.getDataRange().getValues();
+    const header = values.length ? values[0].map(String) : [];
+    const allItems = values.slice(1)
+      .filter(row => row.some(value => value !== '' && value !== null))
+      .map(row => deliveryRowToObjectByHeaders_(row, header));
+    const filteredItems = filterDeliveryFailureItems_(allItems, body || {});
+    const activeItems = allItems.filter(item => !item.archived);
+    return {
+      ok: true,
+      list: filteredItems,
+      items: filteredItems,
+      summary: deliveryFailureSummary_(activeItems),
+      staff: {name:staff.name,level:staff.level}
+    };
+  }
+  if (action === 'deliveryFailureSummary') return {ok:true,summary:deliveryFailureSummary_(readDeliveryFailureItems_())};
   if (action === 'deliveryFailureDetail') return { ok:true, item:getDeliveryFailureById_(body.id) };
   if (action === 'deliveryFailureRelatedStudents') return { ok:true, students:findStudentsByDeliveryEmail_(normalizeDeliveryEmail_(body.email)) };
   if (action === 'deliveryFailureConfirm') return updateDeliveryFailureAction_(body.id, {20:'確認済み',21:staff.name,22:new Date()});
+  if (action === 'deliveryFailureArchive') return setDeliveryFailureArchive_(body.id, true, staff);
+  if (action === 'deliveryFailureUnarchive') return setDeliveryFailureArchive_(body.id, false, staff);
+  if (action === 'deliveryFailureDeletePermanent') {
+    if (staff.level !== '4') throw new Error('完全削除はAK=4のみ実行できます');
+    return deleteDeliveryFailurePermanent_(body.id, staff);
+  }
   if (action === 'deliveryFailureStop') return setDeliveryStopForEmail_(body.id, true, staff);
   throw new Error('不明な管理操作です');
 }
 
-function listDeliveryFailures_(filter) {
+function normalizeDeliveryFailureHeader_(value) {
+  return String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u3000/g, ' ').trim().normalize('NFKC');
+}
+
+function normalizeDeliverySourceSystem_(value) {
+  const normalized = String(value || '').replace(/\u3000/g, '').trim().toUpperCase();
+  if (normalized === 'STEP_MESSAGE_CENTER') return 'STEP_MESSAGE_CENTER';
+  if (normalized === 'QR_ATTENDANCE') return 'QR_ATTENDANCE';
+  return normalized;
+}
+
+function resolveDeliverySourceSystem_(sourceSystem, tags, rawJson) {
+  const explicitSource = normalizeDeliverySourceSystem_(sourceSystem);
+  if (explicitSource) return explicitSource;
+  const evidence = String(tags || '') + ' ' + String(rawJson || '');
+  return /step-message-center|STEP_MESSAGE_CENTER/i.test(evidence)
+    ? 'STEP_MESSAGE_CENTER'
+    : 'QR_ATTENDANCE';
+}
+
+function deliveryFailureBoolean_(value) {
+  return value === true || ['TRUE','1','ARCHIVED','アーカイブ済み','非表示'].indexOf(String(value || '').trim().toUpperCase()) >= 0;
+}
+
+function deliveryFailureHeaderMap_(headers) {
+  const map={}; headers.forEach((header,index)=>map[normalizeDeliveryFailureHeader_(header)]=index); return map;
+}
+
+function deliveryFailureValueByHeader_(row,map,names,fallback) {
+  for(let i=0;i<names.length;i++){const index=map[normalizeDeliveryFailureHeader_(names[i])];if(index!==undefined)return row[index];}
+  return fallback;
+}
+
+function deliveryRowToObjectByHeaders_(row,headers) {
+  const map=deliveryFailureHeaderMap_(headers), value=(...names)=>deliveryFailureValueByHeader_(row,map,names,'');
+  const stoppedValue=value('送信停止'), notifiedValue=value('管理者通知済み');
+  const tagsValue=String(value('タグ')), rawJsonValue=String(value('元JSON'));
+  const sourceSystem=resolveDeliverySourceSystem_(value('送信元システム'),tagsValue,rawJsonValue);
+  const subject=String(value('件名')), fields=String(value('該当通知欄'));
+  return {
+    id:String(value('管理ID')),occurredAt:value('発生日時'),registeredAt:value('登録日時'),email:normalizeDeliveryEmail_(value('メールアドレス')),
+    event:normalizeBrevoEvent_(value('イベント種別')),state:String(value('表示用状態')).trim(),messageId:String(value('BrevoメッセージID','Brevoメッセージ照合ID')),
+    correlationId:String(value('照合ID')),subject:subject,reason:String(value('理由')),tags:tagsValue,sender:String(value('送信元')),
+    studentIds:String(value('生徒番号')),studentNames:String(value('生徒氏名')),school:String(value('校舎')),fields:fields,
+    students:String(value('該当生徒一覧')),relatedStudents:String(value('兄弟を含む関連生徒一覧','兄弟を含む関連')),
+    stopped:stoppedValue===true||String(stoppedValue).toUpperCase()==='TRUE',confirmStatus:String(value('確認状態')),confirmer:String(value('確認者')),
+    confirmedAt:value('確認日時'),resumedBy:String(value('送信再開者')),resumedAt:value('送信再開日時'),guardianConfirmed:value('本人確認済み')===true,
+    guardianConfirmation:String(value('本人確認内容')),deliveredAt:value('最終配信成功日時'),rawJson:rawJsonValue,
+    sourceSystem:sourceSystem,mailType:sourceSystem==='STEP_MESSAGE_CENTER'?(subject||fields||'STEP配信'):(/checkout/i.test(tagsValue)?'退室':'入室'),firstOccurredAt:value('初回発生日時'),lastOccurredAt:value('最終発生日時'),
+    occurrenceCount:Number(value('発生回数'))||1,resentAt:value('再送日時'),adminNotified:!!String(notifiedValue||''),adminNotifiedAt:value('管理者通知日時'),
+    archived:deliveryFailureBoolean_(value('アーカイブ状態','archived')),archivedAt:value('アーカイブ日時','archivedAt'),archivedBy:String(value('アーカイブ実行者','archivedBy'))
+  };
+}
+
+function readDeliveryFailureItems_() {
   const sheet = getDeliveryFailureSheet_();
   if (sheet.getLastRow() < 2) return [];
-  return sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_FAILURE_HEADERS.length).getValues().map(deliveryRowToObject_).filter(item => {
+  const values=sheet.getDataRange().getValues(), headers=values[0].map(String);
+  return values.slice(1).filter(row=>row.some(value=>value!==''&&value!==null)).map(row=>deliveryRowToObjectByHeaders_(row,headers));
+}
+
+function filterDeliveryFailureItems_(items,filter) {
+  return items.filter(item => {
     const emailQ = normalizeDeliveryEmail_(filter.emailSearch); const studentQ = String(filter.studentSearch || '').trim().toLowerCase();
+    const sourceQ = normalizeDeliverySourceSystem_(filter.sourceSystem);
+    const includeArchived = Boolean(filter.includeArchived) || Boolean(emailQ) || Boolean(studentQ);
+    if (filter.archiveOnly && !item.archived) return false;
+    if (!filter.archiveOnly && !includeArchived && item.archived) return false;
     if (emailQ && item.email.indexOf(emailQ) < 0) return false;
     if (studentQ && (item.studentIds + ' ' + item.studentNames).toLowerCase().indexOf(studentQ) < 0) return false;
     if (filter.school && item.school.indexOf(String(filter.school)) < 0) return false;
+    if (filter.event && item.event !== normalizeBrevoEvent_(filter.event)) return false;
     if (filter.state && item.state !== filter.state) return false;
+    if (filter.confirmStatus && item.confirmStatus !== String(filter.confirmStatus)) return false;
+    if (sourceQ && sourceQ !== 'ALL' && item.sourceSystem !== sourceQ) return false;
     if (filter.unconfirmedOnly && item.confirmStatus === '確認済み') return false;
     if (filter.stoppedOnly && !item.stopped) return false;
     return true;
   }).reverse();
 }
 
+function deliveryFailureSummary_(items) {
+  const start=new Date();start.setHours(0,0,0,0);
+  let unconfirmed=0,stopped=0,today=0;
+  items.forEach(item=>{
+    const serious=isMajorDeliveryFailure_(item.event,item.state,item.stopped);
+    if(serious&&item.confirmStatus!=='確認済み')unconfirmed++;
+    if(item.stopped)stopped++;
+    const occurred=item.occurredAt instanceof Date?item.occurredAt:new Date(item.occurredAt);
+    if(!isNaN(occurred.getTime())&&occurred>=start)today++;
+  });
+  return {unconfirmed:unconfirmed,stopped:stopped,today:today,badge:unconfirmed>99?'99+':String(unconfirmed)};
+}
+
+function listDeliveryFailuresWithSummary_(filter) {
+  const all=readDeliveryFailureItems_();
+  return {items:filterDeliveryFailureItems_(all,filter||{}),summary:deliveryFailureSummary_(all)};
+}
+
+function listDeliveryFailures_(filter) { return listDeliveryFailuresWithSummary_(filter).items; }
+
+/** 一時診断用。シートは読み取りのみで、結果を実行ログへ出力する。 */
+function diagnoseDeliveryFailuresList() {
+  const sheet = getDeliveryFailureSheet_();
+  const spreadsheet = sheet.getParent();
+  const values = sheet.getDataRange().getValues();
+  const header = values.length ? values[0].map(String) : [];
+  const allItems = values.slice(1)
+    .filter(row => row.some(value => value !== '' && value !== null))
+    .map(row => deliveryRowToObjectByHeaders_(row, header));
+  const result = {
+    spreadsheetId: spreadsheet.getId(),
+    spreadsheetName: spreadsheet.getName(),
+    sheetName: sheet.getName(),
+    lastRow: sheet.getLastRow(),
+    header: header,
+    totalRows: Math.max(values.length - 1, 0),
+    beforeFilter: allItems.length,
+    afterFilter: allItems.length,
+    sample: allItems.slice(0, 5).map(item => ({
+      source: item.sourceSystem,
+      status: item.event || item.state,
+      messageId: item.messageId,
+      recipient: item.email
+    }))
+  };
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function deliveryRowToObject_(row) {
-  return { id:String(row[0]), occurredAt:row[2], registeredAt:row[3], email:normalizeDeliveryEmail_(row[4]), event:String(row[5]), state:String(row[6]), messageId:String(row[7]), correlationId:String(row[8]), subject:String(row[9]), reason:String(row[10]), tags:String(row[11]), sender:String(row[12]), studentIds:String(row[13]), studentNames:String(row[14]), school:String(row[15]), fields:String(row[16]), students:String(row[17]), relatedStudents:String(row[18]), stopped:row[19] === true || String(row[19]).toUpperCase()==='TRUE', confirmStatus:String(row[20]), confirmer:String(row[21]), confirmedAt:row[22], resumedBy:String(row[23]), resumedAt:row[24], guardianConfirmed:row[25] === true || String(row[25]).toUpperCase()==='TRUE', guardianConfirmation:String(row[26]), deliveredAt:row[27], rawJson:String(row[28]) };
+  const sourceSystem=resolveDeliverySourceSystem_(row[29],row[11],row[28]);
+  return { id:String(row[0]), occurredAt:row[2], registeredAt:row[3], email:normalizeDeliveryEmail_(row[4]), event:String(row[5]), state:String(row[6]), messageId:String(row[7]), correlationId:String(row[8]), subject:String(row[9]), reason:String(row[10]), tags:String(row[11]), sender:String(row[12]), studentIds:String(row[13]), studentNames:String(row[14]), school:String(row[15]), fields:String(row[16]), students:String(row[17]), relatedStudents:String(row[18]), stopped:row[19] === true || String(row[19]).toUpperCase()==='TRUE', confirmStatus:String(row[20]), confirmer:String(row[21]), confirmedAt:row[22], resumedBy:String(row[23]), resumedAt:row[24], guardianConfirmed:row[25] === true || String(row[25]).toUpperCase()==='TRUE', guardianConfirmation:String(row[26]), deliveredAt:row[27], rawJson:String(row[28]), sourceSystem:sourceSystem, mailType:sourceSystem==='STEP_MESSAGE_CENTER'?(String(row[9])||String(row[16])||'STEP配信'):(/checkout/i.test(String(row[11]))?'退室':'入室'), firstOccurredAt:row[30], lastOccurredAt:row[31], occurrenceCount:Number(row[32])||1, resentAt:row[33], archived:deliveryFailureBoolean_(row[36]), archivedAt:row[37], archivedBy:String(row[38]||'') };
 }
 
 function getDeliveryFailureById_(id) {
@@ -292,6 +639,33 @@ function updateDeliveryFailureAction_(id, valuesByZeroIndex) {
   const item = getDeliveryFailureById_(id); const sheet = getDeliveryFailureSheet_();
   Object.keys(valuesByZeroIndex).forEach(key => sheet.getRange(item.row, Number(key) + 1).setValue(valuesByZeroIndex[key]));
   return { ok:true };
+}
+
+function updateDeliveryFailureFieldsByHeader_(id, fields) {
+  const item=getDeliveryFailureById_(id), sheet=getDeliveryFailureSheet_();
+  const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(normalizeDeliveryFailureHeader_);
+  Object.keys(fields).forEach(name=>{
+    const index=headers.indexOf(normalizeDeliveryFailureHeader_(name));
+    if(index<0)throw new Error('必要な列が見つかりません: '+name);
+    sheet.getRange(item.row,index+1).setValue(fields[name]);
+  });
+  return {ok:true};
+}
+
+function setDeliveryFailureArchive_(id, archived, staff) {
+  const updates=archived
+    ? {'アーカイブ状態':true,'アーカイブ日時':new Date(),'アーカイブ実行者':staff.name}
+    : {'アーカイブ状態':false,'アーカイブ日時':'','アーカイブ実行者':''};
+  updateDeliveryFailureFieldsByHeader_(id,updates);
+  return {ok:true,archived:archived};
+}
+
+function deleteDeliveryFailurePermanent_(id, staff) {
+  const item=getDeliveryFailureById_(id);
+  if(!item.archived)throw new Error('完全削除はアーカイブ済みの記録だけ実行できます');
+  Logger.log(JSON.stringify({action:'deliveryFailureDeletePermanent',deletedAt:new Date(),deletedBy:staff.name,email:item.email,messageId:item.messageId,state:item.state,subject:item.subject}));
+  getDeliveryFailureSheet_().deleteRow(item.row);
+  return {ok:true,deleted:true};
 }
 
 function setDeliveryStopForEmail_(id, stopped, staff) {
@@ -310,15 +684,23 @@ function deliveryFailureResume_(body, spamMode) {
   if (spamMode) {
     if (!body.guardianConfirmed || !String(body.confirmationDetails || '').trim()) throw new Error('保護者本人への確認と確認内容が必要です');
   }
-  if (['hard_bounce','blocked','invalid_email','spam'].indexOf(item.event) >= 0) {
-    if (staff.level !== '4') throw new Error('Brevoブロック解除を伴うためAK=4が必要です');
+  if (spamMode) {
     unblockBrevoTransactionalContact_(item.email);
   }
   setDeliveryStopForEmail_(body.id, false, staff);
-  const updates = {23:staff.name,24:new Date()};
+  const updates = {6:'送信再開',23:staff.name,24:new Date()};
   if (spamMode) { updates[25] = true; updates[26] = String(body.confirmationDetails).trim(); updates[20] = '確認済み'; updates[21] = staff.name; updates[22] = new Date(); }
   updateDeliveryFailureAction_(body.id, updates);
-  return { ok:true, stopped:false };
+  return { ok:true, stopped:false, brevoUnblockRequired:!spamMode && ['hard_bounce','blocked','invalid_email'].indexOf(item.event) >= 0 };
+}
+
+function deliveryFailureBrevoUnblock_(body) {
+  const staff = verifyDeliveryStaff_(body, ['4']);
+  const item = getDeliveryFailureById_(body.id);
+  if (item.event === 'spam') throw new Error('spamは本人確認付きの専用解除操作を使用してください');
+  unblockBrevoTransactionalContact_(item.email);
+  updateDeliveryFailureAction_(body.id, {23:staff.name,24:new Date()});
+  return { ok:true, brevoUnblocked:true };
 }
 
 function unblockBrevoTransactionalContact_(email) {
@@ -331,10 +713,11 @@ function unblockBrevoTransactionalContact_(email) {
 }
 
 function setupDeliveryFailureManagement() {
-  getDeliveryFailureSheet_(); ensureDeliveryLogColumns_(getLogSheet_());
+  getDeliveryFailureSheet_(); ensureDeliveryLogColumns_(getDeliveryFailureLogSheet_());
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('BREVO_TEMP_ERROR_THRESHOLD')) props.setProperty('BREVO_TEMP_ERROR_THRESHOLD','3');
   if (!props.getProperty('BREVO_TEMP_ERROR_WINDOW_DAYS')) props.setProperty('BREVO_TEMP_ERROR_WINDOW_DAYS','7');
   if (!props.getProperty('BREVO_WEBHOOK_TOKEN')) props.setProperty('BREVO_WEBHOOK_TOKEN', Utilities.getUuid() + Utilities.getUuid().replace(/-/g,''));
+  if (!props.getProperty('WEBHOOK_DIAGNOSTIC')) props.setProperty('WEBHOOK_DIAGNOSTIC','false');
   Logger.log('不達メール管理の初期設定が完了しました。Webhook URLのトークンはスクリプトプロパティで確認してください。');
 }
