@@ -2,6 +2,7 @@
   "name": "QR登録・管理",
   "short_name": "QR登録",
   "start_url": "./student_qr_register.html",
+  "scope": "./student_qr_register.html",
   "display": "standalone",
   "background_color": "#2e7d5b",
   "theme_color": "#2e7d5b",
