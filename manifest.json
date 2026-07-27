@@ -2,6 +2,7 @@
   "name": "入退室チェックイン",
   "short_name": "入退室",
   "start_url": "./tablet_checkin.html",
+  "scope": "./tablet_checkin.html",
   "display": "standalone",
   "background_color": "#2e7d5b",
   "theme_color": "#2e7d5b",
