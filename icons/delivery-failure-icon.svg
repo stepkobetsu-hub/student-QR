@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="不達メール管理">
+  <rect width="128" height="128" rx="25" fill="#0b3275"/>
+  <path d="M21 67a43 43 0 0 1 70-33" fill="none" stroke="#3b8cff" stroke-width="9" stroke-linecap="round"/>
+  <path d="m84 22 18 4-7 17" fill="none" stroke="#3b8cff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="25" y="42" width="73" height="52" rx="9" fill="#fff"/>
+  <path d="m29 48 32 25a7 7 0 0 0 8 0l25-20" fill="none" stroke="#0b3275" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="94" cy="89" r="24" fill="#f04438" stroke="#fff" stroke-width="5"/>
+  <path d="M94 76v15" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="94" cy="100" r="4" fill="#fff"/>
+</svg>
