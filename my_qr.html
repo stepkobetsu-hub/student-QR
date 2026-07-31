@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#143f67">
+  <title>自分のQR | STEP塾生アプリ</title>
+  <style>
+    :root{--navy:#143f67;--blue:#23618e;--red:#e8383d;--text:#172536;--muted:#66788b;--line:#dfe7ef;--ok:#177245}
+    *{box-sizing:border-box}html{background:#f4f7fb}body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic",sans-serif;color:var(--text);background:radial-gradient(circle at 0 0,#e2f1ff 0,transparent 36%),radial-gradient(circle at 100% 0,#ffe8e9 0,transparent 31%),#f6f8fb}
+    button,input{-webkit-tap-highlight-color:transparent;font:inherit}.app{width:min(100% - 28px,520px);margin:auto;padding:calc(18px + env(safe-area-inset-top)) 0 calc(30px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.back{color:var(--navy);text-decoration:none;font-weight:800;font-size:14px}.brand{font-size:12px;color:var(--muted);font-weight:800}.card{background:#fff;border:1px solid var(--line);border-radius:25px;box-shadow:0 16px 42px rgba(25,56,84,.11);padding:24px}.hidden{display:none!important}h1{margin:0 0 8px;font-size:25px}p{margin:0;color:var(--muted);line-height:1.7;font-size:14px}.field{display:grid;gap:7px;margin-top:18px;font-size:13px;font-weight:800}.field input{width:100%;min-height:50px;border:1px solid #cbd8e4;border-radius:13px;padding:0 14px;background:#fff;color:var(--text)}.field input:focus{outline:3px solid #d9ebfb;border-color:var(--blue)}.primary,.secondary{width:100%;min-height:51px;border:0;border-radius:14px;font-weight:900;margin-top:20px}.primary{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff}.primary:disabled{opacity:.55}.secondary{background:#edf2f7;color:var(--navy)}.message{min-height:22px;margin-top:13px;font-size:13px;line-height:1.55}.error{color:#b3262b}.success{color:var(--ok)}.privacy{margin-top:17px;padding:12px;border-radius:13px;background:#f4f7fa;font-size:12px;color:var(--muted);line-height:1.65}.qr-card{text-align:center}.eyebrow{color:var(--red);font-size:12px;font-weight:900;letter-spacing:.08em}.student-name{font-size:24px;font-weight:900;margin:7px 0 2px}.campus{color:var(--muted);font-size:13px}.qr-wrap{display:grid;place-items:center;min-height:286px;margin:22px auto 14px;padding:17px;border:1px solid var(--line);border-radius:22px;background:#fff}.qr-wrap canvas,.qr-wrap img{width:min(100%,252px)!important;height:auto!important;image-rendering:pixelated}.notice{padding:18px;border-radius:17px;background:#fff6df;color:#725517;font-size:14px;line-height:1.7;text-align:left}.session-note{font-size:11px;color:var(--muted);line-height:1.65}.loading{display:grid;place-items:center;min-height:330px;text-align:center}.spinner{width:42px;height:42px;border:4px solid #dfe8f0;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <div class="top"><a class="back" href="https://stepkobetsu-hub.github.io/step-hub/">← 塾生アプリ</a><span class="brand">個別指導STEP</span></div>
+
+  <section id="loadingPanel" class="card loading">
+    <div><div class="spinner" aria-hidden="true"></div><h1>自分のQR</h1><p>ログイン状態を確認しています…</p></div>
+  </section>
+
+  <section id="loginPanel" class="card hidden">
+    <h1>自分のQR</h1>
+    <p>初回だけ、生徒番号とパスワードで本人確認します。</p>
+    <form id="loginForm" autocomplete="off">
+      <label class="field">生徒番号<input id="studentId" inputmode="numeric" autocomplete="off" required></label>
+      <label class="field">パスワード<input id="password" type="password" autocomplete="off" required></label>
+      <button id="loginButton" class="primary" type="submit">ログインしてQRを表示</button>
+    </form>
+    <div id="loginMessage" class="message" role="alert" aria-live="polite"></div>
+    <div class="privacy">パスワードはこの端末に保存しません。認証後は6時間有効なセッショントークンだけを保存します。</div>
+  </section>
+
+  <section id="qrPanel" class="card qr-card hidden">
+    <div class="eyebrow">MY QR</div>
+    <div id="studentName" class="student-name"></div>
+    <div id="campus" class="campus"></div>
+    <div id="qrWrap" class="qr-wrap"></div>
+    <p id="sessionNote" class="session-note"></p>
+    <button id="logoutButton" class="secondary" type="button">ログアウト</button>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const TOKEN_KEY = 'stepMyQrSessionToken';
+const EXPIRES_KEY = 'stepMyQrSessionExpiresAt';
+const $ = id => document.getElementById(id);
+let apiUrlPromise;
+
+function resolveApiUrl() {
+  if (!apiUrlPromise) {
+    apiUrlPromise = fetch('delivery_failures.html', { cache: 'no-store' })
+      .then(response => {
+        if (!response.ok) throw new Error('接続設定を読み込めませんでした。');
+        return response.text();
+      })
+      .then(source => {
+        const match = source.match(/const\s+API\s*=\s*['"]([^'"]+)['"]/);
+        if (!match) throw new Error('接続設定を確認できませんでした。');
+        return match[1];
+      });
+  }
+  return apiUrlPromise;
+}
+
+function showPanel(name) {
+  ['loadingPanel','loginPanel','qrPanel'].forEach(id => $(id).classList.toggle('hidden', id !== name));
+}
+
+function readSession() {
+  const token = localStorage.getItem(TOKEN_KEY) || '';
+  const expiresAt = localStorage.getItem(EXPIRES_KEY) || '';
+  return token && expiresAt ? { token, expiresAt } : null;
+}
+
+function saveSession(token, expiresAt) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(EXPIRES_KEY, expiresAt);
+}
+
+function clearSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(EXPIRES_KEY);
+}
+
+async function api(payload) {
+  const response = await fetch(await resolveApiUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  });
+  if (!response.ok) throw new Error('サーバーに接続できませんでした。');
+  const result = await response.json();
+  if (!result.ok) {
+    const error = new Error(result.message || '処理に失敗しました。');
+    error.code = result.code || '';
+    throw error;
+  }
+  return result;
+}
+
+async function loadMyQr() {
+  const session = readSession();
+  if (!session || new Date(session.expiresAt).getTime() <= Date.now()) {
+    clearSession();
+    showPanel('loginPanel');
+    return;
+  }
+  try {
+    const result = await api({ action: 'myQrGet', token: session.token });
+    saveSession(session.token, result.expiresAt || session.expiresAt);
+    renderMyQr(result);
+  } catch (error) {
+    clearSession();
+    showPanel('loginPanel');
+    $('loginMessage').className = 'message error';
+    $('loginMessage').textContent = error.message || 'もう一度ログインしてください。';
+  }
+}
+
+function renderMyQr(result) {
+  $('studentName').textContent = result.name ? result.name + ' さん' : '自分のQR';
+  $('campus').textContent = result.campus || '';
+  const wrap = $('qrWrap');
+  wrap.replaceChildren();
+  if (!result.registered || !result.qrData) {
+    const notice = document.createElement('div');
+    notice.className = 'notice';
+    notice.textContent = 'QRがまだ登録されていません。教室スタッフへ「入退室用QRの登録」をご依頼ください。';
+    wrap.appendChild(notice);
+  } else if (typeof QRCode === 'undefined') {
+    const notice = document.createElement('div');
+    notice.className = 'notice';
+    notice.textContent = 'QR表示用データを読み込めませんでした。通信状況を確認して再読み込みしてください。';
+    wrap.appendChild(notice);
+  } else {
+    new QRCode(wrap, { text: result.qrData, width: 252, height: 252, correctLevel: QRCode.CorrectLevel.M });
+  }
+  const expires = new Date(result.expiresAt);
+  $('sessionNote').textContent = Number.isNaN(expires.getTime()) ? '' : 'ログイン有効期限: ' + expires.toLocaleString('ja-JP');
+  showPanel('qrPanel');
+}
+
+$('loginForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const studentId = $('studentId').value.trim();
+  const password = $('password').value;
+  const button = $('loginButton');
+  button.disabled = true;
+  button.textContent = '本人確認中…';
+  $('loginMessage').textContent = '';
+  try {
+    const result = await api({ action: 'myQrLogin', studentId, password });
+    $('password').value = '';
+    $('studentId').value = '';
+    saveSession(result.token, result.expiresAt);
+    showPanel('loadingPanel');
+    await loadMyQr();
+  } catch (error) {
+    $('password').value = '';
+    $('loginMessage').className = 'message error';
+    $('loginMessage').textContent = error.message || 'ログインできませんでした。';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'ログインしてQRを表示';
+  }
+});
+
+$('logoutButton').addEventListener('click', async () => {
+  const session = readSession();
+  clearSession();
+  showPanel('loginPanel');
+  $('loginMessage').className = 'message success';
+  $('loginMessage').textContent = 'ログアウトしました。';
+  if (session) api({ action: 'myQrLogout', token: session.token }).catch(() => {});
+});
+
+document.addEventListener('DOMContentLoaded', loadMyQr);
+</script>
+</body>
+</html>

@@ -53,30 +53,38 @@ const SCHOOL_DISPLAY_NAME = '個別指導ステップ';
 
 // 管理画面（生徒QR登録）からのJSONPリクエスト用
 function doGet(e) {
-  const action = e.parameter.action;
-  const callback = e.parameter.callback;
+  const params = (e && e.parameter) || {};
+  const action = params.action;
+  const callback = params.callback;
   let result;
 
   try {
-    if (action === 'getStudent') {
-      result = getStudent_(e.parameter.code);
-    } else if (action === 'saveQrData') {
-      result = saveStudentQrData_(e.parameter.code, e.parameter.qrData);
-    } else if (action === 'issueNewQr') {
-      result = issueNewStudentQr_(e.parameter.code);
-    } else if (action === 'getNotifyEmails') {
-      result = getNotifyEmails_(e.parameter.code);
-    } else if (action === 'saveNotifyEmails') {
-      const emails = JSON.parse(e.parameter.emails || '[]');
-      result = saveNotifyEmails_(e.parameter.code, emails);
-    } else if (action === 'getPointsInfo') {
-      result = getPointsInfo_(e.parameter.code);
-    } else if (action === 'addPoints') {
-      result = addManualPoints_(e.parameter.code, e.parameter.points, e.parameter.reason);
-    } else if (action === 'getPointsHistory') {
-      result = getPointsHistory_(e.parameter.code);
+    if (action === 'myQrHealth') {
+      result = { ok: true, service: 'STEP_MY_QR', status: 'ready' };
     } else {
-      result = { ok: false, message: '不明なアクションです: ' + action };
+      // 旧管理APIはスタッフの期限付きセッションを必須にする。
+      // 塾生用APIはPOST専用で、この経路から任意の生徒QRを取得できない。
+      requireQrStaffSession_(params);
+      if (action === 'getStudent') {
+        result = getStudent_(params.code);
+      } else if (action === 'saveQrData') {
+        result = saveStudentQrData_(params.code, params.qrData);
+      } else if (action === 'issueNewQr') {
+        result = issueNewStudentQr_(params.code);
+      } else if (action === 'getNotifyEmails') {
+        result = getNotifyEmails_(params.code);
+      } else if (action === 'saveNotifyEmails') {
+        const emails = JSON.parse(params.emails || '[]');
+        result = saveNotifyEmails_(params.code, emails);
+      } else if (action === 'getPointsInfo') {
+        result = getPointsInfo_(params.code);
+      } else if (action === 'addPoints') {
+        result = addManualPoints_(params.code, params.points, params.reason);
+      } else if (action === 'getPointsHistory') {
+        result = getPointsHistory_(params.code);
+      } else {
+        result = { ok: false, message: '不明なアクションです: ' + action };
+      }
     }
   } catch (err) {
     result = { ok: false, message: err.message };
@@ -97,7 +105,9 @@ function doPost(e) {
   try {
     const rawBody = e && e.postData ? String(e.postData.contents || '') : '';
     const body = JSON.parse(rawBody || '{}');
-    if (isBrevoWebhookRequest_(e, body)) {
+    if (isMyQrApiAction_(body.action)) {
+      result = handleMyQrApiAction_(body);
+    } else if (isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
     } else if (body.action === 'checkIn') {
       result = handleCheckIn_(body.qrData, body.photoBase64);

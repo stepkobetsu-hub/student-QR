@@ -1,0 +1,249 @@
+/**
+ * STEP塾生用「自分のQR」専用API。
+ * 既存スタッフ用管理GETは requireQrStaffSession_ で保護し、
+ * 塾生用の本人QR取得はこのファイルのPOSTアクションだけを使用する。
+ */
+
+const MY_QR_SESSION_SECONDS = 6 * 60 * 60;
+const MY_QR_SESSION_PREFIX = 'MY_QR_SESSION_V1:';
+const MY_QR_LOGIN_FAILURE_PREFIX = 'MY_QR_LOGIN_FAILURE_V1:';
+const MY_QR_MAX_LOGIN_FAILURES = 5;
+const MY_QR_LOGIN_LOCK_SECONDS = 10 * 60;
+const MY_QR_STAFF_PERMISSION_LEVELS = ['2', '3', '4'];
+const MY_QR_STUDENT_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/foresta-step-progress/';
+const MY_QR_STAFF_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/student-QR/student_qr_register.html';
+
+function isMyQrApiAction_(action) {
+  return ['myQrLogin', 'myQrGet', 'myQrLogout'].indexOf(String(action || '')) >= 0;
+}
+
+function handleMyQrApiAction_(body) {
+  try {
+    if (body.action === 'myQrLogin') return myQrLogin_(body);
+    if (body.action === 'myQrGet') return myQrGet_(body);
+    if (body.action === 'myQrLogout') return myQrLogout_(body);
+    return { ok: false, code: 'BAD_REQUEST', message: '不明な操作です。' };
+  } catch (error) {
+    console.error('my-qr-api error', error && error.stack ? error.stack : error);
+    return {
+      ok: false,
+      code: error && error.publicCode ? error.publicCode : 'INTERNAL_ERROR',
+      message: error && error.publicMessage ? error.publicMessage : '処理に失敗しました。時間をおいて再度お試しください。'
+    };
+  }
+}
+
+function myQrLogin_(body) {
+  const studentId = String(body.studentId || '').trim();
+  const password = String(body.password || '');
+  if (!studentId || !password) {
+    throw myQrPublicError_('生徒番号とパスワードを入力してください。', 'LOGIN_REQUIRED');
+  }
+
+  const cache = CacheService.getScriptCache();
+  const failureKey = MY_QR_LOGIN_FAILURE_PREFIX + myQrHash_(studentId);
+  const failureCount = Number(cache.get(failureKey) || 0);
+  if (failureCount >= MY_QR_MAX_LOGIN_FAILURES) {
+    throw myQrPublicError_('ログインを一時停止しています。10分後にもう一度お試しください。', 'LOGIN_LOCKED');
+  }
+
+  const authenticated = myQrAuthenticateStudent_(studentId, password);
+  const record = authenticated && myQrFindStudent_(authenticated.studentId);
+  const valid = authenticated && record;
+  if (!valid) {
+    cache.put(failureKey, String(failureCount + 1), MY_QR_LOGIN_LOCK_SECONDS);
+    throw myQrPublicError_('生徒番号またはパスワードが違います。', 'INVALID_CREDENTIALS');
+  }
+  cache.remove(failureKey);
+
+  const rawToken = Utilities.getUuid() + '-' + Utilities.getUuid();
+  const expiresAt = new Date(Date.now() + MY_QR_SESSION_SECONDS * 1000).toISOString();
+  cache.put(
+    MY_QR_SESSION_PREFIX + myQrHash_(rawToken),
+    JSON.stringify({ studentId: record.studentId, expiresAt: expiresAt, authToken: authenticated.token }),
+    MY_QR_SESSION_SECONDS
+  );
+  return { ok: true, token: rawToken, expiresAt: expiresAt };
+}
+
+function myQrGet_(body) {
+  // body.studentId等は意図的に参照しない。本人IDはセッションだけから決定する。
+  const session = myQrRequireSession_(body.token);
+  if (!myQrValidateStudentSession_(session)) {
+    myQrRevokeToken_(body.token);
+    throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  }
+  const record = myQrFindStudent_(session.studentId);
+  if (!record) {
+    myQrRevokeToken_(body.token);
+    throw myQrPublicError_('利用状態を確認できません。教室へお問い合わせください。', 'STUDENT_INACTIVE');
+  }
+  return {
+    ok: true,
+    name: record.name,
+    campus: record.campus,
+    registered: !!record.qrData,
+    qrData: record.qrData,
+    expiresAt: session.expiresAt
+  };
+}
+
+function myQrLogout_(body) {
+  const session = myQrReadSession_(body.token);
+  if (session) myQrLogoutStudentSession_(session);
+  myQrRevokeToken_(body.token);
+  return { ok: true };
+}
+
+function myQrReadSession_(rawToken) {
+  const token = String(rawToken || '').trim();
+  if (!token) return null;
+  const cached = CacheService.getScriptCache().get(MY_QR_SESSION_PREFIX + myQrHash_(token));
+  if (!cached) return null;
+  try { return JSON.parse(cached); } catch (error) { return null; }
+}
+
+function myQrRequireSession_(rawToken) {
+  const token = String(rawToken || '').trim();
+  if (!token) throw myQrPublicError_('ログインが必要です。', 'UNAUTHENTICATED');
+  const cache = CacheService.getScriptCache();
+  const key = MY_QR_SESSION_PREFIX + myQrHash_(token);
+  const cached = cache.get(key);
+  if (!cached) throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  let session;
+  try {
+    session = JSON.parse(cached);
+  } catch (error) {
+    cache.remove(key);
+    throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  }
+  if (!session.studentId || !session.expiresAt || new Date(session.expiresAt).getTime() <= Date.now()) {
+    cache.remove(key);
+    throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  }
+  return session;
+}
+
+function myQrRevokeToken_(rawToken) {
+  const token = String(rawToken || '').trim();
+  if (token) CacheService.getScriptCache().remove(MY_QR_SESSION_PREFIX + myQrHash_(token));
+}
+
+function myQrFindStudent_(studentId) {
+  const sheet = getMasterSheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const match = sheet.getRange(2, COL_STUDENT_ID, lastRow - 1, 1)
+    .createTextFinder(String(studentId))
+    .matchEntireCell(true)
+    .findNext();
+  if (!match) return null;
+  const row = sheet.getRange(match.getRow(), 1, 1, COL_QR_DATA).getValues()[0];
+  return {
+    studentId: String(row[COL_STUDENT_ID - 1] || '').trim(),
+    name: String(row[COL_STUDENT_NAME - 1] || '').trim(),
+    campus: String(row[COL_SCHOOL - 1] || '').trim(),
+    qrData: String(row[COL_QR_DATA - 1] || '').trim()
+  };
+}
+
+function myQrAuthenticateStudent_(studentId, password) {
+  const result = myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+    action: 'studentLogin',
+    studentId: studentId,
+    password: password
+  });
+  const verifiedId = String(result && result.profile && result.profile.studentId || '').trim();
+  if (!result || !result.success || result.role !== 'STUDENT' || verifiedId !== studentId || !result.token) return null;
+  return { studentId: verifiedId, token: String(result.token) };
+}
+
+function myQrValidateStudentSession_(session) {
+  if (!session || !session.authToken) return false;
+  const result = myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+    action: 'getSession',
+    token: session.authToken
+  });
+  return !!result && result.success && result.role === 'STUDENT' && String(result.userId || '').trim() === session.studentId;
+}
+
+function myQrLogoutStudentSession_(session) {
+  try {
+    myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+      action: 'logout',
+      token: session.authToken
+    });
+  } catch (error) {
+    console.warn('upstream student logout failed');
+  }
+}
+
+function requireQrStaffSession_(data) {
+  const token = String(data.sessionToken || '').trim();
+  const staffLoginId = String(data.staffLoginId || '').trim();
+  if (!token || !staffLoginId) throw new Error('スタッフログインが必要です。');
+  const response = UrlFetchApp.fetch(myQrResolveApiUrl_('MY_QR_STAFF_AUTH_API_URL', MY_QR_STAFF_AUTH_SOURCE, 'AUTH_API_URL'), {
+    method: 'post',
+    contentType: 'text/plain;charset=utf-8',
+    payload: JSON.stringify({ action: 'studentQrVerify', sessionToken: token }),
+    muteHttpExceptions: true,
+    followRedirects: true
+  });
+  let verified;
+  try { verified = JSON.parse(response.getContentText()); } catch (error) { verified = null; }
+  if (!verified || !verified.success ||
+      String(verified.loginId || verified.code || '').trim() !== staffLoginId ||
+      MY_QR_STAFF_PERMISSION_LEVELS.indexOf(String(verified.permissionLevel || '').trim()) < 0) {
+    throw new Error('スタッフログインの有効期限が切れました。もう一度ログインしてください。');
+  }
+  return verified;
+}
+
+function myQrResolveApiUrl_(propertyName, sourceUrl, constantName) {
+  const properties = PropertiesService.getScriptProperties();
+  const configured = String(properties.getProperty(propertyName) || '').trim();
+  if (configured) return configured;
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'MY_QR_ENDPOINT:' + propertyName;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const source = UrlFetchApp.fetch(sourceUrl, { muteHttpExceptions: true }).getContentText();
+  const pattern = new RegExp('const\\s+' + constantName + '\\s*=\\s*[\\\'"]([^\\\'"]+)[\\\'"]');
+  const match = source.match(pattern);
+  if (!match) throw new Error('API接続設定を取得できません。');
+  cache.put(cacheKey, match[1], MY_QR_SESSION_SECONDS);
+  return match[1];
+}
+
+function myQrPostJson_(url, payload) {
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'text/plain;charset=utf-8',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+    followRedirects: true
+  });
+  try { return JSON.parse(response.getContentText()); } catch (error) { return null; }
+}
+
+function myQrHash_(value) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value), Utilities.Charset.UTF_8);
+  return bytes.map(function(byte) {
+    return ('0' + ((byte + 256) % 256).toString(16)).slice(-2);
+  }).join('');
+}
+
+function myQrSafeEquals_(expected, actual) {
+  const a = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(expected), Utilities.Charset.UTF_8);
+  const b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(actual), Utilities.Charset.UTF_8);
+  let different = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) different |= a[i % a.length] ^ b[i % b.length];
+  return different === 0;
+}
+
+function myQrPublicError_(message, code) {
+  const error = new Error(message);
+  error.publicMessage = message;
+  error.publicCode = code;
+  return error;
+}
