@@ -45,6 +45,8 @@
 <script>
 const TOKEN_KEY = 'stepMyQrSessionToken';
 const EXPIRES_KEY = 'stepMyQrSessionExpiresAt';
+const COMMON_TOKEN_KEY = 'stepCommonStudentSessionToken';
+const COMMON_EXPIRES_KEY = 'stepCommonStudentSessionExpiresAt';
 const $ = id => document.getElementById(id);
 let apiUrlPromise;
 
@@ -84,6 +86,22 @@ function clearSession() {
   localStorage.removeItem(EXPIRES_KEY);
 }
 
+function readCommonSession() {
+  const token = localStorage.getItem(COMMON_TOKEN_KEY) || '';
+  const expiresAt = localStorage.getItem(COMMON_EXPIRES_KEY) || '';
+  return token && expiresAt && new Date(expiresAt).getTime() > Date.now() ? { token, expiresAt } : null;
+}
+
+function saveCommonSession(token, expiresAt) {
+  localStorage.setItem(COMMON_TOKEN_KEY, token);
+  localStorage.setItem(COMMON_EXPIRES_KEY, expiresAt);
+}
+
+function clearCommonSession() {
+  localStorage.removeItem(COMMON_TOKEN_KEY);
+  localStorage.removeItem(COMMON_EXPIRES_KEY);
+}
+
 async function api(payload) {
   const response = await fetch(await resolveApiUrl(), {
     method: 'POST',
@@ -102,7 +120,19 @@ async function api(payload) {
 }
 
 async function loadMyQr() {
-  const session = readSession();
+  let session = readSession();
+  if (!session) {
+    const common = readCommonSession();
+    if (common) {
+      try {
+        const exchanged = await api({ action: 'myQrCommonLogin', commonToken: common.token });
+        saveSession(exchanged.token, exchanged.expiresAt);
+        session = readSession();
+      } catch (error) {
+        clearCommonSession();
+      }
+    }
+  }
   if (!session || new Date(session.expiresAt).getTime() <= Date.now()) {
     clearSession();
     showPanel('loginPanel');
@@ -156,6 +186,7 @@ $('loginForm').addEventListener('submit', async event => {
     $('password').value = '';
     $('studentId').value = '';
     saveSession(result.token, result.expiresAt);
+    if (result.commonToken && result.commonExpiresAt) saveCommonSession(result.commonToken, result.commonExpiresAt);
     showPanel('loadingPanel');
     await loadMyQr();
   } catch (error) {
@@ -171,6 +202,7 @@ $('loginForm').addEventListener('submit', async event => {
 $('logoutButton').addEventListener('click', async () => {
   const session = readSession();
   clearSession();
+  clearCommonSession();
   showPanel('loginPanel');
   $('loginMessage').className = 'message success';
   $('loginMessage').textContent = 'ログアウトしました。';

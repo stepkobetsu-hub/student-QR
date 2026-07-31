@@ -14,12 +14,13 @@ const MY_QR_STUDENT_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/foresta-ste
 const MY_QR_STAFF_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/student-QR/student_qr_register.html';
 
 function isMyQrApiAction_(action) {
-  return ['myQrLogin', 'myQrGet', 'myQrLogout'].indexOf(String(action || '')) >= 0;
+  return ['myQrLogin', 'myQrCommonLogin', 'myQrGet', 'myQrLogout'].indexOf(String(action || '')) >= 0;
 }
 
 function handleMyQrApiAction_(body) {
   try {
     if (body.action === 'myQrLogin') return myQrLogin_(body);
+    if (body.action === 'myQrCommonLogin') return myQrCommonLogin_(body);
     if (body.action === 'myQrGet') return myQrGet_(body);
     if (body.action === 'myQrLogout') return myQrLogout_(body);
     return { ok: false, code: 'BAD_REQUEST', message: '不明な操作です。' };
@@ -56,11 +57,35 @@ function myQrLogin_(body) {
   }
   cache.remove(failureKey);
 
+  const session = myQrCreateSession_(record.studentId, authenticated.token);
+  session.commonToken = authenticated.token;
+  session.commonExpiresAt = authenticated.expiresAt;
+  return session;
+}
+
+function myQrCommonLogin_(body) {
+  const commonToken = String(body.commonToken || '').trim();
+  if (!commonToken) throw myQrPublicError_('ログインが必要です。', 'UNAUTHENTICATED');
+  const result = myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+    action: 'getCommonStudentSession',
+    token: commonToken
+  });
+  const studentId = String(result && result.profile && result.profile.studentId || '').trim();
+  if (!result || !result.success || result.role !== 'STUDENT' || !studentId) {
+    throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  }
+  const record = myQrFindStudent_(studentId);
+  if (!record) throw myQrPublicError_('利用状態を確認できません。教室へお問い合わせください。', 'STUDENT_INACTIVE');
+  return myQrCreateSession_(record.studentId, commonToken);
+}
+
+function myQrCreateSession_(studentId, authToken) {
+  const cache = CacheService.getScriptCache();
   const rawToken = Utilities.getUuid() + '-' + Utilities.getUuid();
   const expiresAt = new Date(Date.now() + MY_QR_SESSION_SECONDS * 1000).toISOString();
   cache.put(
     MY_QR_SESSION_PREFIX + myQrHash_(rawToken),
-    JSON.stringify({ studentId: record.studentId, expiresAt: expiresAt, authToken: authenticated.token }),
+    JSON.stringify({ studentId: String(studentId), expiresAt: expiresAt, authToken: String(authToken) }),
     MY_QR_SESSION_SECONDS
   );
   return { ok: true, token: rawToken, expiresAt: expiresAt };
@@ -155,7 +180,7 @@ function myQrAuthenticateStudent_(studentId, password) {
   });
   const verifiedId = String(result && result.profile && result.profile.studentId || '').trim();
   if (!result || !result.success || result.role !== 'STUDENT' || verifiedId !== studentId || !result.token) return null;
-  return { studentId: verifiedId, token: String(result.token) };
+  return { studentId: verifiedId, token: String(result.token), expiresAt: String(result.expiresAt || '') };
 }
 
 function myQrValidateStudentSession_(session) {
