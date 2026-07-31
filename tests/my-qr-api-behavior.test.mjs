@@ -88,6 +88,7 @@ test('direct login response already contains the authenticated student QR', () =
 test('common student A token directly returns only student A QR', () => {
   const { context } = createApi();
   const result = context.myQrCommonGet_({ commonToken: 'common-A', studentId: 'B002' });
+  assert.equal(result.studentId, 'A001');
   assert.equal(result.qrData, 'QR-A');
   assert.notEqual(result.qrData, 'QR-B');
 });

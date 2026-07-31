@@ -128,6 +128,7 @@ function myQrGet_(body) {
 function myQrBuildResponse_(record, expiresAt) {
   return {
     ok: true,
+    studentId: record.studentId,
     name: record.name,
     campus: record.campus,
     registered: !!record.qrData,

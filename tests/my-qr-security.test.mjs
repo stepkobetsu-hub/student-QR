@@ -66,6 +66,13 @@ test('QR screen has safe logout and a prominent student-app return action', () =
   assert.equal((page.match(/id="logoutButton"/g) || []).length, 1);
 });
 
+test('QR screen displays only the authenticated response student id', () => {
+  assert.match(page, /id="studentIdDisplay"/);
+  assert.match(page, /result\.studentId \? '生徒ID：' \+ result\.studentId/);
+  assert.match(api, /studentId: record\.studentId/);
+  assert.doesNotMatch(page, /studentIdDisplay'\)\.textContent[^\n]*\$\('studentId'\)/);
+});
+
 test('own-QR request sends a token only', () => {
   assert.match(page, /api\(\{ action: 'myQrGet', token: session\.token \}\)/);
   assert.doesNotMatch(page, /action: 'myQrGet'[^\n]*studentId/);

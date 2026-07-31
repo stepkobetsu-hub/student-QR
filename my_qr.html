@@ -11,12 +11,13 @@
     :root{--navy:#123d68;--blue:#176fa9;--red:#e7363d;--text:#172536;--muted:#66788b;--line:#dfe7ef;--ok:#177245}
     *{box-sizing:border-box}html{background:#f4f7fb}body{margin:0;min-height:100vh;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic",sans-serif;color:var(--text);background:radial-gradient(circle at 0 0,#e2f1ff 0,transparent 36%),radial-gradient(circle at 100% 0,#ffe8e9 0,transparent 31%),#f6f8fb}
     button,input{-webkit-tap-highlight-color:transparent;font:inherit}.app{width:min(100% - 28px,520px);margin:auto;padding:calc(14px + env(safe-area-inset-top)) 0 calc(30px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;gap:10px;min-height:42px;margin-bottom:12px}.back{color:var(--navy);text-decoration:none;font-weight:900;font-size:14px}.brand{margin-left:auto;font-size:12px;color:var(--muted);font-weight:800}.top-logout{border:1px solid #cad8e5;border-radius:999px;background:#fff;color:var(--navy);padding:8px 11px;font-size:12px;font-weight:900}.card{background:#fff;border:1px solid var(--line);border-radius:25px;box-shadow:0 16px 42px rgba(25,56,84,.11);padding:24px}.hidden{display:none!important}h1{margin:0 0 8px;font-size:25px}p{margin:0;color:var(--muted);line-height:1.7;font-size:14px}.field{display:grid;gap:7px;margin-top:18px;font-size:13px;font-weight:800}.field input{width:100%;min-height:50px;border:1px solid #cbd8e4;border-radius:13px;padding:0 14px;background:#fff;color:var(--text)}.field input:focus{outline:3px solid #d9ebfb;border-color:var(--blue)}.primary{width:100%;min-height:51px;border:0;border-radius:14px;font-weight:900;margin-top:20px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff}.primary:disabled{opacity:.55}.message{min-height:22px;margin-top:13px;font-size:13px;line-height:1.55}.error{color:#b3262b}.success{color:var(--ok)}.privacy{margin-top:17px;padding:12px;border-radius:13px;background:#f4f7fa;font-size:12px;color:var(--muted);line-height:1.65}.qr-card{text-align:center;overflow:hidden}.qr-heading{margin:-24px -24px 18px;padding:17px 24px 15px;background:linear-gradient(120deg,var(--navy),var(--blue));color:#fff}.qr-mark{display:inline-grid;grid-template-columns:repeat(3,7px);grid-template-rows:repeat(3,7px);gap:3px;margin-bottom:7px}.qr-mark i{border:2px solid #fff;border-radius:2px}.qr-mark i:nth-child(2){border:0}.qr-mark i:nth-child(3){grid-column:3}.qr-mark i:nth-child(4){grid-row:3}.eyebrow{font-size:11px;font-weight:900;letter-spacing:.12em}.student-name{font-size:24px;font-weight:900;margin:7px 0 2px}.campus{color:var(--muted);font-size:13px}.qr-wrap{display:grid;place-items:center;min-height:286px;margin:18px auto 12px;padding:17px;border:5px solid var(--navy);border-radius:24px;background:#fff;box-shadow:inset 0 0 0 7px #fff,0 10px 28px rgba(20,63,103,.12)}.qr-wrap canvas,.qr-wrap img{width:min(100%,252px)!important;height:auto!important;image-rendering:pixelated}.notice{padding:18px;border-radius:17px;background:#fff6df;color:#725517;font-size:14px;line-height:1.7;text-align:left}.session-note{font-size:11px;color:var(--muted);line-height:1.65}.return-button{display:grid;place-items:center;min-height:56px;margin-top:14px;border-radius:16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;text-decoration:none;font-weight:900;box-shadow:0 9px 22px rgba(23,116,174,.24)}.loading{display:grid;place-items:center;min-height:330px;text-align:center}.spinner{width:42px;height:42px;border:4px solid #dfe8f0;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}
+    .student-details{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 12px;color:var(--muted);font-size:13px}.student-id{font-weight:800;color:var(--navy)}
     @media(max-width:390px){.app{width:min(100% - 20px,520px)}.card{padding:19px}.qr-heading{margin:-19px -19px 14px;padding:14px 19px}.qr-wrap{min-height:270px;padding:12px}.student-name{font-size:22px}}
   </style>
 </head>
 <body>
 <main class="app">
-  <div class="top"><a class="back" href="https://stepkobetsu-hub.github.io/step-hub/">← 塾生アプリ</a><span class="brand">個別指導STEP</span><button id="logoutButton" class="top-logout hidden" type="button">ログアウト</button></div>
+  <div class="top"><a class="back" href="https://stepkobetsu-hub.github.io/step-hub/" target="_top">← 塾生アプリ</a><span class="brand">個別指導STEP</span><button id="logoutButton" class="top-logout hidden" type="button">ログアウト</button></div>
 
   <section id="loadingPanel" class="card loading">
     <div><div class="spinner" aria-hidden="true"></div><h1>自分のQR</h1><p>ログイン状態を確認しています…</p></div>
@@ -37,10 +38,10 @@
   <section id="qrPanel" class="card qr-card hidden">
     <div class="qr-heading"><span class="qr-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><div class="eyebrow">MY QR CODE</div></div>
     <div id="studentName" class="student-name"></div>
-    <div id="campus" class="campus"></div>
+    <div class="student-details"><span id="studentIdDisplay" class="student-id"></span><span id="campus"></span></div>
     <div id="qrWrap" class="qr-wrap"></div>
     <p id="sessionNote" class="session-note"></p>
-    <a class="return-button" href="https://stepkobetsu-hub.github.io/step-hub/">STEP塾生アプリに戻る</a>
+    <a class="return-button" href="https://stepkobetsu-hub.github.io/step-hub/" target="_top">STEP塾生アプリに戻る</a>
   </section>
 </main>
 
@@ -124,7 +125,7 @@ async function saveQrCache(session, result) {
   const cachedUntil = Math.min(sessionExpires, Date.now() + QR_CACHE_MAX_AGE_MS);
   if (!Number.isFinite(cachedUntil) || cachedUntil <= Date.now()) return clearQrCache();
   try {
-    const safeResult = { name: result.name || '', campus: result.campus || '', registered: !!result.registered, qrData: result.qrData || '', expiresAt: session.expiresAt };
+    const safeResult = { studentId: result.studentId || '', name: result.name || '', campus: result.campus || '', registered: !!result.registered, qrData: result.qrData || '', expiresAt: session.expiresAt };
     localStorage.setItem(QR_CACHE_KEY, JSON.stringify({ sessionKind: session.kind, fingerprint: await tokenFingerprint(session.token), cachedUntil, result: safeResult }));
   } catch (error) {}
 }
@@ -208,7 +209,8 @@ function clearQrVisual() {
 
 function renderMyQr(result, validating = false, reuseExisting = false) {
   $('studentName').textContent = result.name ? result.name + ' さん' : '自分のQR';
-  $('campus').textContent = result.campus || '';
+  $('studentIdDisplay').textContent = result.studentId ? '生徒ID：' + result.studentId : '';
+  $('campus').textContent = result.campus ? '校舎：' + result.campus : '';
   const wrap = $('qrWrap');
   const mayReuse = reuseExisting && result.registered && result.qrData && lastRenderedQrData === result.qrData && wrap.childElementCount > 0;
   if (!mayReuse) wrap.replaceChildren();
