@@ -14,15 +14,17 @@ const MY_QR_STUDENT_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/foresta-ste
 const MY_QR_STAFF_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/student-QR/student_qr_register.html';
 
 function isMyQrApiAction_(action) {
-  return ['myQrLogin', 'myQrCommonLogin', 'myQrGet', 'myQrLogout'].indexOf(String(action || '')) >= 0;
+  return ['myQrLogin', 'myQrCommonLogin', 'myQrCommonGet', 'myQrGet', 'myQrLogout', 'myQrCommonLogout'].indexOf(String(action || '')) >= 0;
 }
 
 function handleMyQrApiAction_(body) {
   try {
     if (body.action === 'myQrLogin') return myQrLogin_(body);
     if (body.action === 'myQrCommonLogin') return myQrCommonLogin_(body);
+    if (body.action === 'myQrCommonGet') return myQrCommonGet_(body);
     if (body.action === 'myQrGet') return myQrGet_(body);
     if (body.action === 'myQrLogout') return myQrLogout_(body);
+    if (body.action === 'myQrCommonLogout') return myQrCommonLogout_(body);
     return { ok: false, code: 'BAD_REQUEST', message: '不明な操作です。' };
   } catch (error) {
     console.error('my-qr-api error', error && error.stack ? error.stack : error);
@@ -60,7 +62,24 @@ function myQrLogin_(body) {
   const session = myQrCreateSession_(record.studentId, authenticated.token);
   session.commonToken = authenticated.token;
   session.commonExpiresAt = authenticated.expiresAt;
+  Object.assign(session, myQrBuildResponse_(record, session.expiresAt));
   return session;
+}
+
+function myQrCommonGet_(body) {
+  const commonToken = String(body.commonToken || '').trim();
+  if (!commonToken) throw myQrPublicError_('ログインが必要です。', 'UNAUTHENTICATED');
+  const result = myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+    action: 'getCommonStudentSession',
+    token: commonToken
+  });
+  const studentId = String(result && result.profile && result.profile.studentId || '').trim();
+  if (!result || !result.success || result.role !== 'STUDENT' || !studentId) {
+    throw myQrPublicError_('ログインの有効期限が切れました。もう一度ログインしてください。', 'SESSION_EXPIRED');
+  }
+  const record = myQrFindStudent_(studentId);
+  if (!record) throw myQrPublicError_('利用状態を確認できません。教室へお問い合わせください。', 'STUDENT_INACTIVE');
+  return myQrBuildResponse_(record, result.expiresAt || '');
 }
 
 function myQrCommonLogin_(body) {
@@ -103,13 +122,17 @@ function myQrGet_(body) {
     myQrRevokeToken_(body.token);
     throw myQrPublicError_('利用状態を確認できません。教室へお問い合わせください。', 'STUDENT_INACTIVE');
   }
+  return myQrBuildResponse_(record, session.expiresAt);
+}
+
+function myQrBuildResponse_(record, expiresAt) {
   return {
     ok: true,
     name: record.name,
     campus: record.campus,
     registered: !!record.qrData,
     qrData: record.qrData,
-    expiresAt: session.expiresAt
+    expiresAt: String(expiresAt || '')
   };
 }
 
@@ -117,6 +140,20 @@ function myQrLogout_(body) {
   const session = myQrReadSession_(body.token);
   if (session) myQrLogoutStudentSession_(session);
   myQrRevokeToken_(body.token);
+  return { ok: true };
+}
+
+function myQrCommonLogout_(body) {
+  const commonToken = String(body.commonToken || '').trim();
+  if (!commonToken) return { ok: true };
+  try {
+    myQrPostJson_(myQrResolveApiUrl_('MY_QR_STUDENT_AUTH_API_URL', MY_QR_STUDENT_AUTH_SOURCE, 'API_URL'), {
+      action: 'logout',
+      token: commonToken
+    });
+  } catch (error) {
+    console.warn('upstream common logout failed');
+  }
   return { ok: true };
 }
 

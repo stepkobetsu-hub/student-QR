@@ -71,8 +71,26 @@ function createApi() {
   };
   context.myQrValidateStudentSession_ = session => session.authToken === `upstream-${session.studentId}`;
   context.myQrLogoutStudentSession_ = () => {};
+  context.myQrResolveApiUrl_ = () => 'private-configured-endpoint';
+  context.myQrPostJson_ = (_url, payload) => payload.action === 'getCommonStudentSession' && payload.token === 'common-A'
+    ? { success: true, role: 'STUDENT', profile: { studentId: 'A001' } }
+    : { success: false };
   return { context, cache };
 }
+
+test('direct login response already contains the authenticated student QR', () => {
+  const { context } = createApi();
+  const login = context.myQrLogin_({ studentId: 'A001', password: 'passA' });
+  assert.equal(login.qrData, 'QR-A');
+  assert.notEqual(login.qrData, 'QR-B');
+});
+
+test('common student A token directly returns only student A QR', () => {
+  const { context } = createApi();
+  const result = context.myQrCommonGet_({ commonToken: 'common-A', studentId: 'B002' });
+  assert.equal(result.qrData, 'QR-A');
+  assert.notEqual(result.qrData, 'QR-B');
+});
 
 test('student A token never returns student B QR even if B id is supplied', () => {
   const { context } = createApi();

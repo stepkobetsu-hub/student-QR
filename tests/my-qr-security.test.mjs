@@ -7,9 +7,12 @@ const api = fs.readFileSync(new URL('../gas/MyQrApi.js', import.meta.url), 'utf8
 const gas = fs.readFileSync(new URL('../gas/コード.js', import.meta.url), 'utf8');
 const readme = fs.readFileSync(new URL('../gas/README.md', import.meta.url), 'utf8');
 const staffPage = fs.readFileSync(new URL('../student_qr_register.html', import.meta.url), 'utf8');
+const runtime = fs.readFileSync(new URL('../my_qr_runtime.js', import.meta.url), 'utf8');
+const serviceWorker = fs.readFileSync(new URL('../my_qr_sw.js', import.meta.url), 'utf8');
+const workflow = fs.readFileSync(new URL('../.github/workflows/pages.yml', import.meta.url), 'utf8');
 
 test('new public files contain no production identifiers or concrete authentication columns', () => {
-  const publicChanges = [page, api, readme].join('\n');
+  const publicChanges = [page, api, readme, runtime, serviceWorker, workflow].join('\n');
   assert.doesNotMatch(publicChanges, /script\.google\.com\/macros\/s\//);
   assert.doesNotMatch(publicChanges, /AKfy[a-zA-Z0-9_-]+/);
   assert.doesNotMatch(publicChanges, /docs\.google\.com\/spreadsheets\/d\//);
@@ -24,15 +27,33 @@ test('client stores only a token and expiry, never password or student id', () =
   assert.match(page, /\$\('studentId'\)\.value = ''/);
 });
 
-test('fast QR cache is tab-only, token-bound, short-lived, and cleared with the session', () => {
-  assert.match(page, /QR_CACHE_KEY = 'stepMyQrDisplayCache'/);
-  assert.match(page, /sessionStorage\.setItem\(QR_CACHE_KEY/);
-  assert.doesNotMatch(page, /localStorage\.setItem\(QR_CACHE_KEY/);
+test('fast QR cache survives app restart but remains token-bound, short-lived, and revocable', () => {
+  assert.match(page, /QR_CACHE_KEY = 'stepMyQrDisplayCacheV2'/);
+  assert.match(page, /localStorage\.setItem\(QR_CACHE_KEY/);
   assert.match(page, /crypto\.subtle\.digest\('SHA-256'/);
-  assert.match(page, /QR_CACHE_MAX_AGE_MS = 5 \* 60 \* 1000/);
+  assert.match(page, /QR_CACHE_MAX_AGE_MS = 15 \* 60 \* 1000/);
+  assert.match(page, /cached\.sessionKind !== session\.kind/);
   assert.match(page, /cached\.fingerprint !== await tokenFingerprint\(session\.token\)/);
   assert.match(page, /function clearSession\(\)[\s\S]*?clearQrCache\(\)/);
-  assert.match(page, /catch \(error\) \{[\s\S]*?clearSession\(\);[\s\S]*?showPanel\('loginPanel'\)/);
+  assert.match(page, /catch \(error\) \{[\s\S]*?clearAllSessions\(\);[\s\S]*?clearQrVisual\(\);[\s\S]*?showPanel\('loginPanel'\)/);
+});
+
+test('startup has no resolver HTML fetch or CDN wait and service worker caches local QR assets', () => {
+  assert.doesNotMatch(page, /fetch\('delivery_failures\.html'/);
+  assert.doesNotMatch(page, /cdnjs|jsdelivr|api\.qrserver/);
+  assert.match(page, /src="my_qr_runtime\.js"/);
+  assert.match(page, /src="vendor\/qrcode\.min\.js"/);
+  assert.match(page, /navigator\.serviceWorker\.register\('\.\/my_qr_sw\.js'\)/);
+  assert.match(serviceWorker, /'\.\/vendor\/qrcode\.min\.js'/);
+  assert.match(serviceWorker, /'\.\/my_qr_runtime\.js'/);
+  assert.match(workflow, /vars\.MY_QR_API_URL/);
+});
+
+test('cached validation reuses the rendered QR instead of generating it twice', () => {
+  assert.match(page, /const mayReuse = reuseExisting/);
+  assert.match(page, /else if \(!mayReuse\)/);
+  assert.match(page, /renderMyQr\(\{ \.\.\.result, expiresAt: refreshed\.expiresAt \}, false, !!cached\)/);
+  assert.match(page, /performance\.measure/);
 });
 
 test('QR screen has safe logout and a prominent student-app return action', () => {
