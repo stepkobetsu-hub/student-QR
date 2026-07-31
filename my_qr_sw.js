@@ -1,11 +1,9 @@
-const CACHE_NAME = 'step-my-qr-v3';
+const CACHE_NAME = 'step-my-qr-v4';
 const APP_ASSETS = [
   './my_qr.html',
   './my_qr_runtime.js',
   './vendor/qrcode.min.js',
-  './manifest-my-qr.json',
-  './icon-qr-192.png',
-  './icon-qr-512.png'
+  './my-qr-icon.svg'
 ];
 
 self.addEventListener('install', event => {

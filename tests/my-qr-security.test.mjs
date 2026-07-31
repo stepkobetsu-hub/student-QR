@@ -46,6 +46,8 @@ test('startup has no resolver HTML fetch or CDN wait and service worker caches l
   assert.match(page, /navigator\.serviceWorker\.register\('\.\/my_qr_sw\.js'\)/);
   assert.match(serviceWorker, /'\.\/vendor\/qrcode\.min\.js'/);
   assert.match(serviceWorker, /'\.\/my_qr_runtime\.js'/);
+  assert.doesNotMatch(page, /manifest-my-qr\.json/);
+  assert.doesNotMatch(serviceWorker, /icon-qr-(?:192|512)\.png/);
   assert.match(workflow, /vars\.MY_QR_API_URL/);
 });
 
@@ -60,6 +62,7 @@ test('QR screen has safe logout and a prominent student-app return action', () =
   assert.match(page, /id="logoutButton" class="top-logout hidden"/);
   assert.match(page, /window\.confirm\('ログアウトしますか？/);
   assert.match(page, /class="return-button"[^>]*>STEP塾生アプリに戻る</);
+  assert.match(page, /\.return-button\{[^}]*background:linear-gradient\(135deg,var\(--navy\),var\(--blue\)\)/);
   assert.equal((page.match(/id="logoutButton"/g) || []).length, 1);
 });
 
