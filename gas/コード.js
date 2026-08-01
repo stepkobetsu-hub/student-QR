@@ -105,7 +105,9 @@ function doPost(e) {
   try {
     const rawBody = e && e.postData ? String(e.postData.contents || '') : '';
     const body = JSON.parse(rawBody || '{}');
-    if (isMyQrApiAction_(body.action)) {
+    if (isPointManagerApiAction_(body.action)) {
+      result = handlePointManagerApiAction_(body);
+    } else if (isMyQrApiAction_(body.action)) {
       result = handleMyQrApiAction_(body);
     } else if (isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
@@ -336,9 +338,15 @@ function getPointsSheet_() {
  */
 function getPointSettings_() {
   const props = PropertiesService.getScriptProperties();
-  const perVisit = Number(props.getProperty('POINTS_PER_VISIT')) || 1;
-  const minMinutes = Number(props.getProperty('MIN_STAY_MINUTES')) || 10;
-  return { perVisit, minMinutes };
+  const perVisit = Math.max(1, Math.floor(Number(props.getProperty('POINTS_PER_VISIT')) || 1));
+  const minMinutes = Math.max(0, Number(props.getProperty('MIN_STAY_MINUTES')) || 10);
+  return {
+    enabled: String(props.getProperty('POINTS_ENABLED') || 'true') !== 'false',
+    timing: String(props.getProperty('POINT_AWARD_TIMING') || 'exit') === 'entry' ? 'entry' : 'exit',
+    dailyLimit: String(props.getProperty('POINT_DAILY_LIMIT') || 'once') === 'none' ? 'none' : 'once',
+    perVisit: perVisit,
+    minMinutes: minMinutes
+  };
 }
 
 /**
@@ -660,22 +668,21 @@ function handleCheckIn_(qrData, photoBase64) {
   const now = new Date();
   const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
 
-  // ① 退室せずに日をまたいだ生徒がいれば、来塾した事実に対して1ポイント遡って付与
-  const unclosedDate = findUnclosedPreviousSession_(logSheet, code, todayStr);
-  if (unclosedDate && !hasPointAwarded_(pointsSheet, code, unclosedDate)) {
-    awardPoint_(pointsSheet, unclosedDate, code, name, settings.perVisit, '退室未記録（来塾のみで付与）');
-  }
-
-  // ② 今回が入室か退室かを判定
+  // ① 今回が入室か退室かを判定
   const type = determineCheckType_(logSheet, code, todayStr);
+  const dailyAllowed = settings.dailyLimit === 'none' || !hasPointAwarded_(pointsSheet, code, todayStr);
 
-  // ③ 退室の場合、当日の滞在時間を計算してポイント判定
-  if (type === '退室' && !hasPointAwarded_(pointsSheet, code, todayStr)) {
-    const checkInTime = findLastCheckInToday_(logSheet, code, todayStr);
-    if (checkInTime) {
-      const stayMinutes = Math.floor((now.getTime() - checkInTime.getTime()) / 60000);
-      if (stayMinutes >= settings.minMinutes) {
-        awardPoint_(pointsSheet, todayStr, code, name, settings.perVisit, `退室（滞在${stayMinutes}分）`);
+  // ② 設定に従って自動ポイントを付与する
+  if (settings.enabled && dailyAllowed) {
+    if (settings.timing === 'entry' && type === '入室') {
+      awardPoint_(pointsSheet, todayStr, code, name, settings.perVisit, '[入退室] 入室時付与');
+    } else if (settings.timing === 'exit' && type === '退室') {
+      const checkInTime = findLastCheckInToday_(logSheet, code, todayStr);
+      if (checkInTime) {
+        const stayMinutes = Math.floor((now.getTime() - checkInTime.getTime()) / 60000);
+        if (stayMinutes >= settings.minMinutes) {
+          awardPoint_(pointsSheet, todayStr, code, name, settings.perVisit, `[入退室] 退室（滞在${stayMinutes}分）`);
+        }
       }
     }
   }
