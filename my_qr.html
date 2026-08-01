@@ -51,12 +51,13 @@ const TOKEN_KEY = 'stepMyQrSessionToken';
 const EXPIRES_KEY = 'stepMyQrSessionExpiresAt';
 const COMMON_TOKEN_KEY = 'stepCommonStudentSessionToken';
 const COMMON_EXPIRES_KEY = 'stepCommonStudentSessionExpiresAt';
-const QR_CACHE_KEY = 'stepMyQrDisplayCacheV2';
+const QR_CACHE_KEY = 'stepMyQrDisplayCacheV3';
 const LEGACY_QR_CACHE_KEY = 'stepMyQrDisplayCache';
 const QR_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
 const API_URL = String(window.STEP_MY_QR_API_URL || '');
 const $ = id => document.getElementById(id);
 let lastRenderedQrData = '';
+let attendanceRefreshTimer = null;
 
 function mark(name) { try { performance.mark(name); } catch (error) {} }
 function measure(name, start, end) { try { performance.measure(name, start, end); } catch (error) {} }
@@ -201,6 +202,24 @@ async function loadMyQr() {
   }
 }
 
+async function refreshAttendance() {
+  const session = getPreferredSession();
+  if (!session || document.hidden || $('qrPanel').classList.contains('hidden')) return;
+  try {
+    const result = session.kind === 'common'
+      ? await api({ action: 'myQrCommonGet', commonToken: session.token })
+      : await api({ action: 'myQrGet', token: session.token });
+    renderAttendance(result.attendance);
+    const refreshed = getPreferredSession() || session;
+    await saveQrCache(refreshed, result);
+  } catch (error) {}
+}
+
+function startAttendanceRefresh() {
+  if (attendanceRefreshTimer) clearInterval(attendanceRefreshTimer);
+  attendanceRefreshTimer = setInterval(refreshAttendance, 10000);
+}
+
 function renderAttendance(attendance) {
   const wrap = $('qrWrap');
   let panel = wrap.querySelector('.attendance-panel');
@@ -246,6 +265,7 @@ function renderMyQr(result, validating = false, reuseExisting = false) {
     measure('qr-generation', 'myqr:generate-start', 'myqr:generate-end');
   }
   renderAttendance(result.attendance);
+  startAttendanceRefresh();
   const expires = new Date(result.expiresAt);
   $('sessionNote').textContent = validating ? 'QRを表示しました。セッションを確認しています…' : (Number.isNaN(expires.getTime()) ? '' : 'ログイン有効期限: ' + expires.toLocaleString('ja-JP'));
   showPanel('qrPanel');
@@ -313,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   measure('html-to-api-url', 'myqr:html-start', 'myqr:api-url-ready');
   measure('html-to-qr-library', 'myqr:html-start', 'myqr:qr-library-ready');
   loadMyQr();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./my_qr_sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./my_qr_sw.js?v=7').catch(() => {});
 });
 </script>
 </body>
