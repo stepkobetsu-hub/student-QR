@@ -112,14 +112,14 @@ function pmAuditSheet_() {
 
 function pmMasterRows_() {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('PM_MASTER_V4');
+  const cached = cache.get('PM_MASTER_V5');
   if (cached) {
     try { return JSON.parse(cached); } catch (ignore) {}
   }
   const sheet = SpreadsheetApp.openById(PM_MASTER_SS_ID).getSheetByName(PM_MASTER_SHEET);
   const last = sheet.getLastRow();
   if (last < 2) return [];
-  const rows = sheet.getRange(2, 1, last - 1, 15).getDisplayValues().map(function(row) {
+  const rows = sheet.getRange(2, 1, last - 1, 15).getValues().map(function(row) {
     const id = String(row[0] || '').trim();
     const name = String(row[4] || '').trim();
     const enrollmentFlag = String(row[1] || '').trim();
@@ -130,7 +130,7 @@ function pmMasterRows_() {
       active: !!id && !!name && (enrollmentFlag === '1' || enrollmentFlag === '0')
     };
   }).filter(function(row) { return row.id && row.name; });
-  cache.put('PM_MASTER_V4', JSON.stringify(rows), 300);
+  cache.put('PM_MASTER_V5', JSON.stringify(rows), 300);
   return rows;
 }
 
