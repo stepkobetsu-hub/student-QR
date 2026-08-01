@@ -112,7 +112,7 @@ function pmAuditSheet_() {
 
 function pmMasterRows_() {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('PM_MASTER_V3');
+  const cached = cache.get('PM_MASTER_V4');
   if (cached) {
     try { return JSON.parse(cached); } catch (ignore) {}
   }
@@ -127,10 +127,10 @@ function pmMasterRows_() {
     return {
       id: id, name: name, kana: String(row[5] || '').trim(), campus: String(row[7] || '').trim(),
       grade: String(row[10] || row[9] || '').trim(), status: status,
-      active: !!id && !!name && enrollmentFlag === '1'
+      active: !!id && !!name && (enrollmentFlag === '1' || enrollmentFlag === '0')
     };
   }).filter(function(row) { return row.id && row.name; });
-  cache.put('PM_MASTER_V3', JSON.stringify(rows), 300);
+  cache.put('PM_MASTER_V4', JSON.stringify(rows), 300);
   return rows;
 }
 
