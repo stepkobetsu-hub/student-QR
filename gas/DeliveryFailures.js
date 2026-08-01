@@ -263,7 +263,7 @@ function findStudentsByDeliveryEmail_(email) {
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
   const result = [];
   data.forEach((row, idx) => {
-    const cols = EMAIL_COLS;
+    const cols = DELIVERY_EMAIL_COLS;
     cols.forEach(col => {
       if (normalizeDeliveryEmail_(row[col - 1]) !== email) return;
       result.push({ row: idx + 2, id: String(row[COL_STUDENT_ID - 1] || ''), name: String(row[COL_STUDENT_NAME - 1] || ''), school: String(row[COL_SCHOOL - 1] || ''), field: deliveryEmailFieldName_(col) });
@@ -273,7 +273,7 @@ function findStudentsByDeliveryEmail_(email) {
 }
 
 function deliveryEmailFieldName_(col) {
-  const index = EMAIL_COLS.indexOf(col);
+  const index = DELIVERY_EMAIL_COLS.indexOf(col);
   if (index >= 0) return 'メール' + (index + 1);
   return '';
 }
