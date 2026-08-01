@@ -133,7 +133,34 @@ function myQrBuildResponse_(record, expiresAt) {
     campus: record.campus,
     registered: !!record.qrData,
     qrData: record.qrData,
+    attendance: myQrGetTodayAttendance_(record.studentId),
     expiresAt: String(expiresAt || '')
+  };
+}
+
+function myQrGetTodayAttendance_(studentId) {
+  const logSheet = getLogSheet_();
+  const lastRow = logSheet.getLastRow();
+  const empty = { date: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd'), entryAt: '', exitAt: '' };
+  if (lastRow < 2) return empty;
+
+  const rows = logSheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  const today = empty.date;
+  let firstEntry = null;
+  let lastExit = null;
+  rows.forEach(function(row) {
+    const timestamp = row[0];
+    const code = String(row[1] || '').trim();
+    const type = String(row[3] || '').trim();
+    if (!(timestamp instanceof Date) || code !== String(studentId).trim()) return;
+    if (Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM-dd') !== today) return;
+    if (type === '入室' && (!firstEntry || timestamp.getTime() < firstEntry.getTime())) firstEntry = timestamp;
+    if (type === '退室' && (!lastExit || timestamp.getTime() > lastExit.getTime())) lastExit = timestamp;
+  });
+  return {
+    date: today,
+    entryAt: firstEntry ? Utilities.formatDate(firstEntry, 'Asia/Tokyo', 'HH:mm') : '',
+    exitAt: lastExit ? Utilities.formatDate(lastExit, 'Asia/Tokyo', 'HH:mm') : ''
   };
 }
 
