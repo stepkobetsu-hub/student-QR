@@ -1,4 +1,4 @@
-const CACHE_NAME = 'step-my-qr-v4';
+const CACHE_NAME = 'step-my-qr-v5';
 const APP_ASSETS = [
   './my_qr.html',
   './my_qr_runtime.js',
