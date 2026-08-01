@@ -12,6 +12,7 @@ const MY_QR_LOGIN_LOCK_SECONDS = 10 * 60;
 const MY_QR_STAFF_PERMISSION_LEVELS = ['2', '3', '4'];
 const MY_QR_STUDENT_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/foresta-step-progress/';
 const MY_QR_STAFF_AUTH_SOURCE = 'https://stepkobetsu-hub.github.io/student-QR/student_qr_register.html';
+const MY_QR_ATTENDANCE_SS_ID = '1VyQ3O69PDArG2bJt_Qf347rlTwKfjqM6KPLDWqIPo6A';
 
 function isMyQrApiAction_(action) {
   return ['myQrLogin', 'myQrCommonLogin', 'myQrCommonGet', 'myQrGet', 'myQrLogout', 'myQrCommonLogout'].indexOf(String(action || '')) >= 0;
@@ -139,9 +140,10 @@ function myQrBuildResponse_(record, expiresAt) {
 }
 
 function myQrGetTodayAttendance_(studentId) {
-  const logSheet = getLogSheet_();
-  const lastRow = logSheet.getLastRow();
+  const logSheet = SpreadsheetApp.openById(MY_QR_ATTENDANCE_SS_ID).getSheetByName('ログ');
   const empty = { date: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd'), entryAt: '', exitAt: '' };
+  if (!logSheet) return empty;
+  const lastRow = logSheet.getLastRow();
   if (lastRow < 2) return empty;
 
   const rows = logSheet.getRange(2, 1, lastRow - 1, 4).getValues();
