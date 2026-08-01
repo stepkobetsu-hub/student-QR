@@ -111,7 +111,7 @@ function pmAuditSheet_() {
 
 function pmMasterRows_() {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('PM_MASTER_V2');
+  const cached = cache.get('PM_MASTER_V3');
   if (cached) {
     try { return JSON.parse(cached); } catch (ignore) {}
   }
@@ -121,14 +121,15 @@ function pmMasterRows_() {
   const rows = sheet.getRange(2, 1, last - 1, 15).getDisplayValues().map(function(row) {
     const id = String(row[0] || '').trim();
     const name = String(row[4] || '').trim();
-    const status = String(row[14] || '').trim();
+    const enrollmentFlag = String(row[1] || '').trim();
+    const status = enrollmentFlag === '1' ? '在籍' : (enrollmentFlag === '0' ? '退塾予定' : '退塾');
     return {
       id: id, name: name, kana: String(row[5] || '').trim(), campus: String(row[7] || '').trim(),
       grade: String(row[10] || row[9] || '').trim(), status: status,
-      active: !!id && !!name && !/退塾|退会|無効/.test(status)
+      active: !!id && !!name && enrollmentFlag === '1'
     };
   }).filter(function(row) { return row.id && row.name; });
-  cache.put('PM_MASTER_V2', JSON.stringify(rows), 300);
+  cache.put('PM_MASTER_V3', JSON.stringify(rows), 300);
   return rows;
 }
 
