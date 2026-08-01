@@ -11,7 +11,7 @@ const PM_WRITE_LEVELS = ['2', '3', '4'];
 const PM_SETTINGS_LEVELS = ['4'];
 const PM_STAFF_AUTH_API_URL = 'https://script.google.com/macros/s/AKfycbypkUc0MqZ07E7pZRglNPeRM56WbCcuWaLpRzi9bVFcPklHDxaaLC7GfzG6ozTGCbEX/exec';
 const PM_ACTIONS = [
-  'pointManagerBootstrap', 'pointManagerStudent', 'pointManagerApply',
+  'pointManagerBootstrap', 'pointManagerStudent', 'pointManagerHistory', 'pointManagerApply',
   'pointManagerEdit', 'pointManagerCancel', 'pointManagerGetSettings',
   'pointManagerSaveSettings'
 ];
@@ -31,6 +31,7 @@ function handlePointManagerApiAction_(body) {
     };
     if (body.action === 'pointManagerBootstrap') return pmBootstrap_(context);
     if (body.action === 'pointManagerStudent') return pmStudentDetail_(context, body);
+    if (body.action === 'pointManagerHistory') return pmGlobalHistory_(context, body);
     if (body.action === 'pointManagerGetSettings') return pmGetSettingsResult_(context);
     if (body.action === 'pointManagerSaveSettings') {
       pmRequireLevel_(context, PM_SETTINGS_LEVELS);
@@ -186,6 +187,18 @@ function pmStudentDetail_(staff, body) {
   });
   summary.total = Math.max(0, summary.total);
   return { ok: true, student: student, summary: summary, history: rows.reverse().slice(0, limit), staff: staff };
+}
+
+function pmGlobalHistory_(staff, body) {
+  const mode = String(body.mode || '').trim();
+  if (['special', 'use'].indexOf(mode) < 0) throw new Error('履歴種別が不正です。');
+  const pattern = mode === 'special' ? /^\[特別\]/ : /^\[使用\]/;
+  const rows = pmPointRows_().filter(function(row) {
+    return pattern.test(row.reason);
+  }).sort(function(a, b) {
+    return b.date.localeCompare(a.date) || b.row - a.row;
+  });
+  return { ok: true, mode: mode, history: rows, count: rows.length, staff: staff };
 }
 
 function pmApply_(staff, body) {
