@@ -143,27 +143,22 @@ function myQrBuildResponse_(record, expiresAt) {
 function myQrGetTodayAttendance_(studentId) {
   const logSheet = SpreadsheetApp.openById(MY_QR_ATTENDANCE_SS_ID).getSheetByName('ログ');
   const empty = { date: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd'), entryAt: '', exitAt: '' };
-  if (!logSheet) return empty;
-  const lastRow = logSheet.getLastRow();
-  if (lastRow < 2) return empty;
+  if (!logSheet || logSheet.getLastRow() < 2) return empty;
 
-  const rows = logSheet.getRange(2, 1, lastRow - 1, 4).getValues();
+  const rows = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 2).getValues();
   const today = empty.date;
-  let lastEntry = null;
-  let lastExit = null;
-  rows.forEach(function(row) {
+  const times = rows.reduce(function(result, row) {
     const timestamp = row[0];
     const code = String(row[1] || '').trim();
-    const type = String(row[3] || '').trim();
-    if (!(timestamp instanceof Date) || code !== String(studentId).trim()) return;
-    if (Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM-dd') !== today) return;
-    if (type === '入室' && (!lastEntry || timestamp.getTime() > lastEntry.getTime())) lastEntry = timestamp;
-    if (type === '退室' && (!lastExit || timestamp.getTime() > lastExit.getTime())) lastExit = timestamp;
-  });
+    if (!(timestamp instanceof Date) || code !== String(studentId).trim()) return result;
+    if (Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM-dd') === today) result.push(timestamp);
+    return result;
+  }, []).sort(function(a, b) { return a.getTime() - b.getTime(); });
+
   return {
     date: today,
-    entryAt: lastEntry ? Utilities.formatDate(lastEntry, 'Asia/Tokyo', 'HH:mm') : '',
-    exitAt: lastExit ? Utilities.formatDate(lastExit, 'Asia/Tokyo', 'HH:mm') : ''
+    entryAt: times.length ? Utilities.formatDate(times[0], 'Asia/Tokyo', 'HH:mm') : '',
+    exitAt: times.length >= 2 ? Utilities.formatDate(times[times.length - 1], 'Asia/Tokyo', 'HH:mm') : ''
   };
 }
 
