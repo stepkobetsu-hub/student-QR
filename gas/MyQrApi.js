@@ -135,6 +135,7 @@ function myQrBuildResponse_(record, expiresAt) {
     registered: !!record.qrData,
     qrData: record.qrData,
     attendance: myQrGetTodayAttendance_(record.studentId),
+    points: myQrGetTotalPoints_(record.studentId),
     expiresAt: String(expiresAt || '')
   };
 }
@@ -164,6 +165,15 @@ function myQrGetTodayAttendance_(studentId) {
     entryAt: firstEntry ? Utilities.formatDate(firstEntry, 'Asia/Tokyo', 'HH:mm') : '',
     exitAt: lastExit ? Utilities.formatDate(lastExit, 'Asia/Tokyo', 'HH:mm') : ''
   };
+}
+
+function myQrGetTotalPoints_(studentId) {
+  const pointsSheet = SpreadsheetApp.openById(MY_QR_ATTENDANCE_SS_ID).getSheetByName('ポイント履歴');
+  if (!pointsSheet || pointsSheet.getLastRow() < 2) return 0;
+  const rows = pointsSheet.getRange(2, 2, pointsSheet.getLastRow() - 1, 3).getValues();
+  return rows.reduce(function(total, row) {
+    return String(row[0] || '').trim() === String(studentId).trim() ? total + (Number(row[2]) || 0) : total;
+  }, 0);
 }
 
 function myQrLogout_(body) {
