@@ -1,3 +1,4 @@
+
 /**
  * ===================================================================
  * 入退室管理システム 統合バックエンド (GAS)
@@ -425,10 +426,11 @@ function findUnclosedPreviousSession_(logSheet, studentCode, todayStr) {
 function hasPointAwarded_(pointsSheet, studentCode, dateStr) {
   const lastRow = pointsSheet.getLastRow();
   if (lastRow < 2) return false;
-  const data = pointsSheet.getRange(2, 1, lastRow - 1, 2).getValues(); // 日付, 生徒番号
+  const data = pointsSheet.getRange(2, 1, lastRow - 1, 5).getValues(); // 日付, 生徒番号, 氏名, ポイント, 理由
   return data.some(row => {
     const d = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') : String(row[0]);
-    return d === dateStr && String(row[1]).trim() === String(studentCode).trim();
+    const reason = String(row[4] || '');
+    return d === dateStr && String(row[1]).trim() === String(studentCode).trim() && /^\[入退室\]/.test(reason);
   });
 }
 
