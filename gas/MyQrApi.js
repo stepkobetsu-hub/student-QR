@@ -149,7 +149,7 @@ function myQrGetTodayAttendance_(studentId) {
 
   const rows = logSheet.getRange(2, 1, lastRow - 1, 4).getValues();
   const today = empty.date;
-  let firstEntry = null;
+  let lastEntry = null;
   let lastExit = null;
   rows.forEach(function(row) {
     const timestamp = row[0];
@@ -157,12 +157,12 @@ function myQrGetTodayAttendance_(studentId) {
     const type = String(row[3] || '').trim();
     if (!(timestamp instanceof Date) || code !== String(studentId).trim()) return;
     if (Utilities.formatDate(timestamp, 'Asia/Tokyo', 'yyyy-MM-dd') !== today) return;
-    if (type === '入室' && (!firstEntry || timestamp.getTime() < firstEntry.getTime())) firstEntry = timestamp;
+    if (type === '入室' && (!lastEntry || timestamp.getTime() > lastEntry.getTime())) lastEntry = timestamp;
     if (type === '退室' && (!lastExit || timestamp.getTime() > lastExit.getTime())) lastExit = timestamp;
   });
   return {
     date: today,
-    entryAt: firstEntry ? Utilities.formatDate(firstEntry, 'Asia/Tokyo', 'HH:mm') : '',
+    entryAt: lastEntry ? Utilities.formatDate(lastEntry, 'Asia/Tokyo', 'HH:mm') : '',
     exitAt: lastExit ? Utilities.formatDate(lastExit, 'Asia/Tokyo', 'HH:mm') : ''
   };
 }
