@@ -40,6 +40,8 @@ test('server uses a bounded lock and one-row writes for attendance', () => {
 
 test('normal requests use receipt and daily-state caches before persistent scans', () => {
   assert.match(backend, /getCachedReceiptStatus_\(receipt\) \|\| \(isRetry \? getReceiptStatus_\(receipt, true\) : null\)/);
+  assert.match(backend, /if \(prior && prior\.attendanceSaved\)/);
+  assert.match(backend, /if \(repeated && repeated\.attendanceSaved\)/);
   assert.match(backend, /dailyCheckInStateKey_\('student'/);
   assert.match(backend, /dailyCheckInStateKey_\('teacher'/);
   assert.match(backend, /getRange\(2, 1, logSheet\.getLastRow\(\) - 1, 4\)/);

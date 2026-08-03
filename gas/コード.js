@@ -692,7 +692,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   traceMark_(trace, 'qrValidation');
 
   const prior = getCachedReceiptStatus_(receipt) || (isRetry ? getReceiptStatus_(receipt, true) : null);
-  if (prior.attendanceSaved) {
+  if (prior && prior.attendanceSaved) {
     prior.duplicate = true;
     prior.code = 'ALREADY_PROCESSED';
     prior.message = 'すでに同じ受付を処理済みです';
@@ -709,7 +709,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   let photoFileId = '';
   try {
     const repeated = getCachedReceiptStatus_(receipt) || (isRetry ? getReceiptStatus_(receipt, true) : null);
-    if (repeated.attendanceSaved) {
+    if (repeated && repeated.attendanceSaved) {
       repeated.duplicate = true;
       repeated.code = 'ALREADY_PROCESSED';
       repeated.message = 'すでに同じ受付を処理済みです';
