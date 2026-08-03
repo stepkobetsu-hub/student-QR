@@ -31,7 +31,9 @@ const TEACHER_SS_ID = '1L5aFDXAmfUDkBg8d7X3WqJgMhdMq5tM5sfUZ2G-M58E';
 const TEACHER_SHEET_NAME = '講師マスター';
 const TEACHER_COL_CODE = 1;  // A列: コード（7000番台）
 const TEACHER_COL_NAME = 2;  // B列: 氏名
+const TEACHER_COL_EMAIL = 16; // P列: メールアドレス（行配列では index 15）
 const TEACHER_COL_QR = 17;   // Q列: QRナンバー
+const TEACHER_INDEX_CACHE_VERSION = 'v43-email-p15';
 
 const COL_STUDENT_ID = 1;      // A列: 生徒番号
 const COL_STUDENT_NAME = 5;    // E列: 生徒氏名
@@ -728,11 +730,13 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       attendance = saveStudentAttendance_(values, receipt, trace, notifyEmails.length > 0);
     } else {
       const teacherSheet = getTeacherMasterSheet_();
-      const teacherRow = findQrRowCached_(teacherSheet, TEACHER_COL_QR, qr, 'teacher');
-      if (teacherRow === -1) return checkInFailure_('TARGET_NOT_FOUND', '登録対象が見つかりません', trace);
-      const teacherValues = teacherSheet.getRange(teacherRow, 1, 1, Math.max(teacherSheet.getLastColumn(), TEACHER_COL_QR)).getValues()[0];
+      const teacher = findTeacherByQrCached_(teacherSheet, qr);
+      if (!teacher) return checkInFailure_('TEACHER_NOT_FOUND', '講師の登録対象が見つかりません', trace);
       traceMark_(trace, 'subjectLookup');
-      attendance = saveTeacherAttendance_(teacherValues, receipt, trace);
+      const teacherEmailState = classifyTeacherEmail_(teacher.email);
+      if (teacherEmailState.code === 'OK') notifyEmails = [teacherEmailState.email];
+      attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code);
+      attendance.notificationCode = teacherEmailState.code === 'OK' ? '' : teacherEmailState.code;
     }
   } catch (error) {
     console.error('check-in save failed', sanitizeCheckInError_(error));
@@ -742,29 +746,42 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   }
 
   traceMark_(trace, 'attendanceSaved');
-  let mailStatus = notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED';
+  let resultCode = attendance.notificationCode || 'ATTENDANCE_SAVED';
+  let mailStatus = attendance.notificationCode === 'TEACHER_EMAIL_INVALID' ? 'FAILED' : (notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED');
   cacheReceiptStatus_(Object.assign({}, attendance, { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, mailStatus: mailStatus, duplicate: false }));
   if (notifyEmails.length) {
-    if (!isCheckInMailConfigured_()) {
-      mailStatus = 'FAILED';
-      updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'メール送信設定が未完了です');
-      console.error('check-in mail queue skipped: mail settings are incomplete');
-    } else {
+    const mailConfig = getCheckInMailConfigStatus_();
+    if (mailConfig.ok && photoBase64) {
       try {
         photoFileId = saveCheckInPhoto_(photoBase64, receipt);
-        enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
-        traceMark_(trace, 'mailQueued');
       } catch (error) {
-        mailStatus = 'FAILED';
-        updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], sanitizeCheckInError_(error));
-        console.error('check-in mail queue failed', sanitizeCheckInError_(error));
+        resultCode = 'PHOTO_PROCESS_FAILED';
+        photoFileId = '';
+        console.error('check-in photo processing failed', sanitizeCheckInError_(error));
       }
     }
+    try {
+      enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
+      traceMark_(trace, 'mailQueued');
+    } catch (error) {
+      mailStatus = 'FAILED';
+      updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'MAIL_QUEUE_CREATE_FAILED');
+      resultCode = 'MAIL_QUEUE_CREATE_FAILED';
+      console.error('check-in mail queue failed', sanitizeCheckInError_(error));
+    }
+    if (mailStatus !== 'FAILED' && !mailConfig.ok) {
+      mailStatus = 'FAILED';
+      resultCode = mailConfig.code;
+      markCheckInMailQueueFailed_(receipt, mailConfig.code);
+      updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], mailConfig.code);
+    }
+  } else if (attendance.notificationCode === 'TEACHER_EMAIL_INVALID') {
+    updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'TEACHER_EMAIL_INVALID');
   }
 
   const result = Object.assign({}, attendance, {
     ok: true,
-    code: mailStatus === 'FAILED' ? 'MAIL_FAILED' : 'ATTENDANCE_SAVED',
+    code: resultCode,
     attendanceSaved: true,
     mailStatus: mailStatus,
     duplicate: false,
@@ -846,9 +863,9 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   return { receiptId: receiptId, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
 }
 
-function saveTeacherAttendance_(values, receiptId, trace) {
-  const code = String(values[TEACHER_COL_CODE - 1] || '').trim();
-  const name = String(values[TEACHER_COL_NAME - 1] || '').trim();
+function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
+  const code = String(teacher.code || '').trim();
+  const name = String(teacher.name || '').trim();
   const sheet = getTeacherLogSheet_();
   const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   const now = new Date();
@@ -868,7 +885,9 @@ function saveTeacherAttendance_(values, receiptId, trace) {
   setByHeader_(record, schema.headers, '講師コード', code);
   setByHeader_(record, schema.headers, '氏名', name);
   setByHeader_(record, schema.headers, '種別', type);
-  setByHeader_(record, schema.headers, 'メール送信結果', '通知なし');
+  const hasEmail = emailStateCode === 'OK';
+  setByHeader_(record, schema.headers, 'メール送信結果', hasEmail ? '送信待ち' : (emailStateCode === 'TEACHER_EMAIL_EMPTY' ? '通知先なし' : '送信エラー'));
+  setByHeader_(record, schema.headers, '送信先メール', hasEmail ? teacher.email : '');
   setByHeader_(record, schema.headers, CHECKIN_RECEIPT_HEADER, receiptId);
   setByHeader_(record, schema.headers, CHECKIN_TIMING_HEADER, JSON.stringify(trace.steps));
   const row = sheet.getLastRow() + 1;
@@ -890,6 +909,40 @@ function findQrRowCached_(sheet, column, qrData, kind) {
   if (!match) return -1;
   cache.put(key, String(match.getRow()), 21600);
   return match.getRow();
+}
+
+function findTeacherByQrCached_(sheet, qrData) {
+  const qr = String(qrData || '').trim();
+  if (!qr) return null;
+  const digest = shortCheckInHash_(qr);
+  const cache = CacheService.getScriptCache();
+  const key = 'CHECKIN_TEACHER_INDEX_' + TEACHER_INDEX_CACHE_VERSION + ':' + digest;
+  cache.remove('CHECKIN_QR_ROW_V1:teacher:' + digest);
+  const cached = parseCheckInCache_(cache.get(key));
+  if (cached && cached.row >= 2 && String(sheet.getRange(cached.row, TEACHER_COL_QR).getValue()).trim() === qr) {
+    return cached;
+  }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const match = sheet.getRange(2, TEACHER_COL_QR, lastRow - 1, 1).createTextFinder(qr).matchEntireCell(true).findNext();
+  if (!match) return null;
+  const row = match.getRow();
+  const values = sheet.getRange(row, 1, 1, Math.max(TEACHER_COL_QR, TEACHER_COL_EMAIL)).getValues()[0];
+  const teacher = {
+    row: row,
+    code: String(values[TEACHER_COL_CODE - 1] || '').trim(),
+    name: String(values[TEACHER_COL_NAME - 1] || '').trim(),
+    email: String(values[TEACHER_COL_EMAIL - 1] || '').trim()
+  };
+  cache.put(key, JSON.stringify(teacher), 21600);
+  return teacher;
+}
+
+function classifyTeacherEmail_(value) {
+  const email = String(value || '').trim();
+  if (!email) return { code: 'TEACHER_EMAIL_EMPTY', email: '' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { code: 'TEACHER_EMAIL_INVALID', email: '' };
+  return { code: 'OK', email: email };
 }
 
 function ensureCheckInLogSchema_(sheet) {
@@ -940,7 +993,8 @@ function getReceiptStatus_(receiptId, skipCache) {
     if (match) {
       const values = teacherLog.getRange(match.getRow(), 1, 1, teacherSchema.lastColumn).getValues()[0];
       const value = header => values[teacherSchema.headers.indexOf(header)];
-      const result = { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: 'NOT_REQUIRED', duplicate: true, totalPoints: null };
+      const mailStatus = normalizeMailStatus_(value('メール送信結果'));
+      const result = { ok: true, code: mailStatus === 'FAILED' ? 'BREVO_SEND_FAILED' : 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: mailStatus, duplicate: true, totalPoints: null };
       cacheReceiptStatus_(result);
       return result;
     }
@@ -976,10 +1030,15 @@ function getCheckInMailQueueSheet_() {
   return sheet;
 }
 
-function isCheckInMailConfigured_() {
+function getCheckInMailConfigStatus_() {
   const props = PropertiesService.getScriptProperties();
-  return !!String(props.getProperty('BREVO_API_KEY') || '').trim()
-    && !!String(props.getProperty('CHECKIN_FROM_EMAIL') || '').trim();
+  const diagnosticMode = String(props.getProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE') || '').trim().toUpperCase() === 'TRUE';
+  const fromEmailPresent = !!String(props.getProperty('CHECKIN_FROM_EMAIL') || '').trim();
+  const brevoApiKeyPresent = !!String(props.getProperty('BREVO_API_KEY') || '').trim();
+  if (diagnosticMode) return { ok: true, code: 'OK', provider: 'DIAGNOSTIC', diagnosticMode: true, fromEmailPresent: fromEmailPresent, brevoApiKeyPresent: brevoApiKeyPresent };
+  if (!fromEmailPresent) return { ok: false, code: 'SENDER_CONFIG_INVALID', category: 'NOTIFICATION_CONFIG_ERROR', fromEmailPresent: false, brevoApiKeyPresent: brevoApiKeyPresent };
+  if (!brevoApiKeyPresent) return { ok: false, code: 'BREVO_API_KEY_MISSING', category: 'BREVO_NOT_CONFIGURED', fromEmailPresent: true, brevoApiKeyPresent: false };
+  return { ok: true, code: 'OK', provider: 'BREVO', diagnosticMode: false, fromEmailPresent: true, brevoApiKeyPresent: true };
 }
 
 function enqueueCheckInMail_(attendance, emails, photoFileId) {
@@ -992,6 +1051,18 @@ function enqueueCheckInMail_(attendance, emails, photoFileId) {
     attendance.receiptId, now, now, 'PENDING', 0, now, '', attendance.name, attendance.type, now,
     JSON.stringify(recipients), photoFileId || '', '', '[]', '[]', '', attendance.logRow
   ]]);
+}
+
+function markCheckInMailQueueFailed_(receiptId, errorCode) {
+  const sheet = getCheckInMailQueueSheet_();
+  if (sheet.getLastRow() < 2) return;
+  const match = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).createTextFinder(String(receiptId)).matchEntireCell(true).findNext();
+  if (!match) return;
+  const values = sheet.getRange(match.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0];
+  values[2] = new Date();
+  values[3] = 'FAILED';
+  values[12] = String(errorCode || 'NOTIFICATION_CONFIG_ERROR');
+  sheet.getRange(match.getRow(), 1, 1, values.length).setValues([values]);
 }
 
 function saveCheckInPhoto_(photoBase64, receiptId) {
@@ -1059,9 +1130,10 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
       recipient.status = sent && sent.accepted ? 'SENT' : 'FAILED';
       recipient.messageId = sent && sent.messageId || '';
       recipient.correlationId = sent && sent.correlationId || '';
-      recipient.error = sent && sent.error || '';
+      recipient.error = sent && sent.error ? String(sent.errorCode || 'BREVO_SEND_FAILED') + ': ' + sanitizeCheckInError_(sent.error) : '';
     } catch (error) {
-      recipient.status = 'FAILED'; recipient.error = sanitizeCheckInError_(error);
+      const cleanError = sanitizeCheckInError_(error);
+      recipient.status = 'FAILED'; recipient.error = (/timed?\s*out/i.test(cleanError) ? 'BREVO_API_TIMEOUT' : 'BREVO_SEND_FAILED') + ': ' + cleanError;
     }
     row[10] = JSON.stringify(recipients); row[2] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
@@ -1083,12 +1155,23 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
 }
 
 function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText) {
-  const sheet = getLogSheet_();
-  const schema = ensureCheckInLogSchema_(sheet);
-  const receiptCol = schema.headers.indexOf(CHECKIN_RECEIPT_HEADER) + 1;
-  if (receiptCol < 1 || sheet.getLastRow() < 2) return;
-  const match = sheet.getRange(2, receiptCol, sheet.getLastRow() - 1, 1).createTextFinder(receiptId).matchEntireCell(true).findNext();
-  if (!match) return;
+  const targets = [
+    { sheet: getLogSheet_(), schema: null },
+    { sheet: getTeacherLogSheet_(), schema: null }
+  ];
+  targets[0].schema = ensureCheckInLogSchema_(targets[0].sheet);
+  targets[1].schema = ensureHeaders_(targets[1].sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  let target = null;
+  let match = null;
+  for (let i = 0; i < targets.length; i++) {
+    const receiptCol = targets[i].schema.headers.indexOf(CHECKIN_RECEIPT_HEADER) + 1;
+    if (receiptCol < 1 || targets[i].sheet.getLastRow() < 2) continue;
+    match = targets[i].sheet.getRange(2, receiptCol, targets[i].sheet.getLastRow() - 1, 1).createTextFinder(receiptId).matchEntireCell(true).findNext();
+    if (match) { target = targets[i]; break; }
+  }
+  if (!target || !match) return;
+  const sheet = target.sheet;
+  const schema = target.schema;
   const values = sheet.getRange(match.getRow(), 1, 1, schema.lastColumn).getValues()[0];
   setByHeader_(values, schema.headers, 'メール送信結果', status);
   setByHeader_(values, schema.headers, '配信状態', status);
@@ -1101,7 +1184,7 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
   const cached = getCachedReceiptStatus_(receiptId);
   if (cached) {
     cached.mailStatus = normalizeMailStatus_(status);
-    cached.code = cached.mailStatus === 'FAILED' ? 'MAIL_FAILED' : 'ATTENDANCE_SAVED';
+    cached.code = cached.mailStatus === 'FAILED' ? checkInMailErrorCode_(errorText) : 'ATTENDANCE_SAVED';
     cacheReceiptStatus_(cached);
   }
 }
@@ -1126,6 +1209,207 @@ function setupCheckInMailQueue() {
   return { ok: true, triggerInstalled: !exists };
 }
 
+function diagnoseTeacherNotificationFromProperty() {
+  const props = PropertiesService.getScriptProperties();
+  const requestedCode = String(props.getProperty('CHECKIN_DIAGNOSTIC_TEACHER_CODE') || '').trim();
+  if (!requestedCode) throw new Error('CHECKIN_DIAGNOSTIC_TEACHER_CODE が設定されていません');
+  const sheet = getTeacherMasterSheet_();
+  const lastRow = sheet.getLastRow();
+  const codes = lastRow < 2 ? [] : sheet.getRange(2, TEACHER_COL_CODE, lastRow - 1, 1).getValues();
+  let row = -1;
+  for (let i = 0; i < codes.length; i++) {
+    if (String(codes[i][0]).trim() === requestedCode) { row = i + 2; break; }
+  }
+  if (row < 2) return { teacherFound: false, code: 'TEACHER_NOT_FOUND', teacherCodeMasked: maskCheckInId_(requestedCode) };
+
+  const values = sheet.getRange(row, 1, 1, Math.max(TEACHER_COL_QR, TEACHER_COL_EMAIL)).getValues()[0];
+  const email = String(values[TEACHER_COL_EMAIL - 1] || '').trim();
+  const qr = String(values[TEACHER_COL_QR - 1] || '').trim();
+  const digest = qr ? shortCheckInHash_(qr) : '';
+  const cache = CacheService.getScriptCache();
+  const legacyKey = digest ? 'CHECKIN_QR_ROW_V1:teacher:' + digest : '';
+  const legacyCachePresentBefore = !!(legacyKey && cache.get(legacyKey));
+  const indexed = qr ? findTeacherByQrCached_(sheet, qr) : null;
+  const headerValue = String(sheet.getRange(1, TEACHER_COL_EMAIL).getDisplayValue() || '').trim();
+  const headerDetected = ['メール', 'メールアドレス', 'Email'].indexOf(headerValue) >= 0;
+  const config = getCheckInMailConfigStatus_();
+  const result = {
+    teacherFound: true,
+    teacherCodeMasked: maskCheckInId_(String(values[TEACHER_COL_CODE - 1] || '').trim()),
+    teacherRow: row,
+    teacherCodeSourceColumn: 'A',
+    teacherCodeArrayIndex: TEACHER_COL_CODE - 1,
+    teacherNameSourceColumn: 'B',
+    teacherNameArrayIndex: TEACHER_COL_NAME - 1,
+    teacherNamePresent: !!String(values[TEACHER_COL_NAME - 1] || '').trim(),
+    sourceColumn: 'P',
+    arrayIndex: TEACHER_COL_EMAIL - 1,
+    emailPresent: !!email,
+    emailLength: email.length,
+    emailDomainMasked: maskEmailDomain_(email),
+    emailIsFormula: !!sheet.getRange(row, TEACHER_COL_EMAIL).getFormula(),
+    emailValid: classifyTeacherEmail_(email).code === 'OK',
+    emptyReason: email ? '' : 'P列の実値が空欄',
+    headerDetected: headerDetected,
+    emailColumnResolution: headerDetected ? 'header:P' : 'fixed:P',
+    teacherIndexCacheVersion: TEACHER_INDEX_CACHE_VERSION,
+    teacherIndexEmailPresent: !!(indexed && indexed.email),
+    legacyCachePresentBefore: legacyCachePresentBefore,
+    legacyCachePresentAfter: !!(legacyKey && cache.get(legacyKey)),
+    mailProvider: 'BREVO',
+    brevoApiKeyPresent: config.brevoApiKeyPresent,
+    fromEmailPresent: config.fromEmailPresent
+  };
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+function diagnoseStudentMailFromProperty() {
+  const props = PropertiesService.getScriptProperties();
+  const requestedCode = String(props.getProperty('CHECKIN_DIAGNOSTIC_STUDENT_CODE') || '').trim();
+  if (!requestedCode) throw new Error('CHECKIN_DIAGNOSTIC_STUDENT_CODE が設定されていません');
+  const master = getMasterSheet_();
+  const lastMasterRow = master.getLastRow();
+  const codes = lastMasterRow < 2 ? [] : master.getRange(2, COL_STUDENT_ID, lastMasterRow - 1, 1).getValues();
+  let masterRow = -1;
+  for (let i = 0; i < codes.length; i++) {
+    if (String(codes[i][0]).trim() === requestedCode) { masterRow = i + 2; break; }
+  }
+  if (masterRow < 2) return { studentFound: false, errorCode: 'STUDENT_NOT_FOUND', studentCodeMasked: maskCheckInId_(requestedCode) };
+  const width = Math.max(master.getLastColumn(), 70);
+  const values = master.getRange(masterRow, 1, 1, width).getValues()[0];
+  const recipients = getNotifyEmailsFromValues_(values);
+  const recipient = String(recipients[0] || '').trim();
+
+  const logSheet = getLogSheet_();
+  const logSchema = ensureCheckInLogSchema_(logSheet);
+  const codeCol = logSchema.headers.indexOf('生徒番号');
+  const receiptCol = logSchema.headers.indexOf(CHECKIN_RECEIPT_HEADER);
+  let logRow = -1;
+  let logValues = null;
+  if (codeCol >= 0 && logSheet.getLastRow() >= 2) {
+    const rows = logSheet.getRange(2, 1, logSheet.getLastRow() - 1, logSchema.lastColumn).getValues();
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (String(rows[i][codeCol]).trim() === requestedCode) { logRow = i + 2; logValues = rows[i]; break; }
+    }
+  }
+  const value = header => logValues && logValues[logSchema.headers.indexOf(header)];
+  const receiptId = receiptCol >= 0 ? String(value(CHECKIN_RECEIPT_HEADER) || '').trim() : '';
+  const queueSheet = getCheckInMailQueueSheet_();
+  const queueMatch = receiptId && queueSheet.getLastRow() >= 2
+    ? queueSheet.getRange(2, 1, queueSheet.getLastRow() - 1, 1).createTextFinder(receiptId).matchEntireCell(true).findNext()
+    : null;
+  const queue = queueMatch ? queueSheet.getRange(queueMatch.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0] : null;
+  const triggers = ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'processCheckInMailQueue');
+  const config = getCheckInMailConfigStatus_();
+  const storedError = String(value('最終エラー理由') || '');
+  const errorCode = !config.ok ? config.code : (queue && queue[3] === 'PENDING' && !triggers.length ? 'MAIL_WORKER_NOT_RUNNING' : (/BREVO_SEND_FAILED/.test(storedError) ? 'BREVO_SEND_FAILED' : ''));
+  const result = {
+    studentFound: true,
+    studentCodeMasked: maskCheckInId_(requestedCode),
+    recipientPresent: !!recipient,
+    recipientLength: recipient.length,
+    recipientDomainMasked: maskEmailDomain_(recipient),
+    provider: 'BREVO',
+    apiKeyPresent: config.brevoApiKeyPresent,
+    senderPresent: config.fromEmailPresent,
+    queueCreated: !!queue,
+    queueProcessed: !!(queue && Number(queue[4] || 0) > 0),
+    queueStatus: queue ? String(queue[3] || '') : 'NOT_CREATED',
+    workerTriggerPresent: triggers.length === 1,
+    providerStatus: queue ? String(queue[3] || '') : String(value('配信状態') || value('メール送信結果') || ''),
+    errorCode: errorCode,
+    receiptPresent: !!receiptId,
+    attendanceLogFound: logRow >= 2,
+    deliveryFailureRecorded: false
+  };
+  console.log(JSON.stringify(result));
+  return result;
+}
+
+function diagnoseCheckInMailQueueHealth() {
+  const sheet = getCheckInMailQueueSheet_();
+  const result = { total: 0, pending: 0, retry: 0, processing: 0, sent: 0, failed: 0, stopped: 0 };
+  if (sheet.getLastRow() >= 2) {
+    const states = sheet.getRange(2, 4, sheet.getLastRow() - 1, 1).getDisplayValues();
+    states.forEach(row => {
+      const key = String(row[0] || '').trim().toLowerCase();
+      result.total++;
+      if (Object.prototype.hasOwnProperty.call(result, key)) result[key]++;
+    });
+  }
+  result.workerTriggerPresent = ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'processCheckInMailQueue');
+  result.diagnosticMode = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE') || '').trim().toUpperCase() === 'TRUE';
+  console.log(JSON.stringify(result));
+  Logger.log(JSON.stringify(result));
+  return result;
+}
+
+function runCheckInMailDummyDiagnostics() {
+  const props = PropertiesService.getScriptProperties();
+  const previousMode = props.getProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE');
+  const health = diagnoseCheckInMailQueueHealth();
+  if (health.pending || health.retry || health.processing) throw new Error('MAIL_QUEUE_NOT_IDLE');
+  props.setProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE', 'TRUE');
+  const queue = getCheckInMailQueueSheet_();
+  const before = queue.getLastRow();
+  const runId = Utilities.getUuid();
+  const onePixelJpeg = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EB//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EB//2Q==';
+  const cases = [
+    { role: 'student', photo: false, type: '入室' },
+    { role: 'student', photo: true, type: '退室' },
+    { role: 'teacher', photo: false, type: '出勤' },
+    { role: 'teacher', photo: true, type: '退勤' }
+  ];
+  const receipts = [];
+  try {
+    cases.forEach((item, index) => {
+      const receiptId = 'diag-' + runId + '-' + index;
+      const photoId = item.photo ? saveCheckInPhoto_(onePixelJpeg, receiptId) : '';
+      const attendance = { receiptId: receiptId, name: 'ダミー', type: item.type, logRow: 0 };
+      enqueueCheckInMail_(attendance, ['dummy@invalid.example'], photoId);
+      enqueueCheckInMail_(attendance, ['dummy@invalid.example'], photoId);
+      receipts.push(receiptId);
+    });
+    receipts.forEach(receiptId => {
+      const match = queue.getRange(2, 1, queue.getLastRow() - 1, 1).createTextFinder(receiptId).matchEntireCell(true).findNext();
+      if (match) processCheckInMailQueueRow_(queue, match.getRow(), queue.getRange(match.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0]);
+    });
+    const rows = queue.getRange(before + 1, 1, queue.getLastRow() - before, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues();
+    const result = {
+      cases: cases.length,
+      queueRowsCreated: rows.length,
+      sent: rows.filter(row => String(row[3]) === 'SENT').length,
+      failed: rows.filter(row => String(row[3]) === 'FAILED').length,
+      duplicateQueueRows: rows.length - new Set(rows.map(row => String(row[0]))).size,
+      photoCases: rows.filter(row => !!row[11]).length,
+      provider: 'DIAGNOSTIC'
+    };
+    console.log(JSON.stringify(result));
+    Logger.log(JSON.stringify(result));
+    return result;
+  } finally {
+    if (previousMode == null) props.deleteProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE');
+    else props.setProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE', previousMode);
+  }
+}
+
+function maskEmailDomain_(email) {
+  const domain = String(email || '').trim().split('@')[1] || '';
+  if (!domain) return '';
+  const dot = domain.lastIndexOf('.');
+  const suffix = dot >= 0 ? domain.slice(dot) : '';
+  const base = dot >= 0 ? domain.slice(0, dot) : domain;
+  return (base ? base.charAt(0) + '***' : '***') + suffix;
+}
+
+function checkInMailErrorCode_(value) {
+  const text = String(value || '');
+  const known = ['BREVO_API_KEY_MISSING','MAIL_QUEUE_CREATE_FAILED','MAIL_WORKER_NOT_RUNNING','BREVO_AUTH_FAILED','BREVO_SEND_REJECTED','SENDER_CONFIG_INVALID','RECIPIENT_INVALID','PHOTO_PROCESS_FAILED','BREVO_API_TIMEOUT','TEACHER_EMAIL_INVALID','BREVO_SEND_FAILED'];
+  for (let i = 0; i < known.length; i++) if (text.indexOf(known[i]) >= 0) return known[i];
+  return 'BREVO_SEND_FAILED';
+}
+
 function isValidCheckInQrFormat_(value) { return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(String(value || '').trim()); }
 function isValidReceiptId_(value) { return /^(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|qr-[a-z0-9-]{10,80})$/i.test(String(value || '').trim()); }
 function shortCheckInHash_(value) { return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(value), Utilities.Charset.UTF_8)).replace(/=+$/,'').slice(0,22); }
@@ -1146,7 +1430,13 @@ function logCheckInTrace_(trace, result, phase) { console.log(JSON.stringify({ e
 function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
   options = options || {};
 
-  const apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
+  const props = PropertiesService.getScriptProperties();
+  const diagnosticMode = String(props.getProperty('CHECKIN_MAIL_DIAGNOSTIC_MODE') || '').trim().toUpperCase() === 'TRUE';
+  if (diagnosticMode) {
+    return { accepted: true, provider: 'DIAGNOSTIC', messageId: 'diagnostic-' + Utilities.getUuid(), acceptedAt: new Date(), error: '', httpStatus: 204, correlationId: options.correlationId || Utilities.getUuid() };
+  }
+
+  const apiKey = props.getProperty('BREVO_API_KEY');
   if (!apiKey) {
     throw new Error('BREVO_API_KEY がスクリプトプロパティに設定されていません');
   }
@@ -1191,7 +1481,8 @@ function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
   if (code >= 200 && code < 300) {
     return { accepted: true, messageId: String(response.messageId || ''), acceptedAt: new Date(), error: '', httpStatus: code, correlationId: correlationId };
   }
-  return { accepted: false, messageId: '', acceptedAt: new Date(), error: 'Brevo送信失敗 (' + code + '): ' + res.getContentText(), httpStatus: code, correlationId: correlationId };
+  const errorCode = code === 401 || code === 403 ? 'BREVO_AUTH_FAILED' : 'BREVO_SEND_REJECTED';
+  return { accepted: false, messageId: '', acceptedAt: new Date(), error: 'Brevo送信失敗 (' + code + '): ' + res.getContentText(), errorCode: errorCode, httpStatus: code, correlationId: correlationId };
 }
 
 /**
@@ -1200,12 +1491,13 @@ function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
 function sendCheckInEmail_(studentName, guardianEmail, photoBase64, type, now, receiptId) {
   const label = Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分');
 
-  const subject = (type === '入室') ? '入室のお知らせ' : '退室のお知らせ';
-  const bodyText = studentName + 'さんが' + SCHOOL_DISPLAY_NAME + 'に' + type + 'しました。\n' + label + '\n' + SCHOOL_DISPLAY_NAME;
+  const isTeacher = type === '出勤' || type === '退勤';
+  const subject = type + 'のお知らせ';
+  const bodyText = studentName + (isTeacher ? '先生が' : 'さんが') + SCHOOL_DISPLAY_NAME + 'に' + type + 'しました。\n' + label + '\n' + SCHOOL_DISPLAY_NAME;
   const htmlBody = bodyText.replace(/\n/g, '<br>');
 
   const options = {
-    toName: studentName + '様 保護者',
+    toName: isTeacher ? studentName + '先生' : studentName + '様 保護者',
     tags: ['student-qr', type === '入室' ? 'checkin' : 'checkout'],
     correlationId: receiptId ? String(receiptId) + '-' + shortCheckInHash_(guardianEmail).slice(0, 10) : undefined
   };

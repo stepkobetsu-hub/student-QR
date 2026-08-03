@@ -413,7 +413,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultName.textContent = name + ' 先生';
     resultType.textContent = type + 'を受け付けました';
     resultTime.textContent = label;
-    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus);
+    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode);
     resultPoints.style.display = 'none';
   } else if (ok) {
     resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
@@ -421,7 +421,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultName.textContent = name + ' さん';
     resultType.textContent = type + 'を受け付けました';
     resultTime.textContent = label;
-    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus);
+    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode);
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
       resultPoints.style.display = 'inline-block';
@@ -439,7 +439,21 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   }
 }
 
-function mailStatusText(status) {
+function mailStatusText(status, code) {
+  if (code === 'TEACHER_EMAIL_EMPTY') return '入退室記録が完了しました（講師メールアドレスが空欄のため通知先なし）';
+  if (code === 'TEACHER_EMAIL_INVALID') return '入退室記録は完了しましたが、講師メールアドレスの形式が正しくありません';
+  if (code === 'NOTIFICATION_CONFIG_ERROR') return '入退室記録は完了しましたが、通知設定に不備があります';
+  if (code === 'BREVO_NOT_CONFIGURED') return '入退室記録は完了しましたが、メール送信APIが未設定です';
+  if (code === 'BREVO_API_KEY_MISSING') return '入退室記録は完了しましたが、メール送信APIの認証設定がありません';
+  if (code === 'MAIL_QUEUE_CREATE_FAILED') return '入退室記録は完了しましたが、メール送信予約を作成できませんでした';
+  if (code === 'MAIL_WORKER_NOT_RUNNING') return '入退室記録は完了しましたが、メール送信処理が起動していません';
+  if (code === 'BREVO_AUTH_FAILED') return '入退室記録は完了しましたが、メール送信APIの認証に失敗しました';
+  if (code === 'BREVO_SEND_REJECTED') return '入退室記録は完了しましたが、メール送信APIに拒否されました';
+  if (code === 'SENDER_CONFIG_INVALID') return '入退室記録は完了しましたが、送信元設定が正しくありません';
+  if (code === 'RECIPIENT_INVALID') return '入退室記録は完了しましたが、通知先メールアドレスの形式が正しくありません';
+  if (code === 'PHOTO_PROCESS_FAILED') return '入退室記録は完了しましたが、通知用写真を処理できませんでした';
+  if (code === 'BREVO_API_TIMEOUT') return '入退室記録は完了しましたが、メール送信APIがタイムアウトしました';
+  if (code === 'BREVO_SEND_FAILED') return '入退室記録は完了しましたが、通知メールの送信に失敗しました';
   if (status === 'FAILED') return '入退室記録は完了しましたが、通知メールの送信に失敗しました';
   if (status === 'SENT') return '入退室記録と通知メール送信が完了しました';
   if (status === 'NOT_REQUIRED') return '入退室記録が完了しました（通知先なし）';
@@ -450,6 +464,21 @@ function errorTitle(code) {
   const titles = {
     INVALID_QR_FORMAT: 'QRの形式が正しくありません',
     TARGET_NOT_FOUND: '登録対象が見つかりません',
+    TEACHER_NOT_FOUND: '講師の登録対象が見つかりません',
+    TEACHER_EMAIL_EMPTY: '講師メールアドレスが空欄です',
+    TEACHER_EMAIL_INVALID: '講師メールアドレスの形式が正しくありません',
+    NOTIFICATION_CONFIG_ERROR: '通知設定に不備があります',
+    BREVO_NOT_CONFIGURED: 'メール送信APIが未設定です',
+    BREVO_API_KEY_MISSING: 'メール送信APIの認証設定がありません',
+    MAIL_QUEUE_CREATE_FAILED: 'メール送信予約を作成できませんでした',
+    MAIL_WORKER_NOT_RUNNING: 'メール送信処理が起動していません',
+    BREVO_AUTH_FAILED: 'メール送信APIの認証に失敗しました',
+    BREVO_SEND_REJECTED: 'メール送信APIに拒否されました',
+    SENDER_CONFIG_INVALID: '送信元設定が正しくありません',
+    RECIPIENT_INVALID: '通知先メールアドレスの形式が正しくありません',
+    PHOTO_PROCESS_FAILED: '通知用写真を処理できませんでした',
+    BREVO_API_TIMEOUT: 'メール送信APIがタイムアウトしました',
+    BREVO_SEND_FAILED: '通知メールの送信に失敗しました',
     SAVE_FAILED: '入退室記録の保存に失敗しました',
     TIMEOUT: '通信がタイムアウトしました',
     NETWORK_ERROR: '通信がタイムアウトしました',

@@ -31,9 +31,32 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /CHECKIN_MAIL_QUEUE_SHEET = 'メール送信キュー'/);
   assert.match(backend, /processCheckInMailQueue/);
   assert.match(backend, /getUserLock\(\)[\s\S]*tryLock\(100\)/);
-  assert.match(backend, /isCheckInMailConfigured_\(\)/);
-  assert.match(backend, /mailStatus = 'FAILED'[\s\S]*メール送信設定が未完了です/);
+  assert.match(backend, /getCheckInMailConfigStatus_\(\)/);
+  assert.match(backend, /BREVO_API_KEY_MISSING/);
+  assert.match(backend, /CHECKIN_MAIL_DIAGNOSTIC_MODE/);
+  assert.match(backend, /provider: 'DIAGNOSTIC'/);
+  assert.match(backend, /runCheckInMailDummyDiagnostics/);
+  assert.match(backend, /MAIL_QUEUE_NOT_IDLE/);
   assert.match(page, /入退室記録は完了しましたが、通知メールの送信に失敗しました/);
+});
+
+test('teacher notifications use column P and a versioned cache record', () => {
+  assert.match(backend, /TEACHER_COL_EMAIL = 16/);
+  assert.match(backend, /TEACHER_COL_EMAIL - 1/);
+  assert.match(backend, /TEACHER_INDEX_CACHE_VERSION = 'v43-email-p15'/);
+  assert.match(backend, /findTeacherByQrCached_/);
+  assert.match(backend, /email: String\(values\[TEACHER_COL_EMAIL - 1\]/);
+  assert.match(backend, /cache\.remove\('CHECKIN_QR_ROW_V1:teacher:'/);
+  assert.match(backend, /notifyEmails = \[teacherEmailState\.email\]/);
+});
+
+test('teacher mail errors are distinct and attendance remains successful', () => {
+  for (const code of ['TEACHER_NOT_FOUND', 'TEACHER_EMAIL_EMPTY', 'TEACHER_EMAIL_INVALID', 'NOTIFICATION_CONFIG_ERROR', 'BREVO_NOT_CONFIGURED', 'BREVO_API_KEY_MISSING', 'MAIL_QUEUE_CREATE_FAILED', 'MAIL_WORKER_NOT_RUNNING', 'BREVO_AUTH_FAILED', 'BREVO_SEND_REJECTED', 'SENDER_CONFIG_INVALID', 'RECIPIENT_INVALID', 'PHOTO_PROCESS_FAILED', 'BREVO_API_TIMEOUT', 'BREVO_SEND_FAILED']) {
+    assert.match(page + backend, new RegExp(code));
+  }
+  assert.match(backend, /attendanceSaved: true/);
+  assert.match(backend, /markCheckInMailQueueFailed_/);
+  assert.match(backend, /getTeacherLogSheet_\(\)[\s\S]*updateCheckInLogMailStatus_/);
 });
 
 test('server uses a bounded lock and one-row writes for attendance', () => {
