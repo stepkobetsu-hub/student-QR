@@ -58,7 +58,12 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /ensureCheckInMailWorkerTrigger_/);
   assert.match(backend, /MAIL_WORKER_TRIGGER_CHECK_FAILED/);
   assert.match(backend, /try \{[\s\S]*ensureCheckInMailWorkerTrigger_\(\);[\s\S]*\} catch \(error\)/);
-  assert.match(page, /waitForMailCompletion\(receiptId, 7000\)/);
+  assert.match(page, /trackMailCompletionInBackground\(receiptId\)/);
+  assert.match(page, /void waitForMailCompletion\(receiptId, 7000\)/);
+  assert.doesNotMatch(page, /await waitForMailCompletion\(receiptId/);
+  assert.match(page, /SUCCESS_RESUME_MS = 1500/);
+  assert.match(page, /resumeDelayMs = data\.mailStatus === 'FAILED' \? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS/);
+  assert.match(page, /受付が完了しました。次のQRを読み取れます/);
   assert.match(page, /MailApp一時送信/);
   assert.match(backend, /sendApprovedMailAppFallbackTestToConfiguredSender/);
   assert.match(backend, /CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT/);
