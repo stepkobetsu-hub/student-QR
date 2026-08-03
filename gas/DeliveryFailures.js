@@ -8,7 +8,6 @@ const DELIVERY_FAILURE_HEADERS = [
   '送信元システム','初回発生日時','最終発生日時','発生回数','再送日時','管理者通知済み','管理者通知日時',
   'アーカイブ状態','アーカイブ日時','アーカイブ実行者'
 ];
-const DELIVERY_FAILURE_ADMIN_EMAIL = 'mintcocoajasmine@gmail.com';
 const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時'];
 const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
@@ -320,7 +319,7 @@ function appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlation
   sheet.appendRow([
     Utilities.getUuid(), dedupeKey, eventDate, new Date(), normalizeDeliveryEmail_(body.email), event, deliveryDisplayState_(event),
     normalizeBrevoMessageId_(body['message-id'] || body.messageId || body.message_id), correlationId, logSubject, String(body.reason || body.error || ''),
-    JSON.stringify(body.tags || []), DEFAULT_FROM_EMAIL, matches.map(m => m.id).join(', '), matches.map(m => m.name).join(', '),
+    JSON.stringify(body.tags || []), getCheckInFromEmail_(), matches.map(m => m.id).join(', '), matches.map(m => m.name).join(', '),
     matches.map(m => m.school).join(', '), fields || logMailType, studentList, studentList, stopped, '未確認', '', '', '', '', false, '', '', sourceSystem === 'STEP_MESSAGE_CENTER' ? '' : rawBody,
     sourceSystem, eventDate, eventDate, 1, '', false, '', false, '', ''
   ]);
@@ -364,7 +363,9 @@ function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
       '管理ID：'+managementId,
       'Brevo messageId：'+messageId
     ].join('\n');
-    MailApp.sendEmail({to:DELIVERY_FAILURE_ADMIN_EMAIL,subject:subject,body:body});
+    const adminEmail = String(PropertiesService.getScriptProperties().getProperty('DELIVERY_FAILURE_ADMIN_EMAIL') || '').trim();
+    if (!adminEmail) return {ok:true,skipped:true,reason:'admin_email_not_configured'};
+    MailApp.sendEmail({to:adminEmail,subject:subject,body:body});
     const notifiedIndex=headers.indexOf('管理者通知済み'), notifiedAtIndex=headers.indexOf('管理者通知日時');
     if(notifiedIndex>=0)sheet.getRange(upsertResult.row,notifiedIndex+1).setValue(notificationKey);
     if(notifiedAtIndex>=0)sheet.getRange(upsertResult.row,notifiedAtIndex+1).setValue(new Date());
