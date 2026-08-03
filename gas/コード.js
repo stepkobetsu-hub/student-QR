@@ -1073,7 +1073,14 @@ function enqueueCheckInMail_(attendance, emails, photoFileId) {
     attendance.receiptId, now, now, 'PENDING', 0, now, '', attendance.name, attendance.type, now,
     JSON.stringify(recipients), photoFileId || '', '', '[]', '[]', '', attendance.logRow
   ]]);
-  ensureCheckInMailWorkerTrigger_();
+  // キュー行の保存とトリガー点検は別結果として扱う。
+  // Webアプリ実行ではトリガー一覧の参照権限がない場合があるが、
+  // その例外で保存済みキューを「作成失敗」と誤表示してはならない。
+  try {
+    ensureCheckInMailWorkerTrigger_();
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'checkin_mail_trigger_check', code: 'MAIL_WORKER_TRIGGER_CHECK_FAILED', error: sanitizeCheckInError_(error) }));
+  }
 }
 
 function markCheckInMailQueueFailed_(receiptId, errorCode) {
