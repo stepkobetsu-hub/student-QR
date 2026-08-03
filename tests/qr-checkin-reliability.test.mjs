@@ -17,6 +17,14 @@ test('scanner pauses during a request and resumes without restarting the camera'
   assert.equal((page.match(/getUserMedia\(/g) || []).length, 1);
 });
 
+test('rear-camera preview is corrected without mirroring analysis or mail photo canvases', () => {
+  assert.match(page, /video \{[\s\S]*transform: scaleX\(-1\)/);
+  assert.match(page, /ctx\.drawImage\(video, 0, 0, canvas\.width, canvas\.height\)/);
+  assert.match(page, /photoCtx\.drawImage\(video, 0, 0, photoCanvas\.width, photoCanvas\.height\)/);
+  assert.doesNotMatch(page, /ctx\.scale\(-1/);
+  assert.doesNotMatch(page, /photoCtx\.scale\(-1/);
+});
+
 test('timeout recovery checks the receipt before retrying with the same id', () => {
   assert.match(page, /action: 'getReceiptStatus', receiptId/);
   assert.match(page, /code === 'RECEIPT_NOT_FOUND'/);
@@ -42,6 +50,8 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /mailAppAttemptedAt/);
   assert.match(backend, /mailAppStartedAt/);
   assert.match(backend, /mailAppCompletedAt/);
+  assert.match(backend, /CHECKIN_PHOTO_CACHE_PREFIX/);
+  assert.match(backend, /CacheService\.getScriptCache\(\)\.put\(cacheKey, raw, 600\)/);
   assert.match(backend, /processCheckInMailQueueReceipt_\(receipt, 3000\)/);
   assert.match(backend, /cached\.mailStatus === 'PENDING'[\s\S]*processCheckInMailQueueReceipt_\(receipt, 3000\)/);
   assert.match(backend, /ensureCheckInMailWorkerTrigger_/);

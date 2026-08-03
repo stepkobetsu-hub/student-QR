@@ -51,6 +51,8 @@ const CHECKIN_TIMING_HEADER = '処理時間JSON';
 const CHECKIN_MAIL_QUEUE_SHEET = 'メール送信キュー';
 const CHECKIN_MAIL_QUEUE_HEADERS = ['受付ID','登録日時','更新日時','状態','試行回数','次回試行日時','生徒番号','生徒氏名','種別','受付日時','送信先JSON','写真ファイルID','最終エラー','BrevoメッセージIDJSON','照合IDJSON','送信完了日時','ログ行'];
 const CHECKIN_MAIL_MAX_ATTEMPTS = 3;
+const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
+const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
 
 /**
  * ===================================================================
@@ -1089,6 +1091,11 @@ function markCheckInMailQueueFailed_(receiptId, errorCode) {
 function saveCheckInPhoto_(photoBase64, receiptId) {
   const raw = String(photoBase64 || '').replace(/^data:image\/\w+;base64,/, '');
   if (!raw) return '';
+  const cacheKey = CHECKIN_PHOTO_CACHE_PREFIX + shortCheckInHash_(receiptId);
+  if (raw.length <= CHECKIN_PHOTO_CACHE_MAX_CHARS) {
+    CacheService.getScriptCache().put(cacheKey, raw, 600);
+    return 'CACHE:' + cacheKey;
+  }
   const props = PropertiesService.getScriptProperties();
   let folderId = String(props.getProperty('CHECKIN_MAIL_PHOTO_FOLDER_ID') || '').trim();
   let folder;
@@ -1162,7 +1169,15 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
   let photo = '';
   if (row[11]) {
-    try { photo = 'data:image/jpeg;base64,' + Utilities.base64Encode(DriveApp.getFileById(String(row[11])).getBlob().getBytes()); } catch (ignore) {}
+    try {
+      const photoRef = String(row[11]);
+      if (photoRef.indexOf('CACHE:') === 0) {
+        const cachedPhoto = CacheService.getScriptCache().get(photoRef.slice(6));
+        if (cachedPhoto) photo = 'data:image/jpeg;base64,' + cachedPhoto;
+      } else {
+        photo = 'data:image/jpeg;base64,' + Utilities.base64Encode(DriveApp.getFileById(photoRef).getBlob().getBytes());
+      }
+    } catch (ignore) {}
   }
   recipients.forEach(recipient => {
     if (['SENT','STOPPED'].includes(recipient.status)) return;
@@ -1214,7 +1229,13 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   const logStatus = row[3] === 'SENT' ? '送信完了' : (row[3] === 'FAILED' ? '送信エラー' : '送信待ち');
   const provider = Array.from(new Set(recipients.map(recipient => recipient.provider).filter(Boolean))).join(',');
   updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider);
-  if (row[3] !== 'RETRY' && row[11]) try { DriveApp.getFileById(String(row[11])).setTrashed(true); } catch (ignore) {}
+  if (row[3] !== 'RETRY' && row[11]) {
+    try {
+      const photoRef = String(row[11]);
+      if (photoRef.indexOf('CACHE:') === 0) CacheService.getScriptCache().remove(photoRef.slice(6));
+      else DriveApp.getFileById(photoRef).setTrashed(true);
+    } catch (ignore) {}
+  }
   console.log(JSON.stringify({ event: 'checkin_mail', receiptId: receiptId, status: row[3], provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt, mailDelayMs: row[15] instanceof Date && row[1] instanceof Date ? row[15].getTime() - row[1].getTime() : null }));
   return { status: String(row[3] || ''), errorCode: checkInMailErrorCode_(row[12]), provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt };
 }

@@ -25,7 +25,8 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: none; /* 背面カメラを実際の向きで表示 */
+    transform: scaleX(-1); /* この端末の背面プレビューだけを反転補正。解析・写真Canvasには影響しない */
+    -webkit-transform: scaleX(-1);
   }
   canvas { display: none; }
 
@@ -315,11 +316,11 @@ async function handleQrDetected(qrData) {
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
-  const photoScale = Math.min(1, 640 / video.videoWidth);
+  const photoScale = Math.min(1, 480 / video.videoWidth);
   photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
   photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.55);
+  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.45);
 
   showProcessing(qrData, receiptId);
   let slowTimer = setTimeout(() => {
