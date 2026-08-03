@@ -765,6 +765,19 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     try {
       enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
       traceMark_(trace, 'mailQueued');
+      // Brevo未設定時のMailAppフォールバックは、1分トリガーを待たずに
+      // 受付ID単位で即時処理する。ワーカーと同じScriptLockを使い二重送信を防ぐ。
+      if (mailConfig.provider === 'MAILAPP_FALLBACK') {
+        const immediate = processCheckInMailQueueReceipt_(receipt, 3000);
+        traceMark_(trace, 'mailImmediate');
+        if (immediate && immediate.status === 'SENT') {
+          mailStatus = 'SENT';
+          resultCode = 'ATTENDANCE_SAVED';
+        } else if (immediate && immediate.status === 'FAILED') {
+          mailStatus = 'FAILED';
+          resultCode = immediate.errorCode || 'MAILAPP_SEND_FAILED';
+        }
+      }
     } catch (error) {
       mailStatus = 'FAILED';
       updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'MAIL_QUEUE_CREATE_FAILED');
@@ -1054,6 +1067,7 @@ function enqueueCheckInMail_(attendance, emails, photoFileId) {
     attendance.receiptId, now, now, 'PENDING', 0, now, '', attendance.name, attendance.type, now,
     JSON.stringify(recipients), photoFileId || '', '', '[]', '[]', '', attendance.logRow
   ]]);
+  ensureCheckInMailWorkerTrigger_();
 }
 
 function markCheckInMailQueueFailed_(receiptId, errorCode) {
@@ -1085,7 +1099,7 @@ function saveCheckInPhoto_(photoBase64, receiptId) {
 }
 
 function processCheckInMailQueue() {
-  const queueLock = LockService.getUserLock();
+  const queueLock = LockService.getScriptLock();
   if (!queueLock.tryLock(100)) return { processed: 0, skipped: 'already_running' };
   try {
     const sheet = getCheckInMailQueueSheet_();
@@ -1103,6 +1117,32 @@ function processCheckInMailQueue() {
       processed++;
     });
     return { processed: processed };
+  } finally {
+    queueLock.releaseLock();
+  }
+}
+
+function processCheckInMailQueueReceipt_(receiptId, waitMs) {
+  const receipt = String(receiptId || '').trim();
+  if (!receipt) return { processed: 0, status: 'NOT_FOUND', errorCode: 'RECEIPT_NOT_FOUND' };
+  const queueLock = LockService.getScriptLock();
+  if (!queueLock.tryLock(Math.max(0, Number(waitMs || 0)))) {
+    return { processed: 0, status: 'PENDING', skipped: 'locked', lockState: 'BUSY' };
+  }
+  try {
+    const sheet = getCheckInMailQueueSheet_();
+    if (sheet.getLastRow() < 2) return { processed: 0, status: 'NOT_FOUND', errorCode: 'MAIL_QUEUE_NOT_FOUND' };
+    const match = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).createTextFinder(receipt).matchEntireCell(true).findNext();
+    if (!match) return { processed: 0, status: 'NOT_FOUND', errorCode: 'MAIL_QUEUE_NOT_FOUND' };
+    const row = sheet.getRange(match.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0];
+    const status = String(row[3] || 'PENDING');
+    const staleProcessing = status === 'PROCESSING' && row[2] instanceof Date && Date.now() - row[2].getTime() > 10 * 60 * 1000;
+    if (status === 'SENT' || status === 'FAILED') return { processed: 0, status: status, errorCode: checkInMailErrorCode_(row[12]), lockState: 'ACQUIRED' };
+    if (status === 'PROCESSING' && !staleProcessing) return { processed: 0, status: 'PROCESSING', skipped: 'already_processing', lockState: 'ACQUIRED' };
+    const result = processCheckInMailQueueRow_(sheet, match.getRow(), row) || {};
+    result.processed = 1;
+    result.lockState = 'ACQUIRED';
+    return result;
   } finally {
     queueLock.releaseLock();
   }
@@ -1135,11 +1175,13 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
         return;
       }
       recipient.mailAppAttemptedAt = new Date().toISOString();
+      recipient.mailAppStartedAt = recipient.mailAppAttemptedAt;
     }
     row[10] = JSON.stringify(recipients); row[2] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
     try {
       const sent = sendCheckInEmail_(String(row[7]), recipient.email, photo, String(row[8]), row[9] instanceof Date ? row[9] : new Date(), receiptId);
+      recipient.mailAppCompletedAt = new Date().toISOString();
       recipient.status = sent && sent.accepted ? 'SENT' : 'FAILED';
       recipient.messageId = sent && sent.messageId || '';
       recipient.correlationId = sent && sent.correlationId || '';
@@ -1147,6 +1189,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
       recipient.error = sent && sent.error ? String(sent.errorCode || 'BREVO_SEND_FAILED') + ': ' + sanitizeCheckInError_(sent.error) : '';
       if (recipient.provider === 'MAILAPP_FALLBACK' && recipient.status === 'FAILED') recipient.status = 'STOPPED';
     } catch (error) {
+      if (recipient.provider === 'MAILAPP_FALLBACK') recipient.mailAppCompletedAt = new Date().toISOString();
       const cleanError = sanitizeCheckInError_(error);
       recipient.status = 'FAILED'; recipient.error = (/timed?\s*out/i.test(cleanError) ? 'BREVO_API_TIMEOUT' : 'BREVO_SEND_FAILED') + ': ' + cleanError;
     }
@@ -1169,6 +1212,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider);
   if (row[3] !== 'RETRY' && row[11]) try { DriveApp.getFileById(String(row[11])).setTrashed(true); } catch (ignore) {}
   console.log(JSON.stringify({ event: 'checkin_mail', receiptId: receiptId, status: row[3], provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt, mailDelayMs: row[15] instanceof Date && row[1] instanceof Date ? row[15].getTime() - row[1].getTime() : null }));
+  return { status: String(row[3] || ''), errorCode: checkInMailErrorCode_(row[12]), provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt };
 }
 
 function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText, provider) {
@@ -1223,9 +1267,13 @@ function setupCheckInMailQueue() {
   getCheckInMailQueueSheet_();
   ensureCheckInLogSchema_(getLogSheet_());
   ensureHeaders_(getTeacherLogSheet_(), ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  return { ok: true, triggerInstalled: ensureCheckInMailWorkerTrigger_() };
+}
+
+function ensureCheckInMailWorkerTrigger_() {
   const exists = ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'processCheckInMailQueue');
   if (!exists) ScriptApp.newTrigger('processCheckInMailQueue').timeBased().everyMinutes(1).create();
-  return { ok: true, triggerInstalled: !exists };
+  return !exists;
 }
 
 function diagnoseTeacherNotificationFromProperty() {

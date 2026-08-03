@@ -334,6 +334,10 @@ async function handleQrDetected(qrData) {
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
     renderServerResult(data);
+    if (data && data.attendanceSaved && (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING')) {
+      const settled = await waitForMailCompletion(receiptId, 7000);
+      if (settled) renderServerResult(settled);
+    }
   } catch (err) {
     if (err && err.name === 'AbortError') {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
@@ -384,6 +388,18 @@ async function resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimi
     }
   } catch (ignore) {}
   return { ok: false, code: 'TIMEOUT', message: '通信がタイムアウトしました', attendanceSaved: false };
+}
+
+async function waitForMailCompletion(receiptId, maxWaitMs) {
+  const deadline = Date.now() + Math.max(1000, Number(maxWaitMs || 0));
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    try {
+      const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId }, 3000);
+      if (status && status.attendanceSaved && status.mailStatus !== 'PENDING' && status.mailStatus !== 'PROCESSING') return status;
+    } catch (ignore) {}
+  }
+  return null;
 }
 
 function showProcessing(qrData, receiptId) {
@@ -441,8 +457,8 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
 
 function mailStatusText(status, code, provider) {
   if (provider === 'MAILAPP_FALLBACK' && status === 'SENT') return '入退室記録と通知メール送信が完了しました（MailApp一時送信）';
-  if (provider === 'MAILAPP_FALLBACK' && status !== 'FAILED') return '入退室記録が完了しました。通知メールはMailAppで送信待ちです';
-  if (code === 'MAILAPP_FALLBACK_ACTIVE') return '入退室記録が完了しました。通知メールはMailAppで送信待ちです';
+  if (provider === 'MAILAPP_FALLBACK' && status !== 'FAILED') return '入退室記録が完了しました。通知メールをMailAppで送信中です';
+  if (code === 'MAILAPP_FALLBACK_ACTIVE') return '入退室記録が完了しました。通知メールをMailAppで送信中です';
   if (code === 'MAILAPP_SEND_FAILED') return '入退室記録は完了しましたが、MailAppでの通知送信に失敗しました';
   if (code === 'MAILAPP_DELIVERY_UNCERTAIN') return '入退室記録は完了しました。二重送信防止のためメール再送を停止しました';
   if (code === 'TEACHER_EMAIL_EMPTY') return '入退室記録が完了しました（講師メールアドレスが空欄のため通知先なし）';

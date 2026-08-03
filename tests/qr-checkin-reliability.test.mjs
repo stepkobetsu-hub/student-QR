@@ -30,7 +30,7 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /mailStatus: mailStatus/);
   assert.match(backend, /CHECKIN_MAIL_QUEUE_SHEET = 'メール送信キュー'/);
   assert.match(backend, /processCheckInMailQueue/);
-  assert.match(backend, /getUserLock\(\)[\s\S]*tryLock\(100\)/);
+  assert.match(backend, /getScriptLock\(\)[\s\S]*tryLock\(100\)/);
   assert.match(backend, /getCheckInMailConfigStatus_\(\)/);
   assert.match(backend, /BREVO_API_KEY_MISSING/);
   assert.match(backend, /CHECKIN_MAIL_DIAGNOSTIC_MODE/);
@@ -40,6 +40,11 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /provider: 'MAILAPP_FALLBACK'/);
   assert.match(backend, /MailApp\.sendEmail/);
   assert.match(backend, /mailAppAttemptedAt/);
+  assert.match(backend, /mailAppStartedAt/);
+  assert.match(backend, /mailAppCompletedAt/);
+  assert.match(backend, /processCheckInMailQueueReceipt_\(receipt, 3000\)/);
+  assert.match(backend, /ensureCheckInMailWorkerTrigger_/);
+  assert.match(page, /waitForMailCompletion\(receiptId, 7000\)/);
   assert.match(page, /MailApp一時送信/);
   assert.match(backend, /sendApprovedMailAppFallbackTestToConfiguredSender/);
   assert.match(backend, /CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT/);
