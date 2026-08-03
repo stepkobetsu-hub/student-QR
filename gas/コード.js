@@ -999,21 +999,27 @@ function saveCheckInPhoto_(photoBase64, receiptId) {
 }
 
 function processCheckInMailQueue() {
-  const sheet = getCheckInMailQueueSheet_();
-  if (sheet.getLastRow() < 2) return { processed: 0 };
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues();
-  let processed = 0;
-  rows.forEach((row, index) => {
-    if (processed >= 10) return;
-    const status = String(row[3] || '');
-    const nextAt = row[5] instanceof Date ? row[5].getTime() : 0;
-    const staleProcessing = status === 'PROCESSING' && row[2] instanceof Date && Date.now() - row[2].getTime() > 10 * 60 * 1000;
-    if (!['PENDING','RETRY'].includes(status) && !staleProcessing) return;
-    if (nextAt > Date.now()) return;
-    processCheckInMailQueueRow_(sheet, index + 2, row);
-    processed++;
-  });
-  return { processed: processed };
+  const queueLock = LockService.getUserLock();
+  if (!queueLock.tryLock(100)) return { processed: 0, skipped: 'already_running' };
+  try {
+    const sheet = getCheckInMailQueueSheet_();
+    if (sheet.getLastRow() < 2) return { processed: 0 };
+    const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues();
+    let processed = 0;
+    rows.forEach((row, index) => {
+      if (processed >= 10) return;
+      const status = String(row[3] || '');
+      const nextAt = row[5] instanceof Date ? row[5].getTime() : 0;
+      const staleProcessing = status === 'PROCESSING' && row[2] instanceof Date && Date.now() - row[2].getTime() > 10 * 60 * 1000;
+      if (!['PENDING','RETRY'].includes(status) && !staleProcessing) return;
+      if (nextAt > Date.now()) return;
+      processCheckInMailQueueRow_(sheet, index + 2, row);
+      processed++;
+    });
+    return { processed: processed };
+  } finally {
+    queueLock.releaseLock();
+  }
 }
 
 function processCheckInMailQueueRow_(sheet, rowNumber, row) {
