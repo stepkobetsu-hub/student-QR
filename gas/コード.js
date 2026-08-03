@@ -1413,6 +1413,35 @@ function runCheckInMailDummyDiagnostics() {
   }
 }
 
+function sendApprovedMailAppFallbackTestToConfiguredSender() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT')) throw new Error('APPROVED_TEST_ALREADY_ATTEMPTED');
+  if (String(props.getProperty('BREVO_API_KEY') || '').trim()) throw new Error('BREVO_IS_CONFIGURED');
+  const recipient = String(props.getProperty('CHECKIN_FROM_EMAIL') || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error('APPROVED_TEST_RECIPIENT_INVALID');
+  const attemptId = Utilities.getUuid();
+  props.setProperty('CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT', new Date().toISOString());
+  const onePixelJpeg = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EB//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EB//2Q==';
+  const result = sendEmailViaMailAppFallback_(
+    recipient,
+    '【動作確認】入退室通知メール',
+    '入退室通知のMailApp一時送信テストです。<br>実在する生徒・講師の受付ではありません。',
+    { correlationId: 'approved-test-' + attemptId, attachmentBase64: onePixelJpeg, attachmentName: 'mailapp-test.jpg' }
+  );
+  const safeResult = {
+    accepted: !!(result && result.accepted),
+    provider: result && result.provider || '',
+    recipientPresent: !!recipient,
+    recipientLength: recipient.length,
+    recipientDomainMasked: maskEmailDomain_(recipient),
+    attachmentPresent: true,
+    errorCode: result && result.errorCode || ''
+  };
+  console.log(JSON.stringify(safeResult));
+  Logger.log(JSON.stringify(safeResult));
+  return safeResult;
+}
+
 function maskEmailDomain_(email) {
   const domain = String(email || '').trim().split('@')[1] || '';
   if (!domain) return '';
