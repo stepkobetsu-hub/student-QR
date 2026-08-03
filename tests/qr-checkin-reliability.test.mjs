@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import vm from 'node:vm';
 
 const page = fs.readFileSync(new URL('../tablet_checkin.html', import.meta.url), 'utf8');
 const backend = fs.readFileSync(new URL('../gas/コード.js', import.meta.url), 'utf8');
@@ -96,6 +97,27 @@ test('normal requests use receipt and daily-state caches before persistent scans
   assert.match(backend, /dailyCheckInStateKey_\('student'/);
   assert.match(backend, /dailyCheckInStateKey_\('teacher'/);
   assert.match(backend, /getRange\(2, 1, logSheet\.getLastRow\(\) - 1, 4\)/);
+});
+
+test('daily attendance point uses the first and latest stamp regardless of intermediate scans', () => {
+  assert.match(backend, /CHECKIN_DAY_V2:/);
+  assert.match(backend, /function isDailyStayQualified_\(firstStampMs, currentStampMs, minMinutes\)/);
+  assert.match(backend, /firstStampMs: stampTimes\.length \? stampTimes\[0\] : 0/);
+  assert.match(backend, /state\.count > 0[\s\S]*isDailyStayQualified_\(state\.firstStampMs, now\.getTime\(\), settings\.minMinutes\)/);
+  assert.match(backend, /if \(!state\.firstStampMs\) state\.firstStampMs = now\.getTime\(\)/);
+  assert.doesNotMatch(
+    backend.slice(backend.indexOf('function saveStudentAttendance_'), backend.indexOf('function saveTeacherAttendance_')),
+    /now\.getTime\(\) - state\.lastEntryMs/
+  );
+
+  const source = backend.match(/function isDailyStayQualified_\([\s\S]*?\n\}/)?.[0];
+  assert.ok(source);
+  const context = {};
+  vm.runInNewContext(source, context);
+  const first = Date.UTC(2026, 7, 4, 1, 0, 0);
+  assert.equal(context.isDailyStayQualified_(first, first + 9 * 60000 + 59000, 10), false);
+  assert.equal(context.isDailyStayQualified_(first, first + 10 * 60000, 10), true);
+  assert.equal(context.isDailyStayQualified_(first, first + 30 * 60000, 10), true);
 });
 
 test('public errors are distinct', () => {
