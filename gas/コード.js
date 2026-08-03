@@ -748,9 +748,11 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   traceMark_(trace, 'attendanceSaved');
   let resultCode = attendance.notificationCode || 'ATTENDANCE_SAVED';
   let mailStatus = attendance.notificationCode === 'TEACHER_EMAIL_INVALID' ? 'FAILED' : (notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED');
+  let mailProvider = '';
   cacheReceiptStatus_(Object.assign({}, attendance, { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, mailStatus: mailStatus, duplicate: false }));
   if (notifyEmails.length) {
     const mailConfig = getCheckInMailConfigStatus_();
+    mailProvider = mailConfig.provider || '';
     if (mailConfig.ok && photoBase64) {
       try {
         photoFileId = saveCheckInPhoto_(photoBase64, receipt);
@@ -784,6 +786,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     code: resultCode,
     attendanceSaved: true,
     mailStatus: mailStatus,
+    mailProvider: mailProvider,
     duplicate: false,
     timings: finishCheckInTrace_(trace),
     clientTimingsReceived: !!clientTimings
@@ -867,7 +870,7 @@ function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
   const code = String(teacher.code || '').trim();
   const name = String(teacher.name || '').trim();
   const sheet = getTeacherLogSheet_();
-  const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   const now = new Date();
   const today = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
   const stateKey = dailyCheckInStateKey_('teacher', code, today);
@@ -946,7 +949,7 @@ function classifyTeacherEmail_(value) {
 }
 
 function ensureCheckInLogSchema_(sheet) {
-  return ensureHeaders_(sheet, ['タイムスタンプ','生徒番号','生徒氏名','種別','校舎','メール送信結果','送信先メール','BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時','送信元システム','送信種別','件名','送信時結果',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  return ensureHeaders_(sheet, ['タイムスタンプ','生徒番号','生徒氏名','種別','校舎','メール送信結果','送信先メール','BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時','送信元システム','送信種別','件名','送信時結果','メール送信方式',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
 }
 
 function ensureHeaders_(sheet, required) {
@@ -980,13 +983,13 @@ function getReceiptStatus_(receiptId, skipCache) {
     if (match) {
       const values = studentLog.getRange(match.getRow(), 1, 1, studentSchema.lastColumn).getValues()[0];
       const value = header => values[studentSchema.headers.indexOf(header)];
-      const result = { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: false, name: value('生徒氏名'), school: value('校舎'), type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: normalizeMailStatus_(value('配信状態')), duplicate: true, totalPoints: null };
+      const result = { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: false, name: value('生徒氏名'), school: value('校舎'), type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: normalizeMailStatus_(value('配信状態')), mailProvider: String(value('メール送信方式') || ''), duplicate: true, totalPoints: null };
       cacheReceiptStatus_(result);
       return result;
     }
   }
   const teacherLog = getTeacherLogSheet_();
-  const teacherSchema = ensureHeaders_(teacherLog, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  const teacherSchema = ensureHeaders_(teacherLog, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   const teacherReceiptCol = teacherSchema.headers.indexOf(CHECKIN_RECEIPT_HEADER) + 1;
   if (teacherReceiptCol > 0 && teacherLog.getLastRow() >= 2) {
     const match = teacherLog.getRange(2, teacherReceiptCol, teacherLog.getLastRow() - 1, 1).createTextFinder(receipt).matchEntireCell(true).findNext();
@@ -994,7 +997,7 @@ function getReceiptStatus_(receiptId, skipCache) {
       const values = teacherLog.getRange(match.getRow(), 1, 1, teacherSchema.lastColumn).getValues()[0];
       const value = header => values[teacherSchema.headers.indexOf(header)];
       const mailStatus = normalizeMailStatus_(value('メール送信結果'));
-      const result = { ok: true, code: mailStatus === 'FAILED' ? 'BREVO_SEND_FAILED' : 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: mailStatus, duplicate: true, totalPoints: null };
+      const result = { ok: true, code: mailStatus === 'FAILED' ? checkInMailErrorCode_(value('最終エラー理由')) : 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: mailStatus, mailProvider: String(value('メール送信方式') || ''), duplicate: true, totalPoints: null };
       cacheReceiptStatus_(result);
       return result;
     }
@@ -1036,8 +1039,8 @@ function getCheckInMailConfigStatus_() {
   const fromEmailPresent = !!String(props.getProperty('CHECKIN_FROM_EMAIL') || '').trim();
   const brevoApiKeyPresent = !!String(props.getProperty('BREVO_API_KEY') || '').trim();
   if (diagnosticMode) return { ok: true, code: 'OK', provider: 'DIAGNOSTIC', diagnosticMode: true, fromEmailPresent: fromEmailPresent, brevoApiKeyPresent: brevoApiKeyPresent };
-  if (!fromEmailPresent) return { ok: false, code: 'SENDER_CONFIG_INVALID', category: 'NOTIFICATION_CONFIG_ERROR', fromEmailPresent: false, brevoApiKeyPresent: brevoApiKeyPresent };
-  if (!brevoApiKeyPresent) return { ok: false, code: 'BREVO_API_KEY_MISSING', category: 'BREVO_NOT_CONFIGURED', fromEmailPresent: true, brevoApiKeyPresent: false };
+  if (!brevoApiKeyPresent) return { ok: true, code: 'MAILAPP_FALLBACK_ACTIVE', provider: 'MAILAPP_FALLBACK', diagnosticMode: false, fromEmailPresent: fromEmailPresent, brevoApiKeyPresent: false };
+  if (!fromEmailPresent) return { ok: false, code: 'SENDER_CONFIG_INVALID', category: 'NOTIFICATION_CONFIG_ERROR', provider: 'BREVO', fromEmailPresent: false, brevoApiKeyPresent: true };
   return { ok: true, code: 'OK', provider: 'BREVO', diagnosticMode: false, fromEmailPresent: true, brevoApiKeyPresent: true };
 }
 
@@ -1123,6 +1126,16 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
       recipient.status = 'STOPPED'; recipient.error = '不達メールのため送信停止中'; return;
     }
     recipient.status = 'PROCESSING';
+    const route = getCheckInMailConfigStatus_();
+    recipient.provider = route.provider || 'BREVO';
+    if (route.provider === 'MAILAPP_FALLBACK') {
+      if (recipient.mailAppAttemptedAt) {
+        recipient.status = 'STOPPED';
+        recipient.error = 'MAILAPP_DELIVERY_UNCERTAIN: MailApp送信済みの可能性があるため再送を停止';
+        return;
+      }
+      recipient.mailAppAttemptedAt = new Date().toISOString();
+    }
     row[10] = JSON.stringify(recipients); row[2] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
     try {
@@ -1130,7 +1143,9 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
       recipient.status = sent && sent.accepted ? 'SENT' : 'FAILED';
       recipient.messageId = sent && sent.messageId || '';
       recipient.correlationId = sent && sent.correlationId || '';
+      recipient.provider = sent && sent.provider || recipient.provider;
       recipient.error = sent && sent.error ? String(sent.errorCode || 'BREVO_SEND_FAILED') + ': ' + sanitizeCheckInError_(sent.error) : '';
+      if (recipient.provider === 'MAILAPP_FALLBACK' && recipient.status === 'FAILED') recipient.status = 'STOPPED';
     } catch (error) {
       const cleanError = sanitizeCheckInError_(error);
       recipient.status = 'FAILED'; recipient.error = (/timed?\s*out/i.test(cleanError) ? 'BREVO_API_TIMEOUT' : 'BREVO_SEND_FAILED') + ': ' + cleanError;
@@ -1138,10 +1153,11 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
     row[10] = JSON.stringify(recipients); row[2] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
   });
+  const stopped = recipients.some(recipient => recipient.status === 'STOPPED');
   const pending = recipients.some(recipient => recipient.status === 'FAILED' || recipient.status === 'PROCESSING' || recipient.status === 'PENDING');
   const sent = recipients.filter(recipient => recipient.status === 'SENT');
   row[2] = new Date();
-  row[3] = pending && attempts < CHECKIN_MAIL_MAX_ATTEMPTS ? 'RETRY' : (pending ? 'FAILED' : 'SENT');
+  row[3] = stopped ? 'FAILED' : (pending && attempts < CHECKIN_MAIL_MAX_ATTEMPTS ? 'RETRY' : (pending ? 'FAILED' : 'SENT'));
   row[5] = row[3] === 'RETRY' ? new Date(Date.now() + attempts * 60000) : '';
   row[12] = recipients.filter(recipient => recipient.error).map(recipient => recipient.error).join(' / ');
   row[13] = JSON.stringify(sent.map(recipient => recipient.messageId).filter(Boolean));
@@ -1149,18 +1165,19 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   row[15] = row[3] === 'SENT' ? new Date() : '';
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
   const logStatus = row[3] === 'SENT' ? '送信完了' : (row[3] === 'FAILED' ? '送信エラー' : '送信待ち');
-  updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12]);
+  const provider = Array.from(new Set(recipients.map(recipient => recipient.provider).filter(Boolean))).join(',');
+  updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider);
   if (row[3] !== 'RETRY' && row[11]) try { DriveApp.getFileById(String(row[11])).setTrashed(true); } catch (ignore) {}
-  console.log(JSON.stringify({ event: 'checkin_mail', receiptId: receiptId, status: row[3], attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt, mailDelayMs: row[15] instanceof Date && row[1] instanceof Date ? row[15].getTime() - row[1].getTime() : null }));
+  console.log(JSON.stringify({ event: 'checkin_mail', receiptId: receiptId, status: row[3], provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt, mailDelayMs: row[15] instanceof Date && row[1] instanceof Date ? row[15].getTime() - row[1].getTime() : null }));
 }
 
-function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText) {
+function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText, provider) {
   const targets = [
     { sheet: getLogSheet_(), schema: null },
     { sheet: getTeacherLogSheet_(), schema: null }
   ];
   targets[0].schema = ensureCheckInLogSchema_(targets[0].sheet);
-  targets[1].schema = ensureHeaders_(targets[1].sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  targets[1].schema = ensureHeaders_(targets[1].sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   let target = null;
   let match = null;
   for (let i = 0; i < targets.length; i++) {
@@ -1180,11 +1197,13 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
   setByHeader_(values, schema.headers, '最終エラー理由', String(errorText || '').slice(0, 500));
   setByHeader_(values, schema.headers, '配信状態更新日時', new Date());
   setByHeader_(values, schema.headers, '送信時結果', status);
+  setByHeader_(values, schema.headers, 'メール送信方式', String(provider || ''));
   sheet.getRange(match.getRow(), 1, 1, values.length).setValues([values]);
   const cached = getCachedReceiptStatus_(receiptId);
   if (cached) {
     cached.mailStatus = normalizeMailStatus_(status);
     cached.code = cached.mailStatus === 'FAILED' ? checkInMailErrorCode_(errorText) : 'ATTENDANCE_SAVED';
+    cached.mailProvider = String(provider || cached.mailProvider || '');
     cacheReceiptStatus_(cached);
   }
 }
@@ -1192,7 +1211,7 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
 function updateCheckInTiming_(attendance, timings) {
   const sheet = attendance.isTeacher ? getTeacherLogSheet_() : getLogSheet_();
   const schema = attendance.isTeacher
-    ? ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER])
+    ? ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER])
     : ensureCheckInLogSchema_(sheet);
   if (!attendance.logRow || attendance.logRow > sheet.getLastRow()) return;
   const values = sheet.getRange(attendance.logRow, 1, 1, schema.lastColumn).getValues()[0];
@@ -1203,7 +1222,7 @@ function updateCheckInTiming_(attendance, timings) {
 function setupCheckInMailQueue() {
   getCheckInMailQueueSheet_();
   ensureCheckInLogSchema_(getLogSheet_());
-  ensureHeaders_(getTeacherLogSheet_(), ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  ensureHeaders_(getTeacherLogSheet_(), ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   const exists = ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'processCheckInMailQueue');
   if (!exists) ScriptApp.newTrigger('processCheckInMailQueue').timeBased().everyMinutes(1).create();
   return { ok: true, triggerInstalled: !exists };
@@ -1256,7 +1275,7 @@ function diagnoseTeacherNotificationFromProperty() {
     teacherIndexEmailPresent: !!(indexed && indexed.email),
     legacyCachePresentBefore: legacyCachePresentBefore,
     legacyCachePresentAfter: !!(legacyKey && cache.get(legacyKey)),
-    mailProvider: 'BREVO',
+    mailProvider: config.provider || 'BREVO',
     brevoApiKeyPresent: config.brevoApiKeyPresent,
     fromEmailPresent: config.fromEmailPresent
   };
@@ -1303,14 +1322,14 @@ function diagnoseStudentMailFromProperty() {
   const triggers = ScriptApp.getProjectTriggers().filter(trigger => trigger.getHandlerFunction() === 'processCheckInMailQueue');
   const config = getCheckInMailConfigStatus_();
   const storedError = String(value('最終エラー理由') || '');
-  const errorCode = !config.ok ? config.code : (queue && queue[3] === 'PENDING' && !triggers.length ? 'MAIL_WORKER_NOT_RUNNING' : (/BREVO_SEND_FAILED/.test(storedError) ? 'BREVO_SEND_FAILED' : ''));
+  const errorCode = !config.ok ? config.code : (queue && queue[3] === 'PENDING' && !triggers.length ? 'MAIL_WORKER_NOT_RUNNING' : checkInMailErrorCode_(storedError));
   const result = {
     studentFound: true,
     studentCodeMasked: maskCheckInId_(requestedCode),
     recipientPresent: !!recipient,
     recipientLength: recipient.length,
     recipientDomainMasked: maskEmailDomain_(recipient),
-    provider: 'BREVO',
+    provider: config.provider || 'BREVO',
     apiKeyPresent: config.brevoApiKeyPresent,
     senderPresent: config.fromEmailPresent,
     queueCreated: !!queue,
@@ -1405,9 +1424,9 @@ function maskEmailDomain_(email) {
 
 function checkInMailErrorCode_(value) {
   const text = String(value || '');
-  const known = ['BREVO_API_KEY_MISSING','MAIL_QUEUE_CREATE_FAILED','MAIL_WORKER_NOT_RUNNING','BREVO_AUTH_FAILED','BREVO_SEND_REJECTED','SENDER_CONFIG_INVALID','RECIPIENT_INVALID','PHOTO_PROCESS_FAILED','BREVO_API_TIMEOUT','TEACHER_EMAIL_INVALID','BREVO_SEND_FAILED'];
+  const known = ['MAILAPP_FALLBACK_ACTIVE','MAILAPP_SEND_FAILED','MAILAPP_DELIVERY_UNCERTAIN','BREVO_API_KEY_MISSING','MAIL_QUEUE_CREATE_FAILED','MAIL_WORKER_NOT_RUNNING','BREVO_AUTH_FAILED','BREVO_SEND_REJECTED','SENDER_CONFIG_INVALID','RECIPIENT_INVALID','PHOTO_PROCESS_FAILED','BREVO_API_TIMEOUT','TEACHER_EMAIL_INVALID','BREVO_SEND_FAILED'];
   for (let i = 0; i < known.length; i++) if (text.indexOf(known[i]) >= 0) return known[i];
-  return 'BREVO_SEND_FAILED';
+  return text ? 'BREVO_SEND_FAILED' : '';
 }
 
 function isValidCheckInQrFormat_(value) { return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(String(value || '').trim()); }
@@ -1424,7 +1443,7 @@ function logCheckInTrace_(trace, result, phase) { console.log(JSON.stringify({ e
 
 /**
  * ===================================================================
- * Brevo経由でのメール送信
+ * Brevo優先・MailApp一時フォールバックでのメール送信
  * ===================================================================
  */
 function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
@@ -1438,7 +1457,7 @@ function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
 
   const apiKey = props.getProperty('BREVO_API_KEY');
   if (!apiKey) {
-    throw new Error('BREVO_API_KEY がスクリプトプロパティに設定されていません');
+    return sendEmailViaMailAppFallback_(toEmail, subject, htmlBody, options);
   }
 
   const correlationId = options.correlationId || Utilities.getUuid();
@@ -1479,10 +1498,33 @@ function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
   let response = {};
   try { response = JSON.parse(res.getContentText() || '{}'); } catch (ignore) {}
   if (code >= 200 && code < 300) {
-    return { accepted: true, messageId: String(response.messageId || ''), acceptedAt: new Date(), error: '', httpStatus: code, correlationId: correlationId };
+    return { accepted: true, provider: 'BREVO', messageId: String(response.messageId || ''), acceptedAt: new Date(), error: '', httpStatus: code, correlationId: correlationId };
   }
   const errorCode = code === 401 || code === 403 ? 'BREVO_AUTH_FAILED' : 'BREVO_SEND_REJECTED';
-  return { accepted: false, messageId: '', acceptedAt: new Date(), error: 'Brevo送信失敗 (' + code + '): ' + res.getContentText(), errorCode: errorCode, httpStatus: code, correlationId: correlationId };
+  return { accepted: false, provider: 'BREVO', messageId: '', acceptedAt: new Date(), error: 'Brevo送信失敗 (' + code + '): ' + res.getContentText(), errorCode: errorCode, httpStatus: code, correlationId: correlationId };
+}
+
+function sendEmailViaMailAppFallback_(toEmail, subject, htmlBody, options) {
+  options = options || {};
+  const correlationId = options.correlationId || Utilities.getUuid();
+  const message = {
+    to: toEmail,
+    subject: subject,
+    body: String(htmlBody || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<[^>]+>/g, ''),
+    htmlBody: htmlBody,
+    name: options.fromName || DEFAULT_FROM_NAME
+  };
+  if (options.attachmentBase64 && options.attachmentName) {
+    const mimeType = /\.pdf$/i.test(options.attachmentName) ? 'application/pdf' : 'image/jpeg';
+    message.attachments = [Utilities.newBlob(Utilities.base64Decode(options.attachmentBase64), mimeType, options.attachmentName)];
+  }
+  try {
+    MailApp.sendEmail(message);
+    console.warn(JSON.stringify({ event: 'mail_provider_fallback', provider: 'MAILAPP_FALLBACK', correlationId: correlationId, attachmentPresent: !!message.attachments }));
+    return { accepted: true, provider: 'MAILAPP_FALLBACK', messageId: '', acceptedAt: new Date(), error: '', httpStatus: 202, correlationId: correlationId };
+  } catch (error) {
+    return { accepted: false, provider: 'MAILAPP_FALLBACK', messageId: '', acceptedAt: new Date(), error: sanitizeCheckInError_(error), errorCode: 'MAILAPP_SEND_FAILED', httpStatus: 0, correlationId: correlationId };
+  }
 }
 
 /**

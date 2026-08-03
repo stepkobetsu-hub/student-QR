@@ -37,6 +37,10 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /provider: 'DIAGNOSTIC'/);
   assert.match(backend, /runCheckInMailDummyDiagnostics/);
   assert.match(backend, /MAIL_QUEUE_NOT_IDLE/);
+  assert.match(backend, /provider: 'MAILAPP_FALLBACK'/);
+  assert.match(backend, /MailApp\.sendEmail/);
+  assert.match(backend, /mailAppAttemptedAt/);
+  assert.match(page, /MailApp一時送信/);
   assert.match(page, /入退室記録は完了しましたが、通知メールの送信に失敗しました/);
 });
 
