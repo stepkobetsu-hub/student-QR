@@ -42,7 +42,6 @@ const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 入退室通知メー
 const DELIVERY_EMAIL_COLS = [24, 53, 54, 55]; // X, BA, BB, BC
 const DELIVERY_EMAIL_ENABLED_COLS = [67, 68, 69, 70]; // BO, BP, BQ, BR
 
-const DEFAULT_FROM_EMAIL = 'admin@educrest.jp';
 const DEFAULT_FROM_NAME  = 'Step個別指導ステップ';
 const SCHOOL_DISPLAY_NAME = '個別指導ステップ';
 const CHECKIN_RECEIPT_HEADER = '受付ID';
@@ -297,12 +296,21 @@ function saveNotifyEmails_(code, emails) {
  * ===================================================================
  */
 
-// このメールアドレスに、入退室ログのスプレッドシートを自動共有します
-const SHARE_WITH_EMAILS = [
-  'stepkobetsu@gmail.com',
-  'mintcocoajasmine@gmail.com',
-  'chloeandnina1@gmail.com'
-];
+function getCheckInFromEmail_() {
+  const value = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_FROM_EMAIL') || '').trim();
+  if (!value) throw new Error('CHECKIN_FROM_EMAIL がスクリプトプロパティに設定されていません');
+  return value;
+}
+
+function getCheckInShareEmails_() {
+  const raw = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_SHARE_WITH_EMAILS') || '').trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String).map(value => value.trim()).filter(Boolean);
+  } catch (ignore) {}
+  return raw.split(',').map(value => value.trim()).filter(Boolean);
+}
 
 function getCheckInSpreadsheet_() {
   const props = PropertiesService.getScriptProperties();
@@ -321,7 +329,7 @@ function getCheckInSpreadsheet_() {
 }
 
 function shareCheckInSpreadsheet_(ss) {
-  SHARE_WITH_EMAILS.forEach(email => {
+  getCheckInShareEmails_().forEach(email => {
     try {
       ss.addEditor(email);
     } catch (err) {
@@ -1082,7 +1090,7 @@ function sendEmailViaBrevo(toEmail, subject, htmlBody, options) {
   const payload = {
     sender: {
       name: options.fromName || DEFAULT_FROM_NAME,
-      email: options.fromEmail || DEFAULT_FROM_EMAIL
+      email: options.fromEmail || getCheckInFromEmail_()
     },
     to: [{
       email: toEmail,
