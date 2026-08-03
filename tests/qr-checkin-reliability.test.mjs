@@ -31,6 +31,9 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /CHECKIN_MAIL_QUEUE_SHEET = 'メール送信キュー'/);
   assert.match(backend, /processCheckInMailQueue/);
   assert.match(backend, /getUserLock\(\)[\s\S]*tryLock\(100\)/);
+  assert.match(backend, /isCheckInMailConfigured_\(\)/);
+  assert.match(backend, /mailStatus = 'FAILED'[\s\S]*メール送信設定が未完了です/);
+  assert.match(page, /入退室記録は完了しましたが、通知メールの送信に失敗しました/);
 });
 
 test('server uses a bounded lock and one-row writes for attendance', () => {

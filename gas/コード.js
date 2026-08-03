@@ -745,14 +745,20 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   let mailStatus = notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED';
   cacheReceiptStatus_(Object.assign({}, attendance, { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, mailStatus: mailStatus, duplicate: false }));
   if (notifyEmails.length) {
-    try {
-      photoFileId = saveCheckInPhoto_(photoBase64, receipt);
-      enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
-      traceMark_(trace, 'mailQueued');
-    } catch (error) {
+    if (!isCheckInMailConfigured_()) {
       mailStatus = 'FAILED';
-      updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], sanitizeCheckInError_(error));
-      console.error('check-in mail queue failed', sanitizeCheckInError_(error));
+      updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'メール送信設定が未完了です');
+      console.error('check-in mail queue skipped: mail settings are incomplete');
+    } else {
+      try {
+        photoFileId = saveCheckInPhoto_(photoBase64, receipt);
+        enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
+        traceMark_(trace, 'mailQueued');
+      } catch (error) {
+        mailStatus = 'FAILED';
+        updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], sanitizeCheckInError_(error));
+        console.error('check-in mail queue failed', sanitizeCheckInError_(error));
+      }
     }
   }
 
@@ -968,6 +974,12 @@ function getCheckInMailQueueSheet_() {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function isCheckInMailConfigured_() {
+  const props = PropertiesService.getScriptProperties();
+  return !!String(props.getProperty('BREVO_API_KEY') || '').trim()
+    && !!String(props.getProperty('CHECKIN_FROM_EMAIL') || '').trim();
 }
 
 function enqueueCheckInMail_(attendance, emails, photoFileId) {
