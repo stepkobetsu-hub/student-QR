@@ -38,6 +38,13 @@ test('server uses a bounded lock and one-row writes for attendance', () => {
   assert.doesNotMatch(backend.slice(backend.indexOf('function handleCheckIn_'), backend.indexOf('function sendEmailViaBrevo')), /UrlFetchApp\.fetch/);
 });
 
+test('normal requests use receipt and daily-state caches before persistent scans', () => {
+  assert.match(backend, /getCachedReceiptStatus_\(receipt\) \|\| \(isRetry \? getReceiptStatus_\(receipt, true\) : null\)/);
+  assert.match(backend, /dailyCheckInStateKey_\('student'/);
+  assert.match(backend, /dailyCheckInStateKey_\('teacher'/);
+  assert.match(backend, /getRange\(2, 1, logSheet\.getLastRow\(\) - 1, 4\)/);
+});
+
 test('public errors are distinct', () => {
   for (const code of ['INVALID_QR_FORMAT', 'TARGET_NOT_FOUND', 'SAVE_FAILED', 'TIMEOUT', 'ALREADY_PROCESSED']) {
     assert.match(page + backend, new RegExp(code));

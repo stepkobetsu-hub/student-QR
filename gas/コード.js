@@ -118,7 +118,7 @@ function doPost(e) {
     } else if (isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
     } else if (body.action === 'checkIn') {
-      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings);
+      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true);
     } else if (body.action === 'getReceiptStatus') {
       result = getReceiptStatus_(body.receiptId);
     } else if (body.action === 'sendQrPdf') {
@@ -681,7 +681,7 @@ function handleTeacherCheckIn_(teacherRow, teacherMasterSheet) {
  * 入退室処理のメイン（タブレットから呼ばれる）
  * ===================================================================
  */
-function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings) {
+function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) {
   const trace = createCheckInTrace_(receiptId);
   const qr = String(qrData || '').trim();
   const receipt = String(receiptId || '').trim();
@@ -691,7 +691,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings) {
   if (!isValidCheckInQrFormat_(qr)) return checkInFailure_('INVALID_QR_FORMAT', 'QRの形式が正しくありません', trace);
   traceMark_(trace, 'qrValidation');
 
-  const prior = getReceiptStatus_(receipt);
+  const prior = getCachedReceiptStatus_(receipt) || (isRetry ? getReceiptStatus_(receipt, true) : null);
   if (prior.attendanceSaved) {
     prior.duplicate = true;
     prior.code = 'ALREADY_PROCESSED';
@@ -708,7 +708,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings) {
   let notifyEmails = [];
   let photoFileId = '';
   try {
-    const repeated = getReceiptStatus_(receipt);
+    const repeated = getCachedReceiptStatus_(receipt) || (isRetry ? getReceiptStatus_(receipt, true) : null);
     if (repeated.attendanceSaved) {
       repeated.duplicate = true;
       repeated.code = 'ALREADY_PROCESSED';
@@ -743,6 +743,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings) {
 
   traceMark_(trace, 'attendanceSaved');
   let mailStatus = notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED';
+  cacheReceiptStatus_(Object.assign({}, attendance, { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, mailStatus: mailStatus, duplicate: false }));
   if (notifyEmails.length) {
     try {
       photoFileId = saveCheckInPhoto_(photoBase64, receipt);
@@ -764,7 +765,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings) {
     timings: finishCheckInTrace_(trace),
     clientTimingsReceived: !!clientTimings
   });
-  updateCheckInTiming_(attendance, result.timings);
+  cacheReceiptStatus_(result);
   logCheckInTrace_(trace, result, 'complete');
   return result;
 }
@@ -778,17 +779,29 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   const pointsSheet = getPointsSheet_();
   const now = new Date();
   const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
-  const logRows = logSheet.getLastRow() < 2 ? [] : logSheet.getRange(2, 1, logSheet.getLastRow() - 1, Math.max(4, logSchema.lastColumn)).getValues();
-  const pointRows = pointsSheet.getLastRow() < 2 ? [] : pointsSheet.getRange(2, 1, pointsSheet.getLastRow() - 1, 5).getValues();
+  const stateKey = dailyCheckInStateKey_('student', code, todayStr);
+  const cache = CacheService.getScriptCache();
+  let state = parseCheckInCache_(cache.get(stateKey));
+  if (!state) {
+    const logRows = logSheet.getLastRow() < 2 ? [] : logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 4).getValues();
+    const pointRows = pointsSheet.getLastRow() < 2 ? [] : pointsSheet.getRange(2, 1, pointsSheet.getLastRow() - 1, 5).getValues();
+    const todayRows = logRows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr);
+    const entries = todayRows.filter(row => row[3] === '入室' && row[0] instanceof Date);
+    state = {
+      count: todayRows.length,
+      lastEntryMs: entries.length ? entries[entries.length - 1][0].getTime() : 0,
+      awarded: pointRows.some(row => {
+        const date = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') : String(row[0]);
+        return date === todayStr && String(row[1]).trim() === code && /^\[入退室\]/.test(String(row[4] || ''));
+      }),
+      totalPoints: pointRows.reduce((total, row) => String(row[1]).trim() === code ? total + (Number(row[3]) || 0) : total, 0)
+    };
+  }
   traceMark_(trace, 'attendanceDataRead');
 
-  const todayRows = logRows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr);
-  const type = todayRows.length % 2 === 0 ? '入室' : '退室';
+  const type = state.count % 2 === 0 ? '入室' : '退室';
   const settings = getPointSettings_();
-  const alreadyAwarded = pointRows.some(row => {
-    const date = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') : String(row[0]);
-    return date === todayStr && String(row[1]).trim() === code && /^\[入退室\]/.test(String(row[4] || ''));
-  });
+  const alreadyAwarded = !!state.awarded;
   traceMark_(trace, 'attendanceDecision');
 
   const newRow = new Array(logSchema.lastColumn).fill('');
@@ -811,16 +824,19 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   if (settings.enabled && (settings.dailyLimit === 'none' || !alreadyAwarded)) {
     if (settings.timing === 'entry' && type === '入室') pointDelta = settings.perVisit;
     if (settings.timing === 'exit' && type === '退室') {
-      const entries = todayRows.filter(row => row[3] === '入室');
-      const lastEntry = entries.length ? entries[entries.length - 1][0] : null;
-      if (lastEntry instanceof Date && Math.floor((now.getTime() - lastEntry.getTime()) / 60000) >= settings.minMinutes) pointDelta = settings.perVisit;
+      if (state.lastEntryMs && Math.floor((now.getTime() - state.lastEntryMs) / 60000) >= settings.minMinutes) pointDelta = settings.perVisit;
     }
   }
   if (pointDelta) {
     const reason = type === '入室' ? '[入退室] 入室時付与' : '[入退室] 退室時付与';
     pointsSheet.getRange(pointsSheet.getLastRow() + 1, 1, 1, 5).setValues([[todayStr, code, name, pointDelta, reason]]);
   }
-  const totalPoints = pointRows.reduce((total, row) => String(row[1]).trim() === code ? total + (Number(row[3]) || 0) : total, 0) + pointDelta;
+  state.count++;
+  if (type === '入室') state.lastEntryMs = now.getTime();
+  if (pointDelta) state.awarded = true;
+  state.totalPoints = Number(state.totalPoints || 0) + pointDelta;
+  cache.put(stateKey, JSON.stringify(state), 21600);
+  const totalPoints = state.totalPoints;
   return { receiptId: receiptId, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
 }
 
@@ -829,11 +845,17 @@ function saveTeacherAttendance_(values, receiptId, trace) {
   const name = String(values[TEACHER_COL_NAME - 1] || '').trim();
   const sheet = getTeacherLogSheet_();
   const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
-  const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, schema.lastColumn).getValues();
   const now = new Date();
   const today = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
-  const count = rows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === today).length;
-  const type = count % 2 === 0 ? '出勤' : '退勤';
+  const stateKey = dailyCheckInStateKey_('teacher', code, today);
+  const cache = CacheService.getScriptCache();
+  let state = parseCheckInCache_(cache.get(stateKey));
+  if (!state) {
+    const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    state = { count: rows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === today).length };
+  }
+  traceMark_(trace, 'attendanceDataRead');
+  const type = state.count % 2 === 0 ? '出勤' : '退勤';
   traceMark_(trace, 'attendanceDecision');
   const record = new Array(schema.lastColumn).fill('');
   setByHeader_(record, schema.headers, 'タイムスタンプ', now);
@@ -845,6 +867,8 @@ function saveTeacherAttendance_(values, receiptId, trace) {
   setByHeader_(record, schema.headers, CHECKIN_TIMING_HEADER, JSON.stringify(trace.steps));
   const row = sheet.getLastRow() + 1;
   sheet.getRange(row, 1, 1, record.length).setValues([record]);
+  state.count++;
+  cache.put(stateKey, JSON.stringify(state), 21600);
   return { receiptId: receiptId, isTeacher: true, name: name, school: '', type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: null, logRow: row, maskedSubjectId: maskCheckInId_(code) };
 }
 
@@ -882,9 +906,13 @@ function setByHeader_(row, headers, header, value) {
   if (index >= 0) row[index] = value;
 }
 
-function getReceiptStatus_(receiptId) {
+function getReceiptStatus_(receiptId, skipCache) {
   const receipt = String(receiptId || '').trim();
   if (!isValidReceiptId_(receipt)) return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED', message: '受付情報が見つかりません' };
+  if (!skipCache) {
+    const cached = getCachedReceiptStatus_(receipt);
+    if (cached) return cached;
+  }
   const studentLog = getLogSheet_();
   const studentSchema = ensureCheckInLogSchema_(studentLog);
   const studentReceiptCol = studentSchema.headers.indexOf(CHECKIN_RECEIPT_HEADER) + 1;
@@ -893,7 +921,9 @@ function getReceiptStatus_(receiptId) {
     if (match) {
       const values = studentLog.getRange(match.getRow(), 1, 1, studentSchema.lastColumn).getValues()[0];
       const value = header => values[studentSchema.headers.indexOf(header)];
-      return { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: false, name: value('生徒氏名'), school: value('校舎'), type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: normalizeMailStatus_(value('配信状態')), duplicate: true, totalPoints: null };
+      const result = { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: false, name: value('生徒氏名'), school: value('校舎'), type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: normalizeMailStatus_(value('配信状態')), duplicate: true, totalPoints: null };
+      cacheReceiptStatus_(result);
+      return result;
     }
   }
   const teacherLog = getTeacherLogSheet_();
@@ -904,7 +934,9 @@ function getReceiptStatus_(receiptId) {
     if (match) {
       const values = teacherLog.getRange(match.getRow(), 1, 1, teacherSchema.lastColumn).getValues()[0];
       const value = header => values[teacherSchema.headers.indexOf(header)];
-      return { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: 'NOT_REQUIRED', duplicate: true, totalPoints: null };
+      const result = { ok: true, code: 'ATTENDANCE_SAVED', attendanceSaved: true, receiptId: receipt, isTeacher: true, name: value('氏名'), school: '', type: value('種別'), label: value('タイムスタンプ') instanceof Date ? Utilities.formatDate(value('タイムスタンプ'), 'Asia/Tokyo', 'M月d日H時mm分') : '', mailStatus: 'NOT_REQUIRED', duplicate: true, totalPoints: null };
+      cacheReceiptStatus_(result);
+      return result;
     }
   }
   return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED', message: '受付情報が見つかりません' };
@@ -917,6 +949,15 @@ function normalizeMailStatus_(value) {
   if (/通知先なし|通知なし/.test(status)) return 'NOT_REQUIRED';
   return 'PENDING';
 }
+
+function receiptCacheKey_(receiptId) { return 'CHECKIN_RECEIPT_V1:' + shortCheckInHash_(receiptId); }
+function getCachedReceiptStatus_(receiptId) { return parseCheckInCache_(CacheService.getScriptCache().get(receiptCacheKey_(receiptId))); }
+function cacheReceiptStatus_(result) {
+  if (!result || !result.receiptId || !result.attendanceSaved) return;
+  CacheService.getScriptCache().put(receiptCacheKey_(result.receiptId), JSON.stringify(result), 21600);
+}
+function dailyCheckInStateKey_(kind, code, date) { return 'CHECKIN_DAY_V1:' + kind + ':' + shortCheckInHash_(code) + ':' + date; }
+function parseCheckInCache_(raw) { if (!raw) return null; try { return JSON.parse(raw); } catch (ignore) { return null; } }
 
 function getCheckInMailQueueSheet_() {
   const ss = getCheckInSpreadsheet_();
@@ -1039,6 +1080,12 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
   setByHeader_(values, schema.headers, '配信状態更新日時', new Date());
   setByHeader_(values, schema.headers, '送信時結果', status);
   sheet.getRange(match.getRow(), 1, 1, values.length).setValues([values]);
+  const cached = getCachedReceiptStatus_(receiptId);
+  if (cached) {
+    cached.mailStatus = normalizeMailStatus_(status);
+    cached.code = cached.mailStatus === 'FAILED' ? 'MAIL_FAILED' : 'ATTENDANCE_SAVED';
+    cacheReceiptStatus_(cached);
+  }
 }
 
 function updateCheckInTiming_(attendance, timings) {
