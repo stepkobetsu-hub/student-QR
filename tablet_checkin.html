@@ -25,7 +25,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* 鏡のように表示（左右反転） */
+    transform: none; /* 背面カメラを実際の向きで表示 */
   }
   canvas { display: none; }
 
@@ -87,6 +87,23 @@
   #resultOverlay.show { display: flex; }
   #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
+  #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
+  #scanHint {
+    position: absolute;
+    left: 50%; bottom: 7vh;
+    transform: translateX(-50%);
+    max-width: min(90vw, 620px);
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.68);
+    color: #fff;
+    text-align: center;
+    font-size: 15px;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+  }
+  #scanHint.show { opacity: 1; }
 
   #resultIcon { font-size: 90px; margin-bottom: 10px; }
   #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
@@ -141,12 +158,13 @@
   </div>
 
   <div id="statusDot"></div>
+  <div id="scanHint" role="status" aria-live="polite"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-// ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
-const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
+// STEPシステム資産管理台帳で確認した「生徒QR」既存デプロイ。
+const API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -162,11 +180,20 @@ const resultSub = document.getElementById('resultSub');
 const resultPoints = document.getElementById('resultPoints');
 const statusDot = document.getElementById('statusDot');
 const clockEl = document.getElementById('clock');
+const scanHint = document.getElementById('scanHint');
 
 let scanning = true;
+let requestInFlight = false;
 let lastScannedCode = null;
 let lastScannedTime = 0;
-const RESCAN_COOLDOWN_MS = 15000; // 同じQRの連続読み取り防止（15秒）
+let scanStartedAt = Date.now();
+let lastFrameAt = 0;
+const RESCAN_COOLDOWN_MS = 5000;
+const NO_QR_HINT_MS = 4000;
+const NO_QR_ERROR_MS = 10000;
+const FRAME_INTERVAL_MS = 1000 / 12;
+const SLOW_NOTICE_MS = 8000;
+const REQUEST_TIMEOUT_MS = 15000;
 
 // 時計表示
 function updateClock() {
@@ -201,12 +228,20 @@ function playBeep() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
       audio: false
     });
     video.srcObject = stream;
     await video.play();
+    const track = stream.getVideoTracks()[0];
+    if (track && typeof track.getCapabilities === 'function') {
+      const caps = track.getCapabilities();
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+        try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (ignore) {}
+      }
+    }
     statusDot.classList.remove('error');
+    scanStartedAt = Date.now();
     requestAnimationFrame(scanLoop);
   } catch (err) {
     statusDot.classList.add('error');
@@ -215,29 +250,51 @@ async function startCamera() {
 }
 
 // QRスキャンループ
-function scanLoop() {
-  if (!scanning) {
+function scanLoop(frameTime) {
+  if (!scanning || requestInFlight) {
     requestAnimationFrame(scanLoop);
     return;
   }
 
+  if (frameTime - lastFrameAt < FRAME_INTERVAL_MS) {
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+  lastFrameAt = frameTime;
+
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    let code = null;
+    try {
+      code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      statusDot.classList.remove('error');
+    } catch (error) {
+      statusDot.classList.add('error');
+      scanHint.textContent = 'カメラ映像の解析を再試行しています';
+      scanHint.classList.add('show');
+    }
 
     if (code && code.data) {
+      scanHint.classList.remove('show');
       const now = Date.now();
       if (code.data === lastScannedCode && (now - lastScannedTime) < RESCAN_COOLDOWN_MS) {
         // 直近で同じQRを読み取り済みなのでスキップ
       } else {
         lastScannedCode = code.data;
         lastScannedTime = now;
+        scanning = false;
         playBeep();
         handleQrDetected(code.data);
       }
+    } else if (Date.now() - scanStartedAt >= NO_QR_HINT_MS) {
+      scanHint.textContent = Date.now() - scanStartedAt >= NO_QR_ERROR_MS
+        ? 'QRを認識できません。QRを枠の中央に近づけてください'
+        : 'QRを枠の中央に近づけてください';
+      scanHint.classList.add('show');
     }
   }
   requestAnimationFrame(scanLoop);
@@ -245,66 +302,126 @@ function scanLoop() {
 
 // QR検出時の処理
 async function handleQrDetected(qrData) {
-  scanning = false;
+  if (requestInFlight) return;
+  requestInFlight = true;
+
+  if (!isSupportedQrFormat(qrData)) {
+    showResult(false, null, null, null, 'NOT_STARTED', null, 'QRの形式が正しくありません', false, 'INVALID_QR_FORMAT');
+    finishAndResume(4500);
+    return;
+  }
+
+  const receiptId = createReceiptId();
+  const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
-  photoCanvas.width = video.videoWidth;
-  photoCanvas.height = video.videoHeight;
+  const photoScale = Math.min(1, 640 / video.videoWidth);
+  photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
+  photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.7);
+  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.55);
 
-  showProcessing();
+  showProcessing(qrData, receiptId);
+  let slowTimer = setTimeout(() => {
+    resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
+  }, SLOW_NOTICE_MS);
 
+  try {
+    clientTimings.requestStartedAt = new Date().toISOString();
+    const requestStartedMs = performance.now();
+    const data = await postWithTimeout({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings }, REQUEST_TIMEOUT_MS);
+    clientTimings.responseReceivedAt = new Date().toISOString();
+    clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
+    console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
+    renderServerResult(data);
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
+      renderServerResult(status);
+    } else {
+      showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
+    }
+  } finally {
+    clearTimeout(slowTimer);
+  }
+
+  finishAndResume(4500);
+}
+
+function isSupportedQrFormat(value) {
+  const qr = String(value || '').trim();
+  return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(qr);
+}
+
+function createReceiptId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return 'qr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
+}
+
+async function postWithTimeout(payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // GAS側のCORS制約を避けるためtext/plainで送信
-      body: JSON.stringify({ action: 'checkIn', qrData: qrData, photoBase64: photoBase64 })
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
-    const data = await res.json();
-
-    if (data.ok) {
-      showResult(true, data.name, data.type, data.label, data.mailSent, data.totalPoints, null, data.isTeacher);
-    } else {
-      showResult(false, null, null, null, false, null, data.message);
-    }
-  } catch (err) {
-    showResult(false, null, null, null, false, null, '通信エラーが発生しました');
+    if (!res.ok) throw new Error('HTTP_' + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-
-  setTimeout(() => {
-    resultOverlay.classList.remove('show', 'success', 'error');
-    scanning = true;
-  }, 4500);
 }
 
-function showProcessing() {
+async function resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings) {
+  try {
+    const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId }, 7000);
+    if (status && status.attendanceSaved) return status;
+    if (status && status.code === 'RECEIPT_NOT_FOUND') {
+      return await postWithTimeout({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings, retry: true }, 12000);
+    }
+  } catch (ignore) {}
+  return { ok: false, code: 'TIMEOUT', message: '通信がタイムアウトしました', attendanceSaved: false };
+}
+
+function showProcessing(qrData, receiptId) {
   resultOverlay.className = 'show';
   resultIcon.textContent = '⏳';
-  resultName.textContent = '確認中...';
+  resultName.textContent = 'QRを確認しました';
   resultType.textContent = '';
-  resultTime.textContent = '';
-  resultSub.textContent = '';
+  resultTime.textContent = '受付処理を開始しています';
+  resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
   resultPoints.textContent = '';
   resultPoints.style.display = 'none';
 }
 
-function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg, isTeacher) {
+function renderServerResult(data) {
+  data = data || {};
+  if (data.attendanceSaved) {
+    showResult(true, data.name, data.type, data.label, data.mailStatus, data.totalPoints, data.message, data.isTeacher, data.code, data.duplicate);
+  } else {
+    showResult(false, null, null, null, data.mailStatus || 'NOT_STARTED', null, data.message, false, data.code);
+  }
+}
+
+function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate) {
   if (ok && isTeacher) {
-    resultOverlay.className = 'show success';
+    resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
     resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
     resultName.textContent = name + ' 先生';
-    resultType.textContent = type === '出勤' ? 'こんにちは！' : 'お疲れ様でした！';
-    resultTime.textContent = label + (type === '出勤' ? '出勤' : '退勤');
-    resultSub.textContent = mailSent ? '勤怠を記録し、確認メールを送信しました' : '勤怠を記録しました（メール送信は失敗）';
+    resultType.textContent = type + 'を受け付けました';
+    resultTime.textContent = label;
+    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus);
     resultPoints.style.display = 'none';
   } else if (ok) {
-    resultOverlay.className = 'show success';
+    resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
     resultIcon.textContent = type === '入室' ? '😊' : '🏠';
     resultName.textContent = name + ' さん';
-    resultType.textContent = type === '入室' ? 'こんにちは！' : 'さようなら！';
-    resultTime.textContent = label + (type === '入室' ? '入室' : '退室');
-    resultSub.textContent = mailSent ? '保護者にメールを送信しました' : '（メール送信は失敗しました）';
+    resultType.textContent = type + 'を受け付けました';
+    resultTime.textContent = label;
+    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus);
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
       resultPoints.style.display = 'inline-block';
@@ -314,12 +431,41 @@ function showResult(ok, name, type, label, mailSent, totalPoints, errorMsg, isTe
   } else {
     resultOverlay.className = 'show error';
     resultIcon.textContent = '⚠️';
-    resultName.textContent = '読み取れませんでした';
+    resultName.textContent = errorTitle(errorCode);
     resultType.textContent = '';
     resultTime.textContent = '';
     resultSub.textContent = errorMsg || 'もう一度お試しください';
     resultPoints.style.display = 'none';
   }
+}
+
+function mailStatusText(status) {
+  if (status === 'FAILED') return '入退室記録は完了しましたが、通知メールの送信に失敗しました';
+  if (status === 'SENT') return '入退室記録と通知メール送信が完了しました';
+  if (status === 'NOT_REQUIRED') return '入退室記録が完了しました（通知先なし）';
+  return '入退室記録が完了しました。通知メールは送信待ちです';
+}
+
+function errorTitle(code) {
+  const titles = {
+    INVALID_QR_FORMAT: 'QRの形式が正しくありません',
+    TARGET_NOT_FOUND: '登録対象が見つかりません',
+    SAVE_FAILED: '入退室記録の保存に失敗しました',
+    TIMEOUT: '通信がタイムアウトしました',
+    NETWORK_ERROR: '通信がタイムアウトしました',
+    ALREADY_PROCESSED: 'すでに同じ受付を処理済みです'
+  };
+  return titles[code] || '処理を完了できませんでした';
+}
+
+function finishAndResume(delayMs) {
+  setTimeout(() => {
+    resultOverlay.classList.remove('show', 'success', 'error', 'warning');
+    requestInFlight = false;
+    scanning = true;
+    scanStartedAt = Date.now();
+    scanHint.classList.remove('show');
+  }, delayMs);
 }
 
 startCamera();
