@@ -394,6 +394,17 @@ function getPointSettings_() {
 }
 
 /**
+ * 当日の最初の打刻から現在の打刻までに、必要滞在時間が経過したかを判定する。
+ * 途中の入室／退室の回数や種別には依存しない。
+ */
+function isDailyStayQualified_(firstStampMs, currentStampMs, minMinutes) {
+  const first = Number(firstStampMs) || 0;
+  const current = Number(currentStampMs) || 0;
+  const requiredMs = Math.max(0, Number(minMinutes) || 0) * 60000;
+  return first > 0 && current >= first && (current - first) >= requiredMs;
+}
+
+/**
  * その生徒の「今日」の記録回数から、入室／退室を自動判定する
  * 偶数回目（0, 2, 4...）→ 入室 / 奇数回目（1, 3, 5...）→ 退室
  */
@@ -827,9 +838,11 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
     const logRows = logSheet.getLastRow() < 2 ? [] : logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 4).getValues();
     const pointRows = pointsSheet.getLastRow() < 2 ? [] : pointsSheet.getRange(2, 1, pointsSheet.getLastRow() - 1, 5).getValues();
     const todayRows = logRows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr);
+    const stampTimes = todayRows.map(row => row[0].getTime()).filter(value => Number.isFinite(value)).sort((a, b) => a - b);
     const entries = todayRows.filter(row => row[3] === '入室' && row[0] instanceof Date);
     state = {
       count: todayRows.length,
+      firstStampMs: stampTimes.length ? stampTimes[0] : 0,
       lastEntryMs: entries.length ? entries[entries.length - 1][0].getTime() : 0,
       awarded: pointRows.some(row => {
         const date = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') : String(row[0]);
@@ -864,15 +877,18 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   let pointDelta = 0;
   if (settings.enabled && (settings.dailyLimit === 'none' || !alreadyAwarded)) {
     if (settings.timing === 'entry' && type === '入室') pointDelta = settings.perVisit;
-    if (settings.timing === 'exit' && type === '退室') {
-      if (state.lastEntryMs && Math.floor((now.getTime() - state.lastEntryMs) / 60000) >= settings.minMinutes) pointDelta = settings.perVisit;
+    if (settings.timing === 'exit' && state.count > 0) {
+      if (isDailyStayQualified_(state.firstStampMs, now.getTime(), settings.minMinutes)) pointDelta = settings.perVisit;
     }
   }
   if (pointDelta) {
-    const reason = type === '入室' ? '[入退室] 入室時付与' : '[入退室] 退室時付与';
+    const reason = settings.timing === 'entry'
+      ? '[入退室] 入室時付与'
+      : '[入退室] 当日最初・最終打刻' + settings.minMinutes + '分以上';
     pointsSheet.getRange(pointsSheet.getLastRow() + 1, 1, 1, 5).setValues([[todayStr, code, name, pointDelta, reason]]);
   }
   state.count++;
+  if (!state.firstStampMs) state.firstStampMs = now.getTime();
   if (type === '入室') state.lastEntryMs = now.getTime();
   if (pointDelta) state.awarded = true;
   state.totalPoints = Number(state.totalPoints || 0) + pointDelta;
@@ -1038,7 +1054,8 @@ function cacheReceiptStatus_(result) {
   if (!result || !result.receiptId || !result.attendanceSaved) return;
   CacheService.getScriptCache().put(receiptCacheKey_(result.receiptId), JSON.stringify(result), 21600);
 }
-function dailyCheckInStateKey_(kind, code, date) { return 'CHECKIN_DAY_V1:' + kind + ':' + shortCheckInHash_(code) + ':' + date; }
+// V2: 生徒状態に当日の最初の打刻時刻を保持する。V1キャッシュは再利用しない。
+function dailyCheckInStateKey_(kind, code, date) { return 'CHECKIN_DAY_V2:' + kind + ':' + shortCheckInHash_(code) + ':' + date; }
 function parseCheckInCache_(raw) { if (!raw) return null; try { return JSON.parse(raw); } catch (ignore) { return null; } }
 
 function getCheckInMailQueueSheet_() {
