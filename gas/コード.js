@@ -985,7 +985,11 @@ function getReceiptStatus_(receiptId, skipCache) {
   const receipt = String(receiptId || '').trim();
   if (!isValidReceiptId_(receipt)) return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED', message: '受付情報が見つかりません' };
   if (!skipCache) {
-    const cached = getCachedReceiptStatus_(receipt);
+    let cached = getCachedReceiptStatus_(receipt);
+    if (cached && cached.attendanceSaved && (cached.mailStatus === 'PENDING' || cached.mailStatus === 'PROCESSING')) {
+      processCheckInMailQueueReceipt_(receipt, 3000);
+      cached = getCachedReceiptStatus_(receipt) || cached;
+    }
     if (cached) return cached;
   }
   const studentLog = getLogSheet_();

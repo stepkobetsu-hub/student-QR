@@ -43,6 +43,7 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /mailAppStartedAt/);
   assert.match(backend, /mailAppCompletedAt/);
   assert.match(backend, /processCheckInMailQueueReceipt_\(receipt, 3000\)/);
+  assert.match(backend, /cached\.mailStatus === 'PENDING'[\s\S]*processCheckInMailQueueReceipt_\(receipt, 3000\)/);
   assert.match(backend, /ensureCheckInMailWorkerTrigger_/);
   assert.match(page, /waitForMailCompletion\(receiptId, 7000\)/);
   assert.match(page, /MailApp一時送信/);
