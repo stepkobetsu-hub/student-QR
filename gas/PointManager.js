@@ -144,8 +144,9 @@ function pmPointRows_() {
     return {
       row: index + 2,
       date: pmDate_(row[0]), id: String(row[1] || '').trim(), name: String(row[2] || '').trim(),
-      points: Number(row[3]) || 0, reason: reason, operationId: op,
-      type: pmType_(reason, Number(row[3]) || 0), editable: !!op && /^\[(特別|使用)\]/.test(reason)
+      points: Number(row[3]) || 0, reason: reason, operationId: op || ('ROW:' + (index + 2)),
+      type: pmType_(reason, Number(row[3]) || 0),
+      editable: pmType_(reason, Number(row[3]) || 0) === '入退室' || (!!op && /^\[(特別|使用)\]/.test(reason))
     };
   }).filter(function(row) { return row.id && row.points; });
 }
@@ -262,7 +263,7 @@ function pmRevise_(staff, body, cancel) {
   try {
     const prior = pmFindRequest_(requestId); if (prior) return prior;
     const original = pmPointRows_().find(function(row) { return row.operationId === operationId; });
-    if (!original || !original.editable) throw new Error('自動入退室ポイントは直接編集・取消できません。');
+    if (!original || !original.editable) throw new Error('この記録は編集・取消できません。');
     const reason = cancel ? String(body.reason || '取消').trim() : String(body.reason || '').trim();
     if (!reason) throw new Error('理由・コメントは必須です。');
     const master = pmMasterRows_();
@@ -277,8 +278,10 @@ function pmRevise_(staff, body, cancel) {
       const requested = Number(body.points);
       if (!Number.isInteger(requested) || requested === 0) throw new Error('0以外の整数を入力してください。');
       finalPoints = requested;
-      const kind = requested < 0 ? '使用' : '特別';
-      if (requested < 0) {
+      const isAttendance = original.type === '入退室';
+      if (isAttendance && requested < 1) throw new Error('レギュラー付与ポイントは1以上の整数で入力してください。');
+      const kind = isAttendance ? '入退室' : (requested < 0 ? '使用' : '特別');
+      if (!isAttendance && requested < 0) {
         const afterReverse = Math.max(0, (balances[student.id] || 0) - original.points);
         finalPoints = -Math.min(afterReverse, Math.abs(requested));
         if (finalPoints === 0) throw new Error('使用可能ポイントがありません。');
