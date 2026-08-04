@@ -12,7 +12,9 @@ const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信�
 const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
 const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
-const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock'];
+const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock','deliveryFailureReportSettingsGet','deliveryFailureReportSettingsSave'];
+const DELIVERY_FAILURE_REPORT_EMAILS_PROPERTY = 'DELIVERY_FAILURE_REPORT_EMAILS';
+const DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS = 4;
 const WEBHOOK_DIAGNOSTIC_SHEET_NAME = 'Webhook診断';
 const WEBHOOK_DIAGNOSTIC_HEADERS = ['受信日時','tokenMatched','event','recipient','messageId','messageId取得元','照合結果','処理結果','エラー概要'];
 
@@ -335,6 +337,53 @@ function isMajorDeliveryFailure_(event, state, stopped) {
   return stopped || ['hard_bounce','invalid_email','blocked','spam'].indexOf(normalized) >= 0 || ['恒久不達','無効アドレス','ブロック','迷惑メール報告'].indexOf(String(state || '')) >= 0;
 }
 
+function normalizeDeliveryFailureReportEmails_(input, rejectInvalid) {
+  let values = input;
+  if (!Array.isArray(values)) {
+    const text = String(values || '').trim();
+    if (!text) values = [];
+    else {
+      try {
+        const parsed = JSON.parse(text);
+        values = Array.isArray(parsed) ? parsed : text.split(/[\n,;]+/);
+      } catch (ignore) {
+        values = text.split(/[\n,;]+/);
+      }
+    }
+  }
+  const result = [];
+  const invalid = [];
+  values.forEach(function(value) {
+    const email = normalizeDeliveryEmail_(value);
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      invalid.push(String(value || '').trim());
+      return;
+    }
+    if (result.indexOf(email) < 0) result.push(email);
+  });
+  if (rejectInvalid && invalid.length) throw new Error('正しいメールアドレスを入力してください: ' + invalid.join(', '));
+  if (result.length > DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS) throw new Error('報告先メールアドレスは最大4件です');
+  return result;
+}
+
+function getDeliveryFailureReportEmails_() {
+  const props = PropertiesService.getScriptProperties();
+  const saved = props.getProperty(DELIVERY_FAILURE_REPORT_EMAILS_PROPERTY);
+  if (saved) return normalizeDeliveryFailureReportEmails_(saved, false);
+  return normalizeDeliveryFailureReportEmails_(props.getProperty('DELIVERY_FAILURE_ADMIN_EMAIL') || '', false);
+}
+
+function saveDeliveryFailureReportEmails_(input, staff) {
+  const emails = normalizeDeliveryFailureReportEmails_(input, true);
+  if (!emails.length) throw new Error('報告先メールアドレスを1件以上入力してください');
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty(DELIVERY_FAILURE_REPORT_EMAILS_PROPERTY, JSON.stringify(emails));
+  props.setProperty('DELIVERY_FAILURE_ADMIN_EMAIL', emails[0]);
+  Logger.log(JSON.stringify({action:'deliveryFailureReportSettingsSave',savedAt:new Date(),savedBy:staff.name,recipientCount:emails.length}));
+  return {ok:true,emails:emails,maxRecipients:DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS,savedBy:staff.name};
+}
+
 function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
   try {
     if (!upsertResult || !upsertResult.row) return { ok:true, skipped:true };
@@ -344,12 +393,11 @@ function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
     const value = name => { const i=headers.indexOf(name); return i >= 0 ? row[i] : ''; };
     const event=String(value('イベント種別')), state=String(value('表示用状態')), stopped=value('送信停止')===true||String(value('送信停止')).toUpperCase()==='TRUE';
     const managementId=String(value('管理ID')), messageId=String(value('BrevoメッセージID'));
-    if (!isMajorDeliveryFailure_(event,state,stopped)) return { ok:true, skipped:true };
     const notificationKey=[managementId,messageId,event].join('|'), notifiedValue=value('管理者通知済み');
-    if(String(notifiedValue)===notificationKey||notifiedValue===true||String(notifiedValue).toUpperCase()==='TRUE')return {ok:true,duplicate:true};
-    const subject='【不達メール通知】'+String(value('生徒氏名')||value('メールアドレス'))+' / '+state;
+    if(String(notifiedValue)===notificationKey)return {ok:true,duplicate:true};
+    const subject='【不達メール報告】'+String(value('生徒氏名')||value('メールアドレス'))+' / '+state;
     const body=[
-      '重大な不達メールが発生しました。','',
+      '不達メールが発生しました。','',
       '生徒番号：'+String(value('生徒番号')),
       '生徒氏名：'+String(value('生徒氏名')),
       '校舎：'+String(value('校舎')),
@@ -361,15 +409,19 @@ function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
       '理由：'+String(value('理由')),
       '発生日時：'+String(value('最終発生日時')||value('発生日時')),
       '管理ID：'+managementId,
-      'Brevo messageId：'+messageId
+      'Brevo messageId：'+messageId,
+      '',
+      '不達メール管理： https://stepkobetsu-hub.github.io/student-QR/delivery_failures.html'
     ].join('\n');
-    const adminEmail = String(PropertiesService.getScriptProperties().getProperty('DELIVERY_FAILURE_ADMIN_EMAIL') || '').trim();
-    if (!adminEmail) return {ok:true,skipped:true,reason:'admin_email_not_configured'};
-    MailApp.sendEmail({to:adminEmail,subject:subject,body:body});
+    const reportEmails = getDeliveryFailureReportEmails_();
+    if (!reportEmails.length) return {ok:true,skipped:true,reason:'report_email_not_configured'};
+    reportEmails.forEach(function(recipient) {
+      MailApp.sendEmail({to:recipient,subject:subject,body:body});
+    });
     const notifiedIndex=headers.indexOf('管理者通知済み'), notifiedAtIndex=headers.indexOf('管理者通知日時');
     if(notifiedIndex>=0)sheet.getRange(upsertResult.row,notifiedIndex+1).setValue(notificationKey);
     if(notifiedAtIndex>=0)sheet.getRange(upsertResult.row,notifiedAtIndex+1).setValue(new Date());
-    return {ok:true,notified:true,key:notificationKey};
+    return {ok:true,notified:true,key:notificationKey,recipientCount:reportEmails.length};
   } catch(error) {
     Logger.log('不達メール管理者通知に失敗しました: '+String(error&&error.message||error));
     return {ok:false,error:String(error&&error.message||error)};
@@ -461,6 +513,13 @@ function handleDeliveryFailureAdminAction_(body) {
   if (action === 'deliveryFailureResume') return deliveryFailureResume_(body, false);
   if (action === 'deliveryFailureSpamResume') return deliveryFailureResume_(body, true);
   if (action === 'deliveryFailureBrevoUnblock') return deliveryFailureBrevoUnblock_(body);
+  if (action === 'deliveryFailureReportSettingsGet' || action === 'deliveryFailureReportSettingsSave') {
+    const settingsStaff = verifyDeliveryStaff_(body, ['2','3','4']);
+    if (action === 'deliveryFailureReportSettingsGet') {
+      return {ok:true,emails:getDeliveryFailureReportEmails_(),maxRecipients:DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS,staff:{name:settingsStaff.name,level:settingsStaff.level}};
+    }
+    return saveDeliveryFailureReportEmails_(body.emails, settingsStaff);
+  }
   const staff = verifyDeliveryStaff_(body, viewLevels);
   if (action === 'deliveryFailuresList') {
     const sheet = getDeliveryFailureSheet_();
@@ -480,7 +539,10 @@ function handleDeliveryFailureAdminAction_(body) {
     };
   }
   if (action === 'deliveryFailureSummary') return {ok:true,summary:deliveryFailureSummary_(readDeliveryFailureItems_())};
-  if (action === 'deliveryFailureDetail') return { ok:true, item:getDeliveryFailureById_(body.id) };
+  if (action === 'deliveryFailureDetail') {
+    const item = getDeliveryFailureById_(body.id);
+    return {ok:true,item:item,history:getDeliveryAddressHistory_(item)};
+  }
   if (action === 'deliveryFailureRelatedStudents') return { ok:true, students:findStudentsByDeliveryEmail_(normalizeDeliveryEmail_(body.email)) };
   if (action === 'deliveryFailureConfirm') return updateDeliveryFailureAction_(body.id, {20:'確認済み',21:staff.name,22:new Date()});
   if (action === 'deliveryFailureArchive') return setDeliveryFailureArchive_(body.id, true, staff);
