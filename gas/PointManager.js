@@ -191,12 +191,10 @@ function pmStudentDetail_(staff, body) {
 
 function pmGlobalHistory_(staff, body) {
   const mode = String(body.mode || '').trim();
-  if (['attendance', 'special', 'use', 'all'].indexOf(mode) < 0) throw new Error('履歴種別が不正です。');
+  if (['special', 'use'].indexOf(mode) < 0) throw new Error('履歴種別が不正です。');
+  const pattern = mode === 'special' ? /^\[特別\]/ : /^\[使用\]/;
   const rows = pmPointRows_().filter(function(row) {
-    if (mode === 'all') return true;
-    if (mode === 'attendance') return row.type === '入退室';
-    if (mode === 'special') return row.type === '特別';
-    return row.type === '使用';
+    return pattern.test(row.reason);
   }).sort(function(a, b) {
     return b.date.localeCompare(a.date) || b.row - a.row;
   });
