@@ -25,7 +25,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* この端末の背面プレビューだけを反転補正。解析・写真Canvasには影響しない */
+    transform: scaleX(-1); /* 正面カメラのプレビューを鏡表示。解析・写真Canvasには影響しない */
     -webkit-transform: scaleX(-1);
   }
   canvas { display: none; }
@@ -231,7 +231,7 @@ function playBeep() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
       audio: false
     });
     video.srcObject = stream;
