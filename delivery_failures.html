@@ -17,7 +17,7 @@
 <section class="card tableWrap"><table><thead><tr><th>メールアドレス</th><th>発生時刻</th><th>理由</th><th>生徒氏名</th><th>校舎</th><th>送信元</th><th>メール区分</th><th>状態</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></section>
 <section id="cards" class="mobileCards"></section>
 </main>
-<dialog id="detail"><button class="back" onclick="detail.close()">閉じる</button><h2>不達メール詳細</h2><div id="detailBody"></div></dialog>
+<dialog id="detail"><div class="dialogHead"><h2>不達メール詳細</h2><button class="back dialogClose" onclick="$('detail').close()">閉じる</button></div><div id="detailBody"></div></dialog>
 <dialog id="historyDialog"><div class="dialogHead"><h2>送信状況履歴</h2><button class="back dialogClose" onclick="$('historyDialog').close()">閉じる</button></div><div id="historyBody"></div></dialog>
 <script>
 const API='https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec';
