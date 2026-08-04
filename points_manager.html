@@ -12,7 +12,7 @@
 <div class="tableWrap"><table><thead><tr><th><label><input id="selectAll" type="checkbox" aria-label="表示中の生徒をすべて選択"> 選択</label></th><th>生徒番号</th><th>生徒名</th><th>在籍状態</th><th>校舎</th><th>学年</th><th class="num">現在</th><th class="num">今月付与</th><th></th></tr></thead><tbody id="tbody"></tbody></table></div><div id="cards" class="cards"></div></section>
 </main><div id="modal" class="modal hidden"><div id="modalBox" class="modalBox"></div></div><div id="toast" class="toast hidden"></div>
 <script>
-const API='https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec',AUTH='stepStaffAppAuth',STAFF_TOP='https://stepkobetsu-hub.github.io/seiseki-kanri/';let auth,students=[],selected=new Set(),settings={},searchQuery='';
+const API='https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec',AUTH='stepStaffAppAuth',STAFF_TOP='https://stepkobetsu-hub.github.io/seiseki-kanri/?next=points';let auth,students=[],selected=new Set(),settings={},searchQuery='';
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function uid(){return 'pm_'+Date.now().toString(36)+'_'+crypto.getRandomValues(new Uint32Array(2)).join('_')}
 function isAuthError(message){return /セッション|期限切れ|認証|ログイン|権限/.test(String(message||''))}
