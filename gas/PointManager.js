@@ -275,11 +275,12 @@ function pmRevise_(staff, body, cancel) {
     let newOp = '', finalPoints = 0, newDate = '', newReason = '';
     if (!cancel) {
       newDate = pmInputDate_(body.date);
-      const requested = Number(body.points);
-      if (!Number.isInteger(requested) || requested === 0) throw new Error('0以外の整数を入力してください。');
+      const rawPoints = body.points;
+      const requested = Number(rawPoints);
+      if (rawPoints === '' || rawPoints == null || !Number.isInteger(requested)) throw new Error('整数を入力してください。');
       finalPoints = requested;
       const isAttendance = original.type === '入退室';
-      if (isAttendance && requested < 1) throw new Error('レギュラー付与ポイントは1以上の整数で入力してください。');
+      if (isAttendance && requested < 0) throw new Error('レギュラー付与ポイントは0以上の整数で入力してください。');
       const kind = isAttendance ? '入退室' : (requested < 0 ? '使用' : '特別');
       if (!isAttendance && requested < 0) {
         const afterReverse = Math.max(0, (balances[student.id] || 0) - original.points);
