@@ -148,7 +148,7 @@ function pmPointRows_() {
       type: pmType_(reason, Number(row[3]) || 0),
       editable: pmType_(reason, Number(row[3]) || 0) === '入退室' || (!!op && /^\[(特別|使用)\]/.test(reason))
     };
-  }).filter(function(row) { return row.id && row.points; });
+  }).filter(function(row) { return row.id && (row.points !== 0 || row.operationId.indexOf('ROW:') !== 0); });
 }
 
 function pmBootstrap_(staff) {
