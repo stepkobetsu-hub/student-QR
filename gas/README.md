@@ -6,6 +6,7 @@
 
 - `コード.js`: 入退室・QR・Brevo送信の既存バックエンド
 - `DeliveryFailures.js`: Brevo Transactional Webhookと不達メール管理
+- `DeliveryHistory.js`: エラー当日・直前5回・過去全エラーの送信履歴取得
 - `MyQrApi.js`: 塾生本人認証・期限付きセッション・本人QR取得
 - `appsscript.json`: Apps Scriptマニフェスト
 
@@ -18,6 +19,9 @@ APIキー、Webhookトークン、スプレッドシートIDなどの実行時�
 - `BREVO_WEBHOOK_TOKEN`
 - `BREVO_TEMP_ERROR_THRESHOLD`（既定値 `3`）
 - `BREVO_TEMP_ERROR_WINDOW_DAYS`（既定値 `7`）
+- `DELIVERY_FAILURE_REPORT_EMAILS`（不達報告先をJSON配列で最大4件。値は公開リポジトリへ記録しない）
+
+不達メール管理画面の「報告メール設定」から、AK=2・3・4のスタッフが報告先を1〜4件に変更できます。Brevoから新しい不達イベントを受信したとき、重複判定後に登録先へ個別送信します。
 
 デプロイ時は既存のWebアプリデプロイを更新し、URLを維持してください。
 
