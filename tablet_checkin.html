@@ -173,7 +173,24 @@
     z-index: 2;
   }
   #resultOverlay.entry #resultCharacter { width: min(43vw, 540px); }
+  #resultOverlay.exit.show #resultCharacter {
+    transform-origin: 72% 38%;
+    animation: goodbye-wave 1.9s ease-in-out 1;
+  }
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
+  @keyframes goodbye-wave {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    12% { transform: rotate(-3deg) translateY(-2px); }
+    24% { transform: rotate(3deg) translateY(0); }
+    36% { transform: rotate(-3deg) translateY(-2px); }
+    48% { transform: rotate(3deg) translateY(0); }
+    60% { transform: rotate(-2deg) translateY(-1px); }
+    72% { transform: rotate(2deg) translateY(0); }
+    84% { transform: rotate(-1deg) translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #resultOverlay.exit.show #resultCharacter { animation: none; }
+  }
 
   #resultIcon { font-size: 90px; margin-bottom: 10px; }
   #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
@@ -630,7 +647,7 @@ function errorTitle(code) {
 
 function finishAndResume(delayMs) {
   setTimeout(() => {
-    resultOverlay.classList.remove('show', 'success', 'error', 'warning');
+    resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate');
     requestInFlight = false;
     scanning = true;
     scanStartedAt = Date.now();
