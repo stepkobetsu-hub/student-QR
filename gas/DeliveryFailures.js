@@ -15,6 +15,7 @@ const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
 const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock','deliveryFailureReportSettingsGet','deliveryFailureReportSettingsSave'];
 const DELIVERY_FAILURE_REPORT_EMAILS_PROPERTY = 'DELIVERY_FAILURE_REPORT_EMAILS';
 const DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS = 4;
+const DELIVERY_FAILURE_MANAGER_URL = 'https://stepkobetsu-hub.github.io/student-QR/delivery_failures.html';
 const WEBHOOK_DIAGNOSTIC_SHEET_NAME = 'Webhook診断';
 const WEBHOOK_DIAGNOSTIC_HEADERS = ['受信日時','tokenMatched','event','recipient','messageId','messageId取得元','照合結果','処理結果','エラー概要'];
 
@@ -411,7 +412,7 @@ function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
       '管理ID：'+managementId,
       'Brevo messageId：'+messageId,
       '',
-      '不達メール管理： https://stepkobetsu-hub.github.io/student-QR/delivery_failures.html'
+      '不達メール管理： '+DELIVERY_FAILURE_MANAGER_URL
     ].join('\n');
     const reportEmails = getDeliveryFailureReportEmails_();
     if (!reportEmails.length) return {ok:true,skipped:true,reason:'report_email_not_configured'};
