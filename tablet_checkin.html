@@ -616,7 +616,16 @@ function finishAndResume(delayMs) {
   }, delayMs);
 }
 
-startCamera();
+const previewMode = new URLSearchParams(location.search).get('preview');
+if (previewMode === 'entry') {
+  showResult(true, 'ステップ太郎', '入室', '16:30', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'exit') {
+  showResult(true, 'ステップ太郎', '退室', '19:45', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'duplicate') {
+  showProcessing('', 'preview-受付中');
+} else {
+  startCamera();
+}
 </script>
 
 </body>
