@@ -18,6 +18,10 @@ test('same student QR is blocked for 60 seconds across locked server requests', 
   assert.match(main, /getSharedDuplicateAttendance_\('student', code, receipt\)/);
   assert.match(main, /rememberSharedDuplicateAttendance_\('student', code, attendance\)/);
   assert.match(main, /duplicateWindowSeconds: CHECKIN_DUPLICATE_WINDOW_MS \/ 1000/);
+  assert.match(main, /getLatestTeacherAttendanceFromLog_/);
+  assert.match(main, /getSharedDuplicateAttendance_\('teacher', teacher\.code, receipt\)/);
+  assert.match(main, /rememberSharedDuplicateAttendance_\('teacher', teacher\.code, attendance\)/);
+  assert.match(main, /duplicateFromAuthoritativeLog/);
 });
 
 test('duplicate result returns before photo and mail queue work', () => {
@@ -35,6 +39,15 @@ test('duplicate result returns before photo and mail queue work', () => {
 test('tablet explains that duplicate read created no log or email', () => {
   assert.match(tablet, /60秒以内の重複読取のため、記録とメール送信は追加していません/);
   assert.match(tablet, /name \+ 'は受付済みです'/);
+});
+
+test('teacher result reuses the three backgrounds and waves on exit', () => {
+  assert.match(tablet, /assets\/checkin\/teacher-arrival\.png/);
+  assert.match(tablet, /assets\/checkin\/teacher-goodbye\.png/);
+  assert.match(tablet, /assets\/checkin\/teacher-duplicate\.png/);
+  assert.match(tablet, /show teacher.*entry|show duplicate teacher/);
+  assert.match(tablet, /animation: goodbye-wave 1\.9s/);
+  assert.match(tablet, /teacher-exit/);
 });
 
 test('latest saved row in 入退室ログ2 is canonical for duplicate timing', () => {

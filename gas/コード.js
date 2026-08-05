@@ -769,7 +769,14 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       traceMark_(trace, 'subjectLookup');
       const teacherEmailState = classifyTeacherEmail_(teacher.email);
       if (teacherEmailState.code === 'OK') notifyEmails = [teacherEmailState.email];
-      attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code);
+      const recentAttendance = getSharedDuplicateAttendance_('teacher', teacher.code, receipt);
+      if (recentAttendance) {
+        traceMark_(trace, 'sharedDuplicateGuard');
+        attendance = recentAttendance;
+      } else {
+        attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code);
+        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('teacher', teacher.code, attendance);
+      }
       attendance.notificationCode = teacherEmailState.code === 'OK' ? '' : teacherEmailState.code;
     }
   } catch (error) {
@@ -920,6 +927,21 @@ function getLatestStudentAttendanceLog_(logSheet, code) {
   return null;
 }
 
+function getLatestTeacherAttendanceFromLog_(logSheet, code) {
+  const lastRow = logSheet.getLastRow();
+  if (lastRow < 2) return null;
+  const matches = logSheet
+    .getRange(2, 2, lastRow - 1, 1)
+    .createTextFinder(String(code || '').trim())
+    .matchEntireCell(true)
+    .findAll();
+  if (!matches.length) return null;
+  const row = matches[matches.length - 1].getRow();
+  const values = logSheet.getRange(row, 1, 1, 4).getValues()[0];
+  if (!(values[0] instanceof Date)) return null;
+  return { stampMs: values[0].getTime(), type: String(values[3] || ''), row: row };
+}
+
 function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets) {
   const code = String(values[COL_STUDENT_ID - 1] || '').trim();
   const name = String(values[COL_STUDENT_NAME - 1] || '').trim();
@@ -1031,14 +1053,51 @@ function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
   const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
   const now = new Date();
   const today = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const latestSaved = getLatestTeacherAttendanceFromLog_(sheet, code);
+  if (latestSaved && isWithinCheckInDuplicateWindow_(latestSaved.stampMs, now.getTime())) {
+    traceMark_(trace, 'duplicateFromAuthoritativeLog');
+    return {
+      receiptId: receiptId,
+      isTeacher: true,
+      name: name,
+      school: '',
+      type: latestSaved.type || '出勤',
+      label: Utilities.formatDate(new Date(latestSaved.stampMs), 'Asia/Tokyo', 'M月d日H時mm分'),
+      totalPoints: null,
+      logRow: latestSaved.row,
+      maskedSubjectId: maskCheckInId_(code),
+      duplicate: true
+    };
+  }
   const stateKey = dailyCheckInStateKey_('teacher', code, today);
   const cache = CacheService.getScriptCache();
   let state = parseCheckInCache_(cache.get(stateKey));
   if (!state) {
-    const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
-    state = { count: rows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === today).length };
+    const rows = sheet.getLastRow() < 2 ? [] : sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+    const todayRows = rows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === today);
+    const lastTodayRow = todayRows.reduce((latest, row) => !latest || row[0].getTime() > latest[0].getTime() ? row : latest, null);
+    state = {
+      count: todayRows.length,
+      lastStampMs: lastTodayRow ? lastTodayRow[0].getTime() : 0,
+      lastType: lastTodayRow ? String(lastTodayRow[3] || '') : ''
+    };
   }
   traceMark_(trace, 'attendanceDataRead');
+  if (isWithinCheckInDuplicateWindow_(state.lastStampMs, now.getTime())) {
+    traceMark_(trace, 'duplicateWithinCooldown');
+    return {
+      receiptId: receiptId,
+      isTeacher: true,
+      name: name,
+      school: '',
+      type: state.lastType || (state.count % 2 === 0 ? '退勤' : '出勤'),
+      label: Utilities.formatDate(new Date(state.lastStampMs), 'Asia/Tokyo', 'M月d日H時mm分'),
+      totalPoints: null,
+      logRow: Number(state.lastLogRow || 0),
+      maskedSubjectId: maskCheckInId_(code),
+      duplicate: true
+    };
+  }
   const type = state.count % 2 === 0 ? '出勤' : '退勤';
   traceMark_(trace, 'attendanceDecision');
   const record = new Array(schema.lastColumn).fill('');
@@ -1054,6 +1113,9 @@ function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
   const row = sheet.getLastRow() + 1;
   sheet.getRange(row, 1, 1, record.length).setValues([record]);
   state.count++;
+  state.lastStampMs = now.getTime();
+  state.lastType = type;
+  state.lastLogRow = row;
   cache.put(stateKey, JSON.stringify(state), 21600);
   return { receiptId: receiptId, isTeacher: true, name: name, school: '', type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: null, logRow: row, maskedSubjectId: maskCheckInId_(code) };
 }

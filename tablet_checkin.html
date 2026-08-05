@@ -178,6 +178,10 @@
     animation: goodbye-wave 1.9s ease-in-out 1;
   }
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
+  #resultOverlay.teacher #resultCharacter {
+    width: min(34vw, 430px);
+    max-height: 80vh;
+  }
   @keyframes goodbye-wave {
     0%, 100% { transform: rotate(0deg) translateY(0); }
     12% { transform: rotate(-3deg) translateY(-2px); }
@@ -545,13 +549,25 @@ function renderServerResult(data) {
 
 function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
   if (ok && isTeacher) {
-    resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
-    resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
-    resultCharacter.style.display = 'none';
+    const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
+    resultOverlay.className = isCooldownDuplicate
+      ? 'show duplicate teacher'
+      : (mailStatus === 'FAILED' ? 'show warning teacher' : 'show teacher ' + (type === '出勤' ? 'entry' : 'exit'));
+    resultIcon.textContent = '';
+    resultCharacter.src = isCooldownDuplicate
+      ? 'assets/checkin/teacher-duplicate.png?v=20260806'
+      : (type === '出勤'
+        ? 'assets/checkin/teacher-arrival.png?v=20260806'
+        : 'assets/checkin/teacher-goodbye.png?v=20260806');
+    resultCharacter.style.display = 'block';
     resultName.textContent = name + ' 先生';
-    resultType.textContent = type + 'を受け付けました';
+    resultType.textContent = isCooldownDuplicate
+      ? name + '先生は受付済みです'
+      : (type === '出勤' ? '出勤しました' : '退勤しました');
     resultTime.textContent = label;
-    resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider);
+    resultSub.textContent = isCooldownDuplicate
+      ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
+      : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
     resultPoints.style.display = 'none';
   } else if (ok) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
@@ -647,7 +663,7 @@ function errorTitle(code) {
 
 function finishAndResume(delayMs) {
   setTimeout(() => {
-    resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate');
+    resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate', 'teacher');
     requestInFlight = false;
     scanning = true;
     scanStartedAt = Date.now();
@@ -662,6 +678,12 @@ if (previewMode === 'entry') {
   showResult(true, 'ステップ太郎', '退室', '19:45', 'SENT', 120, '', false, '', false, 'BREVO');
 } else if (previewMode === 'duplicate') {
   showResult(true, 'ステップ太郎', '入室', '16:31', 'NOT_REQUIRED', null, '', false, 'DUPLICATE_WITHIN_COOLDOWN', true, '');
+} else if (previewMode === 'teacher-entry') {
+  showResult(true, '山田', '出勤', '15:30', 'SENT', null, '', true, '', false, 'BREVO');
+} else if (previewMode === 'teacher-exit') {
+  showResult(true, '山田', '退勤', '21:15', 'SENT', null, '', true, '', false, 'BREVO');
+} else if (previewMode === 'teacher-duplicate') {
+  showResult(true, '山田', '出勤', '15:31', 'NOT_REQUIRED', null, '', true, 'DUPLICATE_WITHIN_COOLDOWN', true, '');
 } else {
   startCamera();
 }
