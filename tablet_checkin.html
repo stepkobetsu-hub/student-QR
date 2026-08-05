@@ -84,18 +84,39 @@
     color: #fff;
     text-align: center;
     padding: 30px;
+    overflow: hidden;
   }
+  #resultOverlay > * { position: relative; z-index: 2; }
   #resultOverlay.show { display: flex; }
   #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
   #resultOverlay.entry {
     color: #17324d;
-    background: linear-gradient(145deg, rgba(255, 235, 59, 0.97), rgba(129, 212, 250, 0.97));
+    background: linear-gradient(145deg, #fff36a 0%, #90e5ff 58%, #ffc8ed 100%);
   }
   #resultOverlay.exit {
-    background: linear-gradient(145deg, rgba(13, 36, 89, 0.97), rgba(74, 20, 140, 0.97));
+    background:
+      radial-gradient(circle at 8% 15%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 19% 32%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 30% 10%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 43% 24%, #d8c7ff 0 3px, transparent 4px),
+      radial-gradient(circle at 58% 9%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 72% 29%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 91% 14%, #fff 0 2px, transparent 3px),
+      linear-gradient(150deg, #061a45 0%, #102d67 58%, #28134f 100%);
+  }
+  #resultOverlay.exit::after {
+    content: '';
+    position: absolute;
+    top: 6%; right: 7%;
+    width: 82px; height: 82px;
+    border-radius: 50%;
+    background: #fff2a8;
+    box-shadow: -22px 9px 0 3px #0b2354;
+    z-index: 1;
   }
   #resultOverlay.duplicate {
-    background: linear-gradient(145deg, rgba(69, 76, 84, 0.97), rgba(117, 117, 117, 0.97));
+    color: #171717;
+    background: linear-gradient(145deg, #ffe55c 0%, #ffc928 100%);
   }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
@@ -115,6 +136,36 @@
     pointer-events: none;
   }
   #scanHint.show { opacity: 1; }
+
+  #resultContent {
+    max-width: min(58vw, 720px);
+    padding: 24px 30px;
+    border-radius: 28px;
+    background: rgba(255,255,255,.82);
+    box-shadow: 0 14px 34px rgba(0,0,0,.22);
+    backdrop-filter: blur(5px);
+    margin-right: min(34vw, 390px);
+  }
+  #resultOverlay.exit #resultContent {
+    background: rgba(5,18,51,.76);
+    border: 2px solid rgba(255,255,255,.3);
+  }
+  #resultOverlay.duplicate #resultContent {
+    background: rgba(255,255,255,.88);
+  }
+  #resultCharacter {
+    display: none;
+    position: absolute;
+    right: 2vw;
+    bottom: 1vh;
+    width: min(39vw, 500px);
+    max-height: 72vh;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 16px rgba(0,0,0,.24));
+    z-index: 2;
+  }
+  #resultOverlay.entry #resultCharacter { width: min(43vw, 540px); }
+  #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
 
   #resultIcon { font-size: 90px; margin-bottom: 10px; }
   #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
@@ -160,12 +211,15 @@
   </div>
 
   <div id="resultOverlay">
-    <div id="resultIcon"></div>
-    <div id="resultName"></div>
-    <div id="resultType"></div>
-    <div id="resultTime"></div>
-    <div id="resultSub"></div>
-    <div id="resultPoints"></div>
+    <div id="resultContent">
+      <div id="resultIcon"></div>
+      <div id="resultName"></div>
+      <div id="resultType"></div>
+      <div id="resultTime"></div>
+      <div id="resultSub"></div>
+      <div id="resultPoints"></div>
+    </div>
+    <img id="resultCharacter" alt="" aria-hidden="true">
   </div>
 
   <div id="statusDot"></div>
@@ -184,6 +238,7 @@ const photoCanvas = document.getElementById('photoCanvas');
 const photoCtx = photoCanvas.getContext('2d');
 const resultOverlay = document.getElementById('resultOverlay');
 const resultIcon = document.getElementById('resultIcon');
+const resultCharacter = document.getElementById('resultCharacter');
 const resultName = document.getElementById('resultName');
 const resultType = document.getElementById('resultType');
 const resultTime = document.getElementById('resultTime');
@@ -440,6 +495,7 @@ function trackMailCompletionInBackground(receiptId) {
 function showProcessing(qrData, receiptId) {
   resultOverlay.className = 'show';
   resultIcon.textContent = '⏳';
+  resultCharacter.style.display = 'none';
   resultName.textContent = 'QRを確認しました';
   resultType.textContent = '';
   resultTime.textContent = '受付処理を開始しています';
@@ -461,6 +517,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   if (ok && isTeacher) {
     resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
     resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
+    resultCharacter.style.display = 'none';
     resultName.textContent = name + ' 先生';
     resultType.textContent = type + 'を受け付けました';
     resultTime.textContent = label;
@@ -471,7 +528,11 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
-    resultIcon.textContent = isCooldownDuplicate ? '✓' : (type === '入室' ? '☀️' : '🌙');
+    resultIcon.textContent = '';
+    resultCharacter.src = isCooldownDuplicate
+      ? 'assets/checkin/duplicate.png'
+      : (type === '入室' ? 'assets/checkin/welcome.png' : 'assets/checkin/goodbye.png');
+    resultCharacter.style.display = 'block';
     resultName.textContent = name + ' さん';
     resultType.textContent = isCooldownDuplicate
       ? name + 'は受付済みです'
@@ -489,6 +550,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   } else {
     resultOverlay.className = 'show error';
     resultIcon.textContent = '⚠️';
+    resultCharacter.style.display = 'none';
     resultName.textContent = errorTitle(errorCode);
     resultType.textContent = '';
     resultTime.textContent = '';

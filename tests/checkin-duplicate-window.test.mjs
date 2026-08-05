@@ -50,6 +50,8 @@ test('tablet separates entry, exit, and duplicate result displays', () => {
   assert.match(tablet, /#resultOverlay\.duplicate/);
   assert.match(tablet, /'入室しました'/);
   assert.match(tablet, /'退室しました'/);
-  assert.match(tablet, /'☀️'/);
-  assert.match(tablet, /'🌙'/);
+  assert.match(tablet, /assets\/checkin\/welcome\.png/);
+  assert.match(tablet, /assets\/checkin\/goodbye\.png/);
+  assert.match(tablet, /assets\/checkin\/duplicate\.png/);
+  assert.doesNotMatch(tablet, /repeating-linear-gradient/);
 });
