@@ -34,7 +34,7 @@ test('duplicate result returns before photo and mail queue work', () => {
 
 test('tablet explains that duplicate read created no log or email', () => {
   assert.match(tablet, /60秒以内の重複読取のため、記録とメール送信は追加していません/);
-  assert.match(tablet, /type \+ 'は受付済みです'/);
+  assert.match(tablet, /name \+ 'は受付済みです'/);
 });
 
 test('latest saved row in 入退室ログ2 is canonical for duplicate timing', () => {
