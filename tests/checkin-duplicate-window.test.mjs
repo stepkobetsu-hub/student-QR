@@ -41,6 +41,16 @@ test('tablet explains that duplicate read created no log or email', () => {
   assert.match(tablet, /name \+ 'は受付済みです'/);
 });
 
+test('same-tablet duplicate skips photo upload and server request', () => {
+  assert.match(tablet, /LOCAL_DUPLICATE_WINDOW_MS = 60 \* 1000/);
+  assert.match(tablet, /code\.data === lastAcceptedScan\.qrData/);
+  assert.match(tablet, /showLocalDuplicate\(lastAcceptedScan\)/);
+  assert.match(tablet, /rememberLocalAcceptedScan\(qrData, data\)/);
+  const localDuplicate = tablet.indexOf('showLocalDuplicate(lastAcceptedScan)');
+  const serverRequest = tablet.indexOf('handleQrDetected(code.data)');
+  assert.ok(localDuplicate >= 0 && localDuplicate < serverRequest);
+});
+
 test('teacher result reuses student duplicate art and waves on exit', () => {
   assert.match(tablet, /assets\/checkin\/teacher-arrival\.png/);
   assert.match(tablet, /assets\/checkin\/teacher-goodbye\.png/);
