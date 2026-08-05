@@ -269,6 +269,7 @@ const FRAME_INTERVAL_MS = 1000 / 12;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
 const SUCCESS_RESUME_MS = 2500;
+const DUPLICATE_RESUME_MS = 3500;
 const MAIL_FAILURE_RESUME_MS = 3500;
 
 // 時計表示
@@ -412,7 +413,9 @@ async function handleQrDetected(qrData) {
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
     renderServerResult(data);
     if (data && data.attendanceSaved) {
-      resumeDelayMs = data.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS;
+      resumeDelayMs = data.duplicate
+        ? DUPLICATE_RESUME_MS
+        : (data.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
       if (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING') {
         trackMailCompletionInBackground(receiptId);
       }
@@ -422,7 +425,9 @@ async function handleQrDetected(qrData) {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
       renderServerResult(status);
       if (status && status.attendanceSaved) {
-        resumeDelayMs = status.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS;
+        resumeDelayMs = status.duplicate
+          ? DUPLICATE_RESUME_MS
+          : (status.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
         if (status.mailStatus === 'PENDING' || status.mailStatus === 'PROCESSING') {
           trackMailCompletionInBackground(receiptId);
         }
