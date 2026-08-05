@@ -71,8 +71,12 @@ function readNormalDeliveryHistoryForEmail_(email) {
 function deliveryFailureToHistoryItem_(item) {
   return {
     kind:'error',
+    relation:'error',
     id:item.id,
-    occurredAt:item.occurredAt,
+    occurredAt:item.lastOccurredAt || item.occurredAt,
+    firstOccurredAt:item.firstOccurredAt || item.occurredAt,
+    lastOccurredAt:item.lastOccurredAt || item.occurredAt,
+    occurrenceCount:Number(item.occurrenceCount) || 1,
     finalAt:item.lastOccurredAt || item.occurredAt,
     status:item.state || item.event || 'エラー',
     event:item.event,
@@ -89,24 +93,52 @@ function deliveryFailureToHistoryItem_(item) {
 function getDeliveryAddressHistory_(item) {
   if (!item || !item.email) throw new Error('送信履歴の対象メールアドレスがありません');
   const email = normalizeDeliveryEmail_(item.email);
-  const anchorDay = deliveryHistoryDayKey_(item.occurredAt || item.lastOccurredAt || new Date());
   const normal = readNormalDeliveryHistoryForEmail_(email).sort(function(a, b) {
-    return deliveryHistoryDate_(b.occurredAt).getTime() - deliveryHistoryDate_(a.occurredAt).getTime();
-  });
-  const sameDay = normal.filter(function(entry) { return deliveryHistoryDayKey_(entry.occurredAt) === anchorDay; });
-  const before = normal.filter(function(entry) { return deliveryHistoryDayKey_(entry.occurredAt) < anchorDay; }).slice(0, 5);
-  const errors = readDeliveryFailureItems_().filter(function(errorItem) {
-    return normalizeDeliveryEmail_(errorItem.email) === email;
-  }).map(deliveryFailureToHistoryItem_);
-  const items = sameDay.concat(before, errors).sort(function(a, b) {
-    const aDate = deliveryHistoryDate_(a.occurredAt);
-    const bDate = deliveryHistoryDate_(b.occurredAt);
+    const aDate = deliveryHistoryDate_(a.finalAt) || deliveryHistoryDate_(a.occurredAt);
+    const bDate = deliveryHistoryDate_(b.finalAt) || deliveryHistoryDate_(b.occurredAt);
     return (bDate ? bDate.getTime() : 0) - (aDate ? aDate.getTime() : 0);
   });
+  const errors = readDeliveryFailureItems_().filter(function(errorItem) {
+    return normalizeDeliveryEmail_(errorItem.email) === email;
+  }).map(deliveryFailureToHistoryItem_).sort(function(a, b) {
+    const aDate = deliveryHistoryDate_(a.lastOccurredAt || a.occurredAt);
+    const bDate = deliveryHistoryDate_(b.lastOccurredAt || b.occurredAt);
+    return (bDate ? bDate.getTime() : 0) - (aDate ? aDate.getTime() : 0);
+  });
+  const errorDates = [];
+  errors.forEach(function(errorEntry) {
+    const first = deliveryHistoryDate_(errorEntry.firstOccurredAt || errorEntry.occurredAt);
+    const last = deliveryHistoryDate_(errorEntry.lastOccurredAt || errorEntry.occurredAt);
+    if (first) errorDates.push(first);
+    if (last) errorDates.push(last);
+  });
+  const earliestErrorDate = errorDates.length ? new Date(Math.min.apply(null, errorDates.map(function(date) { return date.getTime(); }))) : deliveryHistoryDate_(item.firstOccurredAt || item.occurredAt);
+  const latestErrorDate = errorDates.length ? new Date(Math.max.apply(null, errorDates.map(function(date) { return date.getTime(); }))) : deliveryHistoryDate_(item.lastOccurredAt || item.occurredAt);
+  const successful = normal.filter(function(entry) {
+    return entry.delivered || /配信完了|delivered|送信完了|送信成功|成功/i.test(String(entry.status || ''));
+  });
+  const afterLatest = successful.filter(function(entry) {
+    const date = deliveryHistoryDate_(entry.finalAt) || deliveryHistoryDate_(entry.occurredAt);
+    return date && latestErrorDate && date.getTime() > latestErrorDate.getTime();
+  }).slice(0, 5).map(function(entry) {
+    return Object.assign({}, entry, {relation:'afterLatestError'});
+  });
+  const beforeFirst = successful.filter(function(entry) {
+    const date = deliveryHistoryDate_(entry.finalAt) || deliveryHistoryDate_(entry.occurredAt);
+    return date && earliestErrorDate && date.getTime() < earliestErrorDate.getTime();
+  }).slice(0, 5).map(function(entry) {
+    return Object.assign({}, entry, {relation:'beforeFirstError'});
+  });
+  const items = afterLatest.concat(errors, beforeFirst);
   return {
     email:email,
-    anchorDay:anchorDay,
-    sendCount:sameDay.length + before.length,
+    anchorDay:deliveryHistoryDayKey_(latestErrorDate),
+    errorStartDay:deliveryHistoryDayKey_(earliestErrorDate),
+    errorEndDay:deliveryHistoryDayKey_(latestErrorDate),
+    afterLatestCount:afterLatest.length,
+    beforeFirstCount:beforeFirst.length,
+    recovered:afterLatest.length > 0,
+    sendCount:afterLatest.length + beforeFirst.length,
     errorCount:errors.length,
     itemCount:items.length,
     items:items
