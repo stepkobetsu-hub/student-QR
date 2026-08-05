@@ -38,13 +38,41 @@ function deliveryHistoryRowHasEmail_(row, email) {
   });
 }
 
+function readDeliveryQueueRecipientsByReceipt_() {
+  const result = {};
+  const sheet = getDeliveryFailureSpreadsheet_().getSheetByName('メール送信キュー');
+  if (!sheet || sheet.getLastRow() < 2) return result;
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(String);
+  values.slice(1).forEach(function(row) {
+    const receiptId = String(deliveryHistoryCell_(row, headers, ['受付ID']) || '').trim();
+    if (!receiptId) return;
+    const rawRecipients = deliveryHistoryCell_(row, headers, ['送信先JSON']);
+    let recipients = [];
+    try {
+      const parsed = JSON.parse(String(rawRecipients || '[]'));
+      if (Array.isArray(parsed)) {
+        recipients = parsed.map(function(recipient) {
+          return normalizeDeliveryEmail_(recipient && recipient.email);
+        }).filter(Boolean);
+      }
+    } catch (ignore) {}
+    result[receiptId] = recipients;
+  });
+  return result;
+}
+
 function readNormalDeliveryHistoryForEmail_(email) {
   const sheet = getDeliveryFailureLogSheet_();
   if (sheet.getLastRow() < 2) return [];
   const values = sheet.getDataRange().getValues();
   const headers = values[0].map(String);
+  const targetEmail = normalizeDeliveryEmail_(email);
+  const queueRecipientsByReceipt = readDeliveryQueueRecipientsByReceipt_();
   return values.slice(1).map(function(row, index) {
-    if (!deliveryHistoryRowHasEmail_(row, email)) return null;
+    const receiptId = String(deliveryHistoryCell_(row, headers, ['受付ID']) || '').trim();
+    const queueRecipients = queueRecipientsByReceipt[receiptId] || [];
+    if (!deliveryHistoryRowHasEmail_(row, targetEmail) && queueRecipients.indexOf(targetEmail) < 0) return null;
     const occurredAt = deliveryHistoryCell_(row, headers, ['受付日時','タイムスタンプ','登録日時','送信完了日時','更新日時']);
     const occurredDate = deliveryHistoryDate_(occurredAt);
     if (!occurredDate) return null;
