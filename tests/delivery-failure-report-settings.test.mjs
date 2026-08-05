@@ -38,6 +38,12 @@ test('page exposes a manager-only report settings dialog with four inputs', () =
   assert.match(page, /\['2','3','4'\]\.includes/);
 });
 
+test('page exposes the canonical full send log above the failure list', () => {
+  assert.match(page, /class="back allSendLogButton"/);
+  assert.match(page, /docs\.google\.com\/spreadsheets\/d\/1VyQ3O69PDArG2bJt_Qf347rlTwKfjqM6KPLDWqIPo6A\/edit#gid=0/);
+  assert.match(page, />全送信ログを見る<\/a>/);
+});
+
 test('default recipient is not exposed in public source', () => {
   assert.doesNotMatch(page + backend + history, /mintcocoajasmine@gmail\.com/i);
 });
@@ -78,6 +84,7 @@ test('history behavior returns every error and caps successful sends on both sid
       getLastRow: () => rows.length + 1,
       getDataRange: () => ({getValues: () => [headers, ...rows]})
     }),
+    getDeliveryFailureSpreadsheet_: () => ({getSheetByName: () => null}),
     readDeliveryFailureItems_: () => errors
   };
   vm.runInNewContext(history, context);
@@ -91,4 +98,27 @@ test('history behavior returns every error and caps successful sends on both sid
     'error','error','error',
     'beforeFirstError','beforeFirstError','beforeFirstError','beforeFirstError','beforeFirstError'
   ]);
+});
+
+test('normal history can match a recipient stored only in the mail queue JSON', () => {
+  const logHeaders = ['タイムスタンプ','生徒番号','生徒氏名','種別','メール送信結果','送信先メール','配信状態','最終配信成功日時','受付ID','件名'];
+  const logRows = [[new Date('2026-08-04T21:17:35+09:00'),'1169','岡崎咲里','退室','送信完了','','配信完了',new Date('2026-08-04T21:17:35+09:00'),'receipt-exit','退室のお知らせ']];
+  const queueHeaders = ['受付ID','送信先JSON'];
+  const queueRows = [['receipt-exit', JSON.stringify([{email:'family@example.com',status:'SENT'}])]];
+  const error = {id:'e1',email:'family@example.com',event:'deferred',state:'一時エラー',occurredAt:new Date('2026-08-04T17:22:29+09:00'),firstOccurredAt:new Date('2026-08-04T17:22:29+09:00'),lastOccurredAt:new Date('2026-08-04T17:22:29+09:00')};
+  const context = {
+    normalizeDeliveryFailureHeader_: value => String(value || '').trim(),
+    normalizeDeliveryEmail_: value => String(value || '').trim().toLowerCase(),
+    Utilities: {formatDate: date => date.toISOString().slice(0, 10)},
+    Session: {getScriptTimeZone: () => 'Asia/Tokyo'},
+    getDeliveryFailureLogSheet_: () => ({getLastRow: () => 2,getDataRange: () => ({getValues: () => [logHeaders, ...logRows]})}),
+    getDeliveryFailureSpreadsheet_: () => ({getSheetByName: name => name === 'メール送信キュー' ? {getLastRow: () => 2,getDataRange: () => ({getValues: () => [queueHeaders, ...queueRows]})} : null}),
+    readDeliveryFailureItems_: () => [error]
+  };
+  vm.runInNewContext(history, context);
+  const result = context.getDeliveryAddressHistory_(error);
+  assert.equal(result.afterLatestCount, 1);
+  assert.equal(result.items[0].relation, 'afterLatestError');
+  assert.equal(result.items[0].mailType, '退室');
+  assert.equal(result.items[0].studentName, '岡崎咲里');
 });
