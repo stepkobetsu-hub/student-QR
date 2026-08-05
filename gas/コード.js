@@ -787,6 +787,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       mailStatus: 'NOT_REQUIRED',
       mailProvider: '',
       duplicate: true,
+      build: CHECKIN_BUILD_ID,
       message: attendance.type + 'は受付済みです',
       timings: finishCheckInTrace_(trace),
       clientTimingsReceived: !!clientTimings
@@ -852,6 +853,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     mailStatus: mailStatus,
     mailProvider: mailProvider,
     duplicate: false,
+    build: CHECKIN_BUILD_ID,
     timings: finishCheckInTrace_(trace),
     clientTimingsReceived: !!clientTimings
   });
