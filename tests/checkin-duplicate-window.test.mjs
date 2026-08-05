@@ -41,10 +41,11 @@ test('tablet explains that duplicate read created no log or email', () => {
   assert.match(tablet, /name \+ 'は受付済みです'/);
 });
 
-test('teacher result reuses the three backgrounds and waves on exit', () => {
+test('teacher result reuses student duplicate art and waves on exit', () => {
   assert.match(tablet, /assets\/checkin\/teacher-arrival\.png/);
   assert.match(tablet, /assets\/checkin\/teacher-goodbye\.png/);
-  assert.match(tablet, /assets\/checkin\/teacher-duplicate\.png/);
+  assert.match(tablet, /assets\/checkin\/duplicate\.png/);
+  assert.match(tablet, /#resultOverlay\.teacher\.entry::before/);
   assert.match(tablet, /show teacher.*entry|show duplicate teacher/);
   assert.match(tablet, /animation: goodbye-wave 1\.9s/);
   assert.match(tablet, /teacher-exit/);
