@@ -25,6 +25,8 @@ test('every new failure is reported once to each configured recipient', () => {
   assert.match(source, /String\(notifiedValue\)===notificationKey/);
   assert.match(source, /reportEmails\.forEach/);
   assert.match(source, /MailApp\.sendEmail\(\{to:recipient,subject:subject,body:body\}\)/);
+  assert.match(backend, /DELIVERY_FAILURE_MANAGER_URL = 'https:\/\/stepkobetsu-hub\.github\.io\/student-QR\/delivery_failures\.html'/);
+  assert.match(source, /'不達メール管理： '\+DELIVERY_FAILURE_MANAGER_URL/);
 });
 
 test('page exposes a manager-only report settings dialog with four inputs', () => {
