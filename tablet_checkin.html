@@ -300,9 +300,11 @@ let scanning = true;
 let requestInFlight = false;
 let lastScannedCode = null;
 let lastScannedTime = 0;
+let lastAcceptedScan = null;
 let scanStartedAt = Date.now();
 let lastFrameAt = 0;
 const RESCAN_COOLDOWN_MS = 5000;
+const LOCAL_DUPLICATE_WINDOW_MS = 60 * 1000;
 const NO_QR_HINT_MS = 4000;
 const NO_QR_ERROR_MS = 10000;
 const FRAME_INTERVAL_MS = 1000 / 12;
@@ -400,6 +402,15 @@ function scanLoop(frameTime) {
       const now = Date.now();
       if (code.data === lastScannedCode && (now - lastScannedTime) < RESCAN_COOLDOWN_MS) {
         // 直近で同じQRを読み取り済みなのでスキップ
+      } else if (lastAcceptedScan && code.data === lastAcceptedScan.qrData &&
+          (now - lastAcceptedScan.acceptedAt) < LOCAL_DUPLICATE_WINDOW_MS) {
+        // 同じタブレットの60秒以内の再読取は、写真送信とサーバー通信を省略する。
+        lastScannedCode = code.data;
+        lastScannedTime = now;
+        scanning = false;
+        playBeep();
+        showLocalDuplicate(lastAcceptedScan);
+        finishAndResume(DUPLICATE_RESUME_MS);
       } else {
         lastScannedCode = code.data;
         lastScannedTime = now;
@@ -451,6 +462,7 @@ async function handleQrDetected(qrData) {
     clientTimings.responseReceivedAt = new Date().toISOString();
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
+    rememberLocalAcceptedScan(qrData, data);
     renderServerResult(data);
     if (data && data.attendanceSaved) {
       resumeDelayMs = data.duplicate
@@ -463,6 +475,7 @@ async function handleQrDetected(qrData) {
   } catch (err) {
     if (err && err.name === 'AbortError') {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
+      rememberLocalAcceptedScan(qrData, status);
       renderServerResult(status);
       if (status && status.attendanceSaved) {
         resumeDelayMs = status.duplicate
@@ -564,6 +577,35 @@ function renderServerResult(data) {
   } else {
     showResult(false, null, null, null, data.mailStatus || 'NOT_STARTED', null, data.message, false, data.code, false, data.mailProvider);
   }
+}
+
+function rememberLocalAcceptedScan(qrData, data) {
+  if (!data || !data.attendanceSaved || !data.name || !data.type) return;
+  lastAcceptedScan = {
+    qrData: qrData,
+    acceptedAt: Date.now(),
+    name: data.name,
+    type: data.type,
+    label: data.label,
+    totalPoints: data.totalPoints,
+    isTeacher: !!data.isTeacher
+  };
+}
+
+function showLocalDuplicate(scan) {
+  showResult(
+    true,
+    scan.name,
+    scan.type,
+    scan.label,
+    'NOT_REQUIRED',
+    scan.totalPoints,
+    '',
+    scan.isTeacher,
+    'DUPLICATE_WITHIN_COOLDOWN',
+    true,
+    ''
+  );
 }
 
 function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
