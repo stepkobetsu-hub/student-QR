@@ -538,8 +538,8 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
     resultIcon.textContent = '';
     resultCharacter.src = isCooldownDuplicate
-      ? 'assets/checkin/duplicate.png'
-      : (type === '入室' ? 'assets/checkin/welcome.png' : 'assets/checkin/goodbye.png');
+      ? 'assets/checkin/duplicate.png?v=429da8e'
+      : (type === '入室' ? 'assets/checkin/welcome.png?v=429da8e' : 'assets/checkin/goodbye.png?v=429da8e');
     resultCharacter.style.display = 'block';
     resultName.textContent = name + ' さん';
     resultType.textContent = isCooldownDuplicate
