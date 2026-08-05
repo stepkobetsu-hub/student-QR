@@ -54,6 +54,8 @@ const CHECKIN_MAIL_MAX_ATTEMPTS = 3;
 const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
 const CHECKIN_DUPLICATE_WINDOW_MS = 60 * 1000;
+const CHECKIN_DUPLICATE_GUARD_PREFIX = 'CHECKIN_DUPLICATE_GUARD_V1:';
+const CHECKIN_BUILD_ID = 'duplicate-guard-v63';
 
 /**
  * ===================================================================
@@ -70,7 +72,7 @@ function doGet(e) {
 
   try {
     if (action === 'myQrHealth') {
-      result = { ok: true, service: 'STEP_MY_QR', status: 'ready' };
+      result = { ok: true, service: 'STEP_MY_QR', status: 'ready', build: CHECKIN_BUILD_ID, duplicateWindowSeconds: CHECKIN_DUPLICATE_WINDOW_MS / 1000 };
     } else {
       // 旧管理APIはスタッフの期限付きセッションを必須にする。
       // 塾生用APIはPOST専用で、この経路から任意の生徒QRを取得できない。
@@ -751,7 +753,15 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       const values = masterSheet.getRange(studentRow, 1, 1, width).getValues()[0];
       traceMark_(trace, 'subjectLookup');
       notifyEmails = getNotifyEmailsFromValues_(values);
-      attendance = saveStudentAttendance_(values, receipt, trace, notifyEmails.length > 0);
+      const code = String(values[COL_STUDENT_ID - 1] || '').trim();
+      const recentAttendance = getSharedDuplicateAttendance_('student', code, receipt);
+      if (recentAttendance) {
+        traceMark_(trace, 'sharedDuplicateGuard');
+        attendance = recentAttendance;
+      } else {
+        attendance = saveStudentAttendance_(values, receipt, trace, notifyEmails.length > 0);
+        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('student', code, attendance);
+      }
     } else {
       const teacherSheet = getTeacherMasterSheet_();
       const teacher = findTeacherByQrCached_(teacherSheet, qr);
@@ -848,6 +858,41 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   cacheReceiptStatus_(result);
   logCheckInTrace_(trace, result, 'complete');
   return result;
+}
+
+function sharedDuplicateGuardKey_(kind, code) {
+  return CHECKIN_DUPLICATE_GUARD_PREFIX + kind + ':' + shortCheckInHash_(code);
+}
+
+function getSharedDuplicateAttendance_(kind, code, receiptId) {
+  const raw = PropertiesService.getScriptProperties().getProperty(sharedDuplicateGuardKey_(kind, code));
+  const saved = parseCheckInCache_(raw);
+  if (!saved || !isWithinCheckInDuplicateWindow_(saved.acceptedAtMs, Date.now())) return null;
+  return {
+    receiptId: receiptId,
+    isTeacher: kind === 'teacher',
+    name: saved.name || '',
+    school: saved.school || '',
+    type: saved.type || '',
+    label: saved.label || '',
+    totalPoints: typeof saved.totalPoints === 'number' ? saved.totalPoints : null,
+    logRow: Number(saved.logRow || 0),
+    maskedSubjectId: saved.maskedSubjectId || '',
+    duplicate: true
+  };
+}
+
+function rememberSharedDuplicateAttendance_(kind, code, attendance) {
+  PropertiesService.getScriptProperties().setProperty(sharedDuplicateGuardKey_(kind, code), JSON.stringify({
+    acceptedAtMs: Date.now(),
+    name: attendance.name || '',
+    school: attendance.school || '',
+    type: attendance.type || '',
+    label: attendance.label || '',
+    totalPoints: typeof attendance.totalPoints === 'number' ? attendance.totalPoints : null,
+    logRow: Number(attendance.logRow || 0),
+    maskedSubjectId: attendance.maskedSubjectId || ''
+  }));
 }
 
 function isWithinCheckInDuplicateWindow_(lastStampMs, currentStampMs) {
