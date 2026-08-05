@@ -137,21 +137,29 @@
   }
   #scanHint.show { opacity: 1; }
 
-  #resultContent {
+  #resultContent { max-width: min(92vw, 720px); }
+  #resultOverlay.entry #resultContent,
+  #resultOverlay.exit #resultContent,
+  #resultOverlay.duplicate #resultContent {
     max-width: min(58vw, 720px);
     padding: 24px 30px;
     border-radius: 28px;
-    background: rgba(255,255,255,.82);
     box-shadow: 0 14px 34px rgba(0,0,0,.22);
     backdrop-filter: blur(5px);
     margin-right: min(34vw, 390px);
   }
+  #resultOverlay.entry #resultContent {
+    color: #17324d;
+    background: rgba(255,255,255,.86);
+  }
   #resultOverlay.exit #resultContent {
-    background: rgba(5,18,51,.76);
+    color: #fff;
+    background: rgba(5,18,51,.78);
     border: 2px solid rgba(255,255,255,.3);
   }
   #resultOverlay.duplicate #resultContent {
-    background: rgba(255,255,255,.88);
+    color: #171717;
+    background: rgba(255,255,255,.9);
   }
   #resultCharacter {
     display: none;
@@ -625,7 +633,16 @@ function finishAndResume(delayMs) {
   }, delayMs);
 }
 
-startCamera();
+const previewMode = new URLSearchParams(location.search).get('preview');
+if (previewMode === 'entry') {
+  showResult(true, 'ステップ太郎', '入室', '16:30', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'exit') {
+  showResult(true, 'ステップ太郎', '退室', '19:45', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'duplicate') {
+  showResult(true, 'ステップ太郎', '入室', '16:31', 'NOT_REQUIRED', null, '', false, 'DUPLICATE_WITHIN_COOLDOWN', true, '');
+} else {
+  startCamera();
+}
 </script>
 
 </body>
