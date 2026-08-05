@@ -53,6 +53,7 @@ const CHECKIN_MAIL_QUEUE_HEADERS = ['受付ID','登録日時','更新日時','�
 const CHECKIN_MAIL_MAX_ATTEMPTS = 3;
 const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
+const CHECKIN_DUPLICATE_WINDOW_MS = 60 * 1000;
 
 /**
  * ===================================================================
@@ -768,6 +769,23 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     lock.releaseLock();
   }
 
+  if (attendance.duplicate) {
+    const duplicateResult = Object.assign({}, attendance, {
+      ok: true,
+      code: 'DUPLICATE_WITHIN_COOLDOWN',
+      attendanceSaved: true,
+      mailStatus: 'NOT_REQUIRED',
+      mailProvider: '',
+      duplicate: true,
+      message: attendance.type + 'は受付済みです',
+      timings: finishCheckInTrace_(trace),
+      clientTimingsReceived: !!clientTimings
+    });
+    cacheReceiptStatus_(duplicateResult);
+    logCheckInTrace_(trace, duplicateResult, 'duplicate-within-cooldown');
+    return duplicateResult;
+  }
+
   traceMark_(trace, 'attendanceSaved');
   let resultCode = attendance.notificationCode || 'ATTENDANCE_SAVED';
   let mailStatus = attendance.notificationCode === 'TEACHER_EMAIL_INVALID' ? 'FAILED' : (notifyEmails.length ? 'PENDING' : 'NOT_REQUIRED');
@@ -832,6 +850,12 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
   return result;
 }
 
+function isWithinCheckInDuplicateWindow_(lastStampMs, currentStampMs) {
+  const last = Number(lastStampMs) || 0;
+  const current = Number(currentStampMs) || 0;
+  return last > 0 && current >= last && current - last < CHECKIN_DUPLICATE_WINDOW_MS;
+}
+
 function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets) {
   const code = String(values[COL_STUDENT_ID - 1] || '').trim();
   const name = String(values[COL_STUDENT_NAME - 1] || '').trim();
@@ -850,10 +874,16 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
     const todayRows = logRows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr);
     const stampTimes = todayRows.map(row => row[0].getTime()).filter(value => Number.isFinite(value)).sort((a, b) => a - b);
     const entries = todayRows.filter(row => row[3] === '入室' && row[0] instanceof Date);
+    const lastTodayRow = todayRows.reduce((latest, row) => {
+      if (!(row[0] instanceof Date)) return latest;
+      return !latest || row[0].getTime() > latest[0].getTime() ? row : latest;
+    }, null);
     state = {
       count: todayRows.length,
       firstStampMs: stampTimes.length ? stampTimes[0] : 0,
       lastEntryMs: entries.length ? entries[entries.length - 1][0].getTime() : 0,
+      lastStampMs: lastTodayRow ? lastTodayRow[0].getTime() : 0,
+      lastType: lastTodayRow ? String(lastTodayRow[3] || '') : '',
       awarded: pointRows.some(row => {
         const date = row[0] instanceof Date ? Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') : String(row[0]);
         return date === todayStr && String(row[1]).trim() === code && /^\[入退室\]/.test(String(row[4] || ''));
@@ -862,6 +892,22 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
     };
   }
   traceMark_(trace, 'attendanceDataRead');
+
+  if (isWithinCheckInDuplicateWindow_(state.lastStampMs, now.getTime())) {
+    traceMark_(trace, 'duplicateWithinCooldown');
+    return {
+      receiptId: receiptId,
+      isTeacher: false,
+      name: name,
+      school: school,
+      type: state.lastType || (state.count % 2 === 0 ? '退室' : '入室'),
+      label: Utilities.formatDate(new Date(state.lastStampMs), 'Asia/Tokyo', 'M月d日H時mm分'),
+      totalPoints: Number(state.totalPoints || 0),
+      logRow: Number(state.lastLogRow || 0),
+      maskedSubjectId: maskCheckInId_(code),
+      duplicate: true
+    };
+  }
 
   const type = state.count % 2 === 0 ? '入室' : '退室';
   const settings = getPointSettings_();
@@ -900,6 +946,9 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   state.count++;
   if (!state.firstStampMs) state.firstStampMs = now.getTime();
   if (type === '入室') state.lastEntryMs = now.getTime();
+  state.lastStampMs = now.getTime();
+  state.lastType = type;
+  state.lastLogRow = logRow;
   if (pointDelta) state.awarded = true;
   state.totalPoints = Number(state.totalPoints || 0) + pointDelta;
   cache.put(stateKey, JSON.stringify(state), 21600);
