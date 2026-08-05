@@ -14,6 +14,10 @@ test('same student QR is blocked for 60 seconds across locked server requests', 
   assert.equal(context.isWithinCheckInDuplicateWindow_(100000, 160001), false);
   assert.match(main, /const CHECKIN_DUPLICATE_WINDOW_MS = 60 \* 1000/);
   assert.match(main, /const lock = LockService\.getScriptLock\(\)/);
+  assert.match(main, /CHECKIN_DUPLICATE_GUARD_V1/);
+  assert.match(main, /getSharedDuplicateAttendance_\('student', code, receipt\)/);
+  assert.match(main, /rememberSharedDuplicateAttendance_\('student', code, attendance\)/);
+  assert.match(main, /duplicateWindowSeconds: CHECKIN_DUPLICATE_WINDOW_MS \/ 1000/);
 });
 
 test('duplicate result returns before photo and mail queue work', () => {
