@@ -87,6 +87,16 @@
   }
   #resultOverlay.show { display: flex; }
   #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
+  #resultOverlay.entry {
+    color: #17324d;
+    background: linear-gradient(145deg, rgba(255, 235, 59, 0.97), rgba(129, 212, 250, 0.97));
+  }
+  #resultOverlay.exit {
+    background: linear-gradient(145deg, rgba(13, 36, 89, 0.97), rgba(74, 20, 140, 0.97));
+  }
+  #resultOverlay.duplicate {
+    background: linear-gradient(145deg, rgba(69, 76, 84, 0.97), rgba(117, 117, 117, 0.97));
+  }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
   #scanHint {
@@ -457,14 +467,17 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultSub.textContent = duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider);
     resultPoints.style.display = 'none';
   } else if (ok) {
-    resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
-    resultIcon.textContent = type === '入室' ? '😊' : '🏠';
+    const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
+    resultOverlay.className = isCooldownDuplicate
+      ? 'show duplicate'
+      : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
+    resultIcon.textContent = isCooldownDuplicate ? '✓' : (type === '入室' ? '☀️' : '🌙');
     resultName.textContent = name + ' さん';
-    resultType.textContent = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN'
-      ? type + 'は受付済みです'
-      : type + 'を受け付けました';
+    resultType.textContent = isCooldownDuplicate
+      ? name + 'は受付済みです'
+      : (type === '入室' ? '入室しました' : '退室しました');
     resultTime.textContent = label;
-    resultSub.textContent = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN'
+    resultSub.textContent = isCooldownDuplicate
       ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
       : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
     if (typeof totalPoints === 'number') {
@@ -555,3 +568,4 @@ startCamera();
 
 </body>
 </html>
+

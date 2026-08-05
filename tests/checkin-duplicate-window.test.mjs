@@ -34,5 +34,23 @@ test('duplicate result returns before photo and mail queue work', () => {
 
 test('tablet explains that duplicate read created no log or email', () => {
   assert.match(tablet, /60秒以内の重複読取のため、記録とメール送信は追加していません/);
-  assert.match(tablet, /type \+ 'は受付済みです'/);
+  assert.match(tablet, /name \+ 'は受付済みです'/);
 });
+
+test('latest saved row in 入退室ログ2 is canonical for duplicate timing', () => {
+  assert.match(main, /function getLatestStudentAttendanceLog_\(logSheet, code\)/);
+  assert.match(main, /const latestSavedAttendance = getLatestStudentAttendanceLog_\(logSheet, code\)/);
+  assert.match(main, /const duplicateBaseStampMs = latestSavedAttendance \? latestSavedAttendance\.stampMs : state\.lastStampMs/);
+  assert.match(main, /isWithinCheckInDuplicateWindow_\(duplicateBaseStampMs, now\.getTime\(\)\)/);
+});
+
+test('tablet separates entry, exit, and duplicate result displays', () => {
+  assert.match(tablet, /#resultOverlay\.entry/);
+  assert.match(tablet, /#resultOverlay\.exit/);
+  assert.match(tablet, /#resultOverlay\.duplicate/);
+  assert.match(tablet, /'入室しました'/);
+  assert.match(tablet, /'退室しました'/);
+  assert.match(tablet, /'☀️'/);
+  assert.match(tablet, /'🌙'/);
+});
+
