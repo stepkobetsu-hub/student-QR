@@ -44,6 +44,12 @@ test('page exposes the canonical full send log above the failure list', () => {
   assert.match(page, />全送信ログを見る<\/a>/);
 });
 
+test('a resolved temporary error is shown as an informational blue message', () => {
+  assert.match(page, /\.historyReason\.resolved\{background:#eaf3ff;color:#185abd/);
+  assert.match(page, /途中で一時エラーがありましたが、その後配信完了しました。/);
+  assert.match(page, /resolved=x\.kind!==['"]error['"]&&/);
+});
+
 test('default recipient is not exposed in public source', () => {
   assert.doesNotMatch(page + backend + history, /mintcocoajasmine@gmail\.com/i);
 });
