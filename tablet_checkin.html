@@ -179,8 +179,27 @@
   }
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
   #resultOverlay.teacher #resultCharacter {
-    width: min(34vw, 430px);
-    max-height: 80vh;
+    width: min(49vw, 650px);
+    height: 88vh;
+    max-height: none;
+    object-fit: cover;
+    object-position: center top;
+    bottom: -8vh;
+  }
+  #resultOverlay.teacher.entry::before {
+    content: '';
+    position: absolute;
+    top: 5vh;
+    right: 3vw;
+    width: min(44vw, 560px);
+    height: min(25vw, 320px);
+    border-radius: 50% 50% 0 0;
+    background: repeating-radial-gradient(ellipse at 50% 100%,
+      transparent 0 40%, #ef5350 41% 46%, #ff9800 47% 52%,
+      #ffeb3b 53% 58%, #43a047 59% 64%, #29b6f6 65% 70%,
+      #5c6bc0 71% 76%, #ab47bc 77% 82%, transparent 83% 100%);
+    opacity: .82;
+    z-index: 1;
   }
   @keyframes goodbye-wave {
     0%, 100% { transform: rotate(0deg) translateY(0); }
@@ -555,7 +574,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
       : (mailStatus === 'FAILED' ? 'show warning teacher' : 'show teacher ' + (type === '出勤' ? 'entry' : 'exit'));
     resultIcon.textContent = '';
     resultCharacter.src = isCooldownDuplicate
-      ? 'assets/checkin/teacher-duplicate.png?v=20260806'
+      ? 'assets/checkin/duplicate.png?v=429da8e'
       : (type === '出勤'
         ? 'assets/checkin/teacher-arrival.png?v=20260806'
         : 'assets/checkin/teacher-goodbye.png?v=20260806');
