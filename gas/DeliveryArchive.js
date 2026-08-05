@@ -187,10 +187,15 @@ function maybeArchiveDeliveryHistory_() {
   return archiveOldDeliveryHistory();
 }
 
+// 日次トリガーから呼ばれるが、実際の整理は上の30日間隔制御により月1回まで。
+function archiveOldDeliveryHistoryScheduled() {
+  return maybeArchiveDeliveryHistory_();
+}
+
 function setupDeliveryHistoryArchive() {
-  const handler = 'archiveOldDeliveryHistory';
+  const handler = 'archiveOldDeliveryHistoryScheduled';
   const exists = ScriptApp.getProjectTriggers().some(function(trigger) { return trigger.getHandlerFunction() === handler; });
-  if (!exists) ScriptApp.newTrigger(handler).timeBased().everyMonths(1).onMonthDay(2).atHour(3).create();
+  if (!exists) ScriptApp.newTrigger(handler).timeBased().everyDays(1).atHour(3).create();
   const result = archiveOldDeliveryHistory();
   result.triggerCreated = !exists;
   return result;
