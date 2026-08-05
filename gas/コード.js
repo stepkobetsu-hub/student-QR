@@ -1108,6 +1108,11 @@ function enqueueCheckInMail_(attendance, emails, photoFileId) {
   } catch (error) {
     console.warn(JSON.stringify({ event: 'checkin_mail_trigger_check', code: 'MAIL_WORKER_TRIGGER_CHECK_FAILED', error: sanitizeCheckInError_(error) }));
   }
+  // 人が年度整理を覚えていなくても、月1回だけ2年超の履歴を年度別保管へ移す。
+  if (typeof maybeArchiveDeliveryHistory_ === 'function') {
+    try { maybeArchiveDeliveryHistory_(); }
+    catch (error) { console.warn(JSON.stringify({event:'delivery_history_archive',code:'ARCHIVE_CHECK_FAILED',error:sanitizeCheckInError_(error)})); }
+  }
 }
 
 function markCheckInMailQueueFailed_(receiptId, errorCode) {
