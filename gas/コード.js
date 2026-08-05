@@ -115,22 +115,32 @@ function doPost(e) {
   try {
     const rawBody = e && e.postData ? String(e.postData.contents || '') : '';
     const body = JSON.parse(rawBody || '{}');
-    if (isPointManagerApiAction_(body.action)) {
+    const action = String(body.action || '');
+    const isPointManagerRequest = /^pointManager/.test(action);
+    const pointManagerAvailable = typeof isPointManagerApiAction_ === 'function' &&
+      typeof handlePointManagerApiAction_ === 'function';
+    if (isPointManagerRequest && !pointManagerAvailable) {
+      result = {
+        ok: false,
+        code: 'POINT_MANAGER_MODULE_MISSING',
+        message: 'ポイント管理機能を読み込めませんでした。管理者へ連絡してください。'
+      };
+    } else if (pointManagerAvailable && isPointManagerApiAction_(action)) {
       result = handlePointManagerApiAction_(body);
-    } else if (isMyQrApiAction_(body.action)) {
+    } else if (typeof isMyQrApiAction_ === 'function' && isMyQrApiAction_(action)) {
       result = handleMyQrApiAction_(body);
-    } else if (isBrevoWebhookRequest_(e, body)) {
+    } else if (typeof isBrevoWebhookRequest_ === 'function' && isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
-    } else if (body.action === 'checkIn') {
+    } else if (action === 'checkIn') {
       result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true);
-    } else if (body.action === 'getReceiptStatus') {
+    } else if (action === 'getReceiptStatus') {
       result = getReceiptStatus_(body.receiptId);
-    } else if (body.action === 'sendQrPdf') {
+    } else if (action === 'sendQrPdf') {
       result = sendQrPdfEmail_(body.code, body.toEmail, body.pdfBase64);
-    } else if (isDeliveryFailureAdminAction_(body.action)) {
+    } else if (typeof isDeliveryFailureAdminAction_ === 'function' && isDeliveryFailureAdminAction_(action)) {
       result = handleDeliveryFailureAdminAction_(body);
     } else {
-      result = { ok: false, message: '不明なアクションです: ' + body.action };
+      result = { ok: false, message: '不明なアクションです: ' + action };
     }
   } catch (err) {
     console.error('check-in request failed', sanitizeCheckInError_(err));
