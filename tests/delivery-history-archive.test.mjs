@@ -20,11 +20,10 @@ test('retention is a rolling two years and archives are separated by year', () =
   assert.equal(context.deliveryHistoryArchiveYear_(new Date('2023-12-31T12:00:00+09:00')), 2023);
 });
 
-test('automatic archive has both a monthly trigger and a mail-flow fallback', () => {
-  assert.match(archive, /everyMonths\(1\)\.onMonthDay\(2\)\.atHour\(3\)/);
+test('automatic archive uses a supported daily trigger with a monthly throttle', () => {
+  assert.match(archive, /archiveOldDeliveryHistoryScheduled/);
+  assert.match(archive, /everyDays\(1\)\.atHour\(3\)/);
   assert.match(archive, /DELIVERY_HISTORY_ARCHIVE_CHECK_INTERVAL_MS = 30 \* 24 \* 60 \* 60 \* 1000/);
-  assert.match(main, /typeof maybeArchiveDeliveryHistory_ === 'function'/);
-  assert.match(main, /ARCHIVE_CHECK_FAILED/);
 });
 
 test('archive copies, verifies and only then deletes source rows', () => {
