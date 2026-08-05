@@ -84,18 +84,51 @@
     color: #fff;
     text-align: center;
     padding: 30px;
+    overflow: hidden;
   }
+  #resultOverlay > * { position: relative; z-index: 2; }
   #resultOverlay.show { display: flex; }
   #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
   #resultOverlay.entry {
     color: #17324d;
-    background: linear-gradient(145deg, rgba(255, 235, 59, 0.97), rgba(129, 212, 250, 0.97));
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.95) 0 3%, transparent 3.3%),
+      radial-gradient(circle at 86% 22%, rgba(255,255,255,.85) 0 2.5%, transparent 2.8%),
+      linear-gradient(145deg, #fff45c 0%, #8be2ff 58%, #ffc6ee 100%);
   }
   #resultOverlay.exit {
-    background: linear-gradient(145deg, rgba(13, 36, 89, 0.97), rgba(74, 20, 140, 0.97));
+    background:
+      radial-gradient(circle at 8% 14%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 18% 34%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 29% 12%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 42% 25%, #d9c6ff 0 3px, transparent 4px),
+      radial-gradient(circle at 58% 10%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 72% 31%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 91% 16%, #fff 0 2px, transparent 3px),
+      linear-gradient(155deg, #061a45 0%, #102d67 55%, #31145e 100%);
+  }
+  #resultOverlay.exit::after {
+    content: '';
+    position: absolute;
+    top: 7%; right: 8%;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: #fff4b2;
+    box-shadow: -24px 10px 0 4px #0b2354;
+    z-index: 1;
   }
   #resultOverlay.duplicate {
-    background: linear-gradient(145deg, rgba(69, 76, 84, 0.97), rgba(117, 117, 117, 0.97));
+    color: #111;
+    background: #ffd928;
+  }
+  #resultOverlay.duplicate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-top: 28px solid transparent;
+    border-bottom: 28px solid transparent;
+    border-image: repeating-linear-gradient(135deg, #111 0 28px, #ffd928 28px 56px) 28;
+    z-index: 1;
   }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
@@ -117,6 +150,14 @@
   #scanHint.show { opacity: 1; }
 
   #resultIcon { font-size: 90px; margin-bottom: 10px; }
+  #resultCharacter {
+    display: none;
+    width: min(48vw, 520px);
+    max-height: 45vh;
+    object-fit: contain;
+    margin: -6px 0 2px;
+    filter: drop-shadow(0 12px 15px rgba(0,0,0,.24));
+  }
   #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
   #resultType { font-size: 30px; margin-bottom: 4px; font-weight: bold; }
   #resultTime {
@@ -161,6 +202,7 @@
 
   <div id="resultOverlay">
     <div id="resultIcon"></div>
+    <img id="resultCharacter" alt="" aria-hidden="true">
     <div id="resultName"></div>
     <div id="resultType"></div>
     <div id="resultTime"></div>
@@ -184,6 +226,7 @@ const photoCanvas = document.getElementById('photoCanvas');
 const photoCtx = photoCanvas.getContext('2d');
 const resultOverlay = document.getElementById('resultOverlay');
 const resultIcon = document.getElementById('resultIcon');
+const resultCharacter = document.getElementById('resultCharacter');
 const resultName = document.getElementById('resultName');
 const resultType = document.getElementById('resultType');
 const resultTime = document.getElementById('resultTime');
@@ -438,11 +481,13 @@ function trackMailCompletionInBackground(receiptId) {
 }
 
 function showProcessing(qrData, receiptId) {
-  resultOverlay.className = 'show';
-  resultIcon.textContent = '⏳';
-  resultName.textContent = 'QRを確認しました';
-  resultType.textContent = '';
-  resultTime.textContent = '受付処理を開始しています';
+    resultOverlay.className = 'show duplicate';
+    resultIcon.textContent = '';
+    resultCharacter.src = 'assets/checkin/duplicate.png';
+    resultCharacter.style.display = 'block';
+    resultName.textContent = '受付中です';
+    resultType.textContent = '係員が確認しています';
+    resultTime.textContent = 'そのまま少しお待ちください';
   resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
   resultPoints.textContent = '';
   resultPoints.style.display = 'none';
@@ -461,6 +506,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   if (ok && isTeacher) {
     resultOverlay.className = mailStatus === 'FAILED' ? 'show warning' : 'show success';
     resultIcon.textContent = type === '出勤' ? '🙋' : '👋';
+    resultCharacter.style.display = 'none';
     resultName.textContent = name + ' 先生';
     resultType.textContent = type + 'を受け付けました';
     resultTime.textContent = label;
@@ -471,11 +517,17 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
-    resultIcon.textContent = isCooldownDuplicate ? '✓' : (type === '入室' ? '☀️' : '🌙');
-    resultName.textContent = name + ' さん';
+    resultIcon.textContent = '';
+    resultCharacter.src = isCooldownDuplicate
+      ? 'assets/checkin/duplicate.png'
+      : (type === '入室' ? 'assets/checkin/welcome.png' : 'assets/checkin/goodbye.png');
+    resultCharacter.style.display = 'block';
+    resultName.textContent = isCooldownDuplicate
+      ? name + ' さん'
+      : (type === '入室' ? name + 'さん、こんにちは！' : name + 'さん、さようなら！');
     resultType.textContent = isCooldownDuplicate
       ? name + 'は受付済みです'
-      : (type === '入室' ? '入室しました' : '退室しました');
+      : (type === '入室' ? 'WELCOME！ 入室しました' : '退室しました');
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
       ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
@@ -489,6 +541,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   } else {
     resultOverlay.className = 'show error';
     resultIcon.textContent = '⚠️';
+    resultCharacter.style.display = 'none';
     resultName.textContent = errorTitle(errorCode);
     resultType.textContent = '';
     resultTime.textContent = '';
