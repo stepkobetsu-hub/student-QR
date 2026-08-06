@@ -321,10 +321,10 @@ const RESCAN_COOLDOWN_MS = 5000;
 const LOCAL_DUPLICATE_WINDOW_MS = 60 * 1000;
 const NO_QR_HINT_MS = 4000;
 const NO_QR_ERROR_MS = 10000;
-const FRAME_INTERVAL_MS = 1000 / 12;
+const FRAME_INTERVAL_MS = 1000 / 20;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const SCAN_RELEASE_MS = 300;
+const SCAN_RELEASE_MS = 0;
 const DUPLICATE_RESUME_MS = 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
@@ -406,7 +406,7 @@ function playErrorSound() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } },
       audio: false
     });
     video.srcObject = stream;
@@ -441,7 +441,7 @@ function scanLoop(frameTime) {
   lastFrameAt = frameTime;
 
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
+    const scale = Math.min(1, 640 / video.videoWidth, 360 / video.videoHeight);
     canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
     canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -503,6 +503,10 @@ async function handleQrDetected(qrData) {
   const receiptId = createReceiptId();
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
+  // QRを検出したら写真変換より先に反応し、次の読取枠を直ちに解放する。
+  showProcessing(qrData, receiptId);
+  await new Promise(resolve => setTimeout(resolve, 0));
+
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
   const photoScale = Math.min(1, 360 / video.videoWidth);
   photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
@@ -510,7 +514,6 @@ async function handleQrDetected(qrData) {
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
   const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
 
-  showProcessing(qrData, receiptId);
   let slowTimer = setTimeout(() => {
     if (isCurrentScanFeedback(scanToken, feedbackDeadline)) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
   }, SLOW_NOTICE_MS);

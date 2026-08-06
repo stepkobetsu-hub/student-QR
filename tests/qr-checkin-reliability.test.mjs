@@ -61,7 +61,10 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(page, /trackMailCompletionInBackground\(receiptId\)/);
   assert.match(page, /void waitForMailCompletion\(receiptId, 7000\)/);
   assert.doesNotMatch(page, /await waitForMailCompletion\(receiptId/);
-  assert.match(page, /SCAN_RELEASE_MS = 300/);
+  assert.match(page, /SCAN_RELEASE_MS = 0/);
+  assert.match(page, /FRAME_INTERVAL_MS = 1000 \/ 20/);
+  assert.match(page, /640 \/ video\.videoWidth, 360 \/ video\.videoHeight/);
+  assert.match(page, /showProcessing\(qrData, receiptId\);[\s\S]*await new Promise\(resolve => setTimeout\(resolve, 0\)\);[\s\S]*photoCanvas\.toDataURL/);
   assert.match(page, /DUPLICATE_RESUME_MS = 1000/);
   assert.match(page, /setTimeout\(\(\) => releaseScannerForNextPerson\(scanToken\), SCAN_RELEASE_MS\)/);
   assert.match(page, /isCurrentScanFeedback\(scanToken, feedbackDeadline\)/);
