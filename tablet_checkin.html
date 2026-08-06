@@ -255,6 +255,19 @@
     background: #4caf50;
   }
   #statusDot.error { background: #e53935; }
+  #pendingBadge {
+    position: absolute;
+    top: 14px; right: 14px;
+    display: none;
+    padding: 7px 12px;
+    border-radius: 18px;
+    background: #c62828;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 5;
+  }
+  #pendingBadge.show { display: block; }
 </style>
 </head>
 <body>
@@ -284,6 +297,7 @@
   </div>
 
   <div id="statusDot"></div>
+  <div id="pendingBadge" role="status" aria-live="polite"></div>
   <div id="scanHint" role="status" aria-live="polite"></div>
 </div>
 
@@ -308,6 +322,7 @@ const resultPoints = document.getElementById('resultPoints');
 const statusDot = document.getElementById('statusDot');
 const clockEl = document.getElementById('clock');
 const scanHint = document.getElementById('scanHint');
+const pendingBadge = document.getElementById('pendingBadge');
 
 let scanning = true;
 let requestInFlight = false;
@@ -328,6 +343,11 @@ const SCAN_RELEASE_MS = 0;
 const DUPLICATE_RESUME_MS = 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
+const PENDING_CHECKIN_STORAGE_KEY = 'step_pending_checkins_v1';
+const PENDING_RETRY_INTERVAL_MS = 10000;
+const PENDING_AUTO_RETRY_LIMIT_MS = 30 * 60 * 1000;
+const PENDING_MAX_ITEMS = 20;
+let pendingRetryRunning = false;
 
 // 次の読取を妨げないよう、結果表示用の写真はアプリ起動時に先読みしておく。
 const exitPhotoPreload = new Image();
@@ -513,6 +533,7 @@ async function handleQrDetected(qrData) {
   photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
   const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
+  savePendingCheckIn({ receiptId, qrData, photoBase64, clientTimings, createdAt: Date.now(), attempts: 0 });
 
   let slowTimer = setTimeout(() => {
     if (isCurrentScanFeedback(scanToken, feedbackDeadline)) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
@@ -525,6 +546,7 @@ async function handleQrDetected(qrData) {
     clientTimings.responseReceivedAt = new Date().toISOString();
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
+    settlePendingCheckIn(receiptId, data);
     rememberLocalAcceptedScan(qrData, data);
     if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(data);
     if (data && data.attendanceSaved) {
@@ -535,6 +557,7 @@ async function handleQrDetected(qrData) {
   } catch (err) {
     if (err && err.name === 'AbortError') {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
+      settlePendingCheckIn(receiptId, status);
       rememberLocalAcceptedScan(qrData, status);
       if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(status);
       if (status && status.attendanceSaved) {
@@ -576,6 +599,102 @@ function createReceiptId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
   return 'qr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
 }
+
+function loadPendingCheckIns() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PENDING_CHECKIN_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(item => item && item.receiptId && item.qrData) : [];
+  } catch (ignore) {
+    return [];
+  }
+}
+
+function writePendingCheckIns(items) {
+  const normalized = items.slice(-PENDING_MAX_ITEMS);
+  try {
+    localStorage.setItem(PENDING_CHECKIN_STORAGE_KEY, JSON.stringify(normalized));
+  } catch (error) {
+    // 容量不足時は写真を外しても受付IDとQRを保持する。
+    const compact = normalized.map(item => Object.assign({}, item, { photoBase64: '' }));
+    try { localStorage.setItem(PENDING_CHECKIN_STORAGE_KEY, JSON.stringify(compact)); } catch (ignore) {}
+  }
+  updatePendingBadge();
+}
+
+function savePendingCheckIn(item) {
+  const items = loadPendingCheckIns().filter(saved => saved.receiptId !== item.receiptId);
+  items.push(item);
+  writePendingCheckIns(items);
+}
+
+function removePendingCheckIn(receiptId) {
+  writePendingCheckIns(loadPendingCheckIns().filter(item => item.receiptId !== receiptId));
+}
+
+function settlePendingCheckIn(receiptId, result) {
+  if (result && result.attendanceSaved) {
+    removePendingCheckIn(receiptId);
+    return;
+  }
+  const retryable = !result || ['BUSY', 'TIMEOUT', 'INTERNAL_ERROR', 'NETWORK_ERROR'].includes(String(result.code || ''));
+  if (!retryable) removePendingCheckIn(receiptId);
+}
+
+function updatePendingBadge() {
+  if (!pendingBadge) return;
+  const count = loadPendingCheckIns().length;
+  pendingBadge.textContent = count ? '未送信受付 ' + count + '件（自動再送）' : '';
+  pendingBadge.classList.toggle('show', count > 0);
+}
+
+async function retryPendingCheckIns() {
+  if (pendingRetryRunning || !navigator.onLine) return;
+  const items = loadPendingCheckIns();
+  if (!items.length) return;
+  pendingRetryRunning = true;
+  try {
+    const item = items[0];
+    try {
+      const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId: item.receiptId }, 5000);
+      if (status && status.attendanceSaved) {
+        removePendingCheckIn(item.receiptId);
+        return;
+      }
+      // 長時間後の打刻時刻ずれを防ぐため、自動再登録は受付から30分以内だけ行う。
+      if (Date.now() - Number(item.createdAt || 0) > PENDING_AUTO_RETRY_LIMIT_MS) {
+        updatePendingBadge();
+        return;
+      }
+      const retried = await postWithTimeout({
+        action: 'checkIn',
+        qrData: item.qrData,
+        photoBase64: item.photoBase64 || '',
+        receiptId: item.receiptId,
+        clientTimings: item.clientTimings || {},
+        retry: true
+      }, 12000);
+      settlePendingCheckIn(item.receiptId, retried);
+      if (retried && retried.attendanceSaved && (retried.mailStatus === 'PENDING' || retried.mailStatus === 'PROCESSING')) {
+        trackMailCompletionInBackground(item.receiptId);
+      }
+    } catch (ignore) {
+      const current = loadPendingCheckIns();
+      const target = current.find(saved => saved.receiptId === item.receiptId);
+      if (target) {
+        target.attempts = Number(target.attempts || 0) + 1;
+        target.lastAttemptAt = Date.now();
+        writePendingCheckIns(current);
+      }
+    }
+  } finally {
+    pendingRetryRunning = false;
+  }
+}
+
+updatePendingBadge();
+setInterval(() => void retryPendingCheckIns(), PENDING_RETRY_INTERVAL_MS);
+window.addEventListener('online', () => void retryPendingCheckIns());
+setTimeout(() => void retryPendingCheckIns(), 1500);
 
 async function postWithTimeout(payload, timeoutMs) {
   const controller = new AbortController();
