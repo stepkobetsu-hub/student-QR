@@ -327,6 +327,7 @@ const SUCCESS_RESUME_MS = 2500;
 const DUPLICATE_RESUME_MS = 2500;
 const MAIL_FAILURE_RESUME_MS = 3500;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
+const PHOTO_EXIT_PROBABILITY = 1.0; // 表示確認中：退室時100％（確認後0.2へ戻す）
 
 // 退室結果は2.5秒しか表示しないため、写真版をアプリ起動時に先読みしておく。
 const exitPhotoPreload = new Image();
@@ -703,7 +704,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultPoints.style.display = 'none';
   } else if (ok) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
-    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < 0.2;
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < PHOTO_EXIT_PROBABILITY;
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
