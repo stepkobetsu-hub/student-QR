@@ -340,8 +340,8 @@ const NO_QR_ERROR_MS = 10000;
 const FRAME_INTERVAL_MS = 1000 / 20;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const SCAN_RELEASE_MS = 0;
-const DUPLICATE_RESUME_MS = 1000;
+const RESULT_DISPLAY_MS = 2000;
+const DUPLICATE_RESUME_MS = 1500;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
 const PENDING_CHECKIN_STORAGE_KEY = 'step_pending_checkins_v1';
@@ -513,18 +513,20 @@ async function handleQrDetected(qrData) {
   if (requestInFlight) return;
   requestInFlight = true;
   const scanToken = ++activeScanToken;
-  const feedbackDeadline = Date.now() + SCAN_RELEASE_MS;
-  setTimeout(() => releaseScannerForNextPerson(scanToken), SCAN_RELEASE_MS);
 
   if (!isSupportedQrFormat(qrData)) {
     showResult(false, null, null, null, 'NOT_STARTED', null, 'QRの形式が正しくありません', false, 'INVALID_QR_FORMAT');
+    finishAndResume(DUPLICATE_RESUME_MS);
     return;
   }
+
+  const feedbackDeadline = Date.now() + RESULT_DISPLAY_MS;
+  setTimeout(() => releaseScannerForNextPerson(scanToken), RESULT_DISPLAY_MS);
 
   const receiptId = createReceiptId();
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
-  // 通常受付では全画面表示を出さず、次の読取枠を直ちに解放する。
+  // 完了画面を先に描画させてから、写真作成と通信をバックグラウンドで始める。
   await new Promise(resolve => setTimeout(resolve, 0));
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
@@ -536,7 +538,7 @@ async function handleQrDetected(qrData) {
   savePendingCheckIn({ receiptId, qrData, photoBase64, clientTimings, createdAt: Date.now(), attempts: 0 });
 
   let slowTimer = setTimeout(() => {
-    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
+    if (scanToken === activeScanToken) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
   }, SLOW_NOTICE_MS);
 
   try {
@@ -548,7 +550,9 @@ async function handleQrDetected(qrData) {
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
     settlePendingCheckIn(receiptId, data);
     rememberLocalAcceptedScan(qrData, data);
-    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(data);
+    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
+      renderServerResult(data);
+    }
     if (data && data.attendanceSaved) {
       if (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING') {
         trackMailCompletionInBackground(receiptId);
@@ -559,7 +563,9 @@ async function handleQrDetected(qrData) {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
       settlePendingCheckIn(receiptId, status);
       rememberLocalAcceptedScan(qrData, status);
-      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(status);
+      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
+        renderServerResult(status);
+      }
       if (status && status.attendanceSaved) {
         if (status.mailStatus === 'PENDING' || status.mailStatus === 'PROCESSING') {
           trackMailCompletionInBackground(receiptId);
@@ -695,6 +701,14 @@ updatePendingBadge();
 setInterval(() => void retryPendingCheckIns(), PENDING_RETRY_INTERVAL_MS);
 window.addEventListener('online', () => void retryPendingCheckIns());
 setTimeout(() => void retryPendingCheckIns(), 1500);
+
+// 始業時の最初のQRでApps Scriptの起動待ちが起きないよう、画面表示中に温めておく。
+function warmCheckInApi() {
+  const url = API_URL + '?action=myQrHealth&_=' + Date.now();
+  void fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+}
+setTimeout(warmCheckInApi, 300);
+setInterval(warmCheckInApi, 3 * 60 * 1000);
 
 async function postWithTimeout(payload, timeoutMs) {
   const controller = new AbortController();
