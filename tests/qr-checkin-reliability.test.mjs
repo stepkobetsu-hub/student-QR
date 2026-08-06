@@ -53,21 +53,28 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(backend, /mailAppCompletedAt/);
   assert.match(backend, /CHECKIN_PHOTO_CACHE_PREFIX/);
   assert.match(backend, /CacheService\.getScriptCache\(\)\.put\(cacheKey, raw, 600\)/);
-  assert.match(backend, /processCheckInMailQueueReceipt_\(receipt, 3000\)/);
-  assert.match(backend, /cached\.mailStatus === 'PENDING'[\s\S]*processCheckInMailQueueReceipt_\(receipt, 3000\)/);
+  assert.doesNotMatch(backend, /const immediate = processCheckInMailQueueReceipt_\(receipt, 3000\)/);
+  assert.doesNotMatch(backend, /cached\.mailStatus === 'PENDING'[\s\S]*processCheckInMailQueueReceipt_\(receipt, 3000\)/);
   assert.match(backend, /ensureCheckInMailWorkerTrigger_/);
   assert.match(backend, /MAIL_WORKER_TRIGGER_CHECK_FAILED/);
   assert.match(backend, /try \{[\s\S]*ensureCheckInMailWorkerTrigger_\(\);[\s\S]*\} catch \(error\)/);
   assert.match(page, /trackMailCompletionInBackground\(receiptId\)/);
   assert.match(page, /void waitForMailCompletion\(receiptId, 7000\)/);
   assert.doesNotMatch(page, /await waitForMailCompletion\(receiptId/);
-  assert.match(page, /SUCCESS_RESUME_MS = 1500/);
-  assert.match(page, /resumeDelayMs = data\.mailStatus === 'FAILED' \? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS/);
+  assert.match(page, /SUCCESS_RESUME_MS = 2500/);
+  assert.match(page, /data\.duplicate[\s\S]*DUPLICATE_RESUME_MS[\s\S]*MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS/);
   assert.match(page, /受付が完了しました。次のQRを読み取れます/);
   assert.match(page, /MailApp一時送信/);
   assert.match(backend, /sendApprovedMailAppFallbackTestToConfiguredSender/);
   assert.match(backend, /CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT/);
   assert.match(page, /入退室記録は完了しましたが、通知メールの送信に失敗しました/);
+});
+
+test('tablet sends a smaller photo and mail remains fully queued', () => {
+  assert.match(page, /360 \/ video\.videoWidth/);
+  assert.match(page, /toDataURL\('image\/jpeg', 0\.35\)/);
+  assert.match(backend, /送信は1分間隔のワーカーへ任せ/);
+  assert.match(backend, /everyMinutes\(1\)/);
 });
 
 test('teacher notifications use column P and a versioned cache record', () => {
