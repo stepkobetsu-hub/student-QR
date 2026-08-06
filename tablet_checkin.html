@@ -443,11 +443,11 @@ async function handleQrDetected(qrData) {
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
-  const photoScale = Math.min(1, 480 / video.videoWidth);
+  const photoScale = Math.min(1, 360 / video.videoWidth);
   photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
   photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.45);
+  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
 
   showProcessing(qrData, receiptId);
   let resumeDelayMs = 4500;
