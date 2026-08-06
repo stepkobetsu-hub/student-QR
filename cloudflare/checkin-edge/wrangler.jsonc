@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "step-checkin-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "CAMPUS_CHECKIN", "class_name": "CampusCheckin" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CampusCheckin"] }
+  ],
+  "triggers": {
+    "crons": ["0 22 * * *"]
+  },
+  "env": {
+    "staging": {
+      "name": "step-checkin-edge-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io"
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "CAMPUS_CHECKIN", "class_name": "CampusCheckin" }
+        ]
+      }
+    },
+    "production": {
+      "name": "step-checkin-edge-production",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io"
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "CAMPUS_CHECKIN", "class_name": "CampusCheckin" }
+        ]
+      }
+    }
+  }
+}
