@@ -316,6 +316,7 @@ let lastScannedTime = 0;
 let lastAcceptedScan = null;
 let scanStartedAt = Date.now();
 let lastFrameAt = 0;
+let activeScanToken = 0;
 const RESCAN_COOLDOWN_MS = 5000;
 const LOCAL_DUPLICATE_WINDOW_MS = 60 * 1000;
 const NO_QR_HINT_MS = 4000;
@@ -323,9 +324,8 @@ const NO_QR_ERROR_MS = 10000;
 const FRAME_INTERVAL_MS = 1000 / 12;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const SUCCESS_RESUME_MS = 1000;
+const SCAN_RELEASE_MS = 1000;
 const DUPLICATE_RESUME_MS = 1000;
-const MAIL_FAILURE_RESUME_MS = 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
 
@@ -491,10 +491,12 @@ function scanLoop(frameTime) {
 async function handleQrDetected(qrData) {
   if (requestInFlight) return;
   requestInFlight = true;
+  const scanToken = ++activeScanToken;
+  const feedbackDeadline = Date.now() + SCAN_RELEASE_MS;
+  setTimeout(() => releaseScannerForNextPerson(scanToken), SCAN_RELEASE_MS);
 
   if (!isSupportedQrFormat(qrData)) {
     showResult(false, null, null, null, 'NOT_STARTED', null, 'QRの形式が正しくありません', false, 'INVALID_QR_FORMAT');
-    finishAndResume(4500);
     return;
   }
 
@@ -509,9 +511,8 @@ async function handleQrDetected(qrData) {
   const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
 
   showProcessing(qrData, receiptId);
-  let resumeDelayMs = 4500;
   let slowTimer = setTimeout(() => {
-    resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
+    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
   }, SLOW_NOTICE_MS);
 
   try {
@@ -522,11 +523,8 @@ async function handleQrDetected(qrData) {
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
     rememberLocalAcceptedScan(qrData, data);
-    renderServerResult(data);
+    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(data);
     if (data && data.attendanceSaved) {
-      resumeDelayMs = data.duplicate
-        ? DUPLICATE_RESUME_MS
-        : (data.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
       if (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING') {
         trackMailCompletionInBackground(receiptId);
       }
@@ -535,23 +533,35 @@ async function handleQrDetected(qrData) {
     if (err && err.name === 'AbortError') {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
       rememberLocalAcceptedScan(qrData, status);
-      renderServerResult(status);
+      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) renderServerResult(status);
       if (status && status.attendanceSaved) {
-        resumeDelayMs = status.duplicate
-          ? DUPLICATE_RESUME_MS
-          : (status.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
         if (status.mailStatus === 'PENDING' || status.mailStatus === 'PROCESSING') {
           trackMailCompletionInBackground(receiptId);
         }
       }
     } else {
-      showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
+      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
+        showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
+      } else {
+        playErrorSound();
+      }
     }
   } finally {
     clearTimeout(slowTimer);
   }
+}
 
-  finishAndResume(resumeDelayMs);
+function isCurrentScanFeedback(scanToken, feedbackDeadline) {
+  return scanToken === activeScanToken && Date.now() < feedbackDeadline;
+}
+
+function releaseScannerForNextPerson(scanToken) {
+  if (scanToken !== activeScanToken) return;
+  resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate', 'teacher');
+  requestInFlight = false;
+  scanning = true;
+  scanStartedAt = Date.now();
+  scanHint.classList.remove('show');
 }
 
 function isSupportedQrFormat(value) {

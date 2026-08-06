@@ -61,10 +61,11 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(page, /trackMailCompletionInBackground\(receiptId\)/);
   assert.match(page, /void waitForMailCompletion\(receiptId, 7000\)/);
   assert.doesNotMatch(page, /await waitForMailCompletion\(receiptId/);
-  assert.match(page, /SUCCESS_RESUME_MS = 1000/);
+  assert.match(page, /SCAN_RELEASE_MS = 1000/);
   assert.match(page, /DUPLICATE_RESUME_MS = 1000/);
-  assert.match(page, /MAIL_FAILURE_RESUME_MS = 1000/);
-  assert.match(page, /data\.duplicate[\s\S]*DUPLICATE_RESUME_MS[\s\S]*MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS/);
+  assert.match(page, /setTimeout\(\(\) => releaseScannerForNextPerson\(scanToken\), SCAN_RELEASE_MS\)/);
+  assert.match(page, /isCurrentScanFeedback\(scanToken, feedbackDeadline\)/);
+  assert.doesNotMatch(page, /finishAndResume\(resumeDelayMs\)/);
   assert.match(page, /受付が完了しました。次のQRを読み取れます/);
   assert.match(page, /MailApp一時送信/);
   assert.match(backend, /sendApprovedMailAppFallbackTestToConfiguredSender/);
