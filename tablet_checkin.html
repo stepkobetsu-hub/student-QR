@@ -355,6 +355,43 @@ function playBeep() {
   }
 }
 
+function playToneSequence(tones) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') void audioCtx.resume();
+    const startedAt = audioCtx.currentTime + 0.02;
+    tones.forEach((tone, index) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const at = startedAt + index * tone.gap;
+      osc.type = tone.type || 'sine';
+      osc.frequency.setValueAtTime(tone.hz, at);
+      gain.gain.setValueAtTime(tone.volume || 0.22, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + tone.duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + tone.duration);
+    });
+  } catch (ignore) {}
+}
+
+function playSuccessSound() {
+  playToneSequence([
+    { hz: 740, duration: 0.16, gap: 0.18, volume: 0.2 },
+    { hz: 1040, duration: 0.24, gap: 0.18, volume: 0.24 }
+  ]);
+  if (navigator.vibrate) navigator.vibrate(80);
+}
+
+function playErrorSound() {
+  playToneSequence([
+    { hz: 260, duration: 0.22, gap: 0.25, volume: 0.3, type: 'square' },
+    { hz: 190, duration: 0.22, gap: 0.25, volume: 0.3, type: 'square' },
+    { hz: 150, duration: 0.34, gap: 0.25, volume: 0.32, type: 'square' }
+  ]);
+  if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+}
+
 // カメラ起動
 async function startCamera() {
   try {
@@ -470,7 +507,7 @@ async function handleQrDetected(qrData) {
   try {
     clientTimings.requestStartedAt = new Date().toISOString();
     const requestStartedMs = performance.now();
-    const data = await postWithTimeout({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings }, REQUEST_TIMEOUT_MS);
+    const data = await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings });
     clientTimings.responseReceivedAt = new Date().toISOString();
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
@@ -532,6 +569,18 @@ async function postWithTimeout(payload, timeoutMs) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function postCheckInWithBusyRetry(payload) {
+  const retryDelays = [350, 700, 1200, 1800];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    const data = await postWithTimeout(Object.assign({}, payload, { retry: attempt > 0 }), REQUEST_TIMEOUT_MS);
+    if (!data || data.code !== 'BUSY') return data;
+    if (attempt === retryDelays.length) return data;
+    resultSub.textContent = 'ただいま混み合っています。順番に受付しています…（' + (attempt + 1) + '回目）';
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+  }
+  return { ok: false, code: 'BUSY', attendanceSaved: false, message: '受付が混み合っています' };
 }
 
 async function resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings) {
@@ -683,6 +732,8 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultSub.textContent = errorMsg || 'もう一度お試しください';
     resultPoints.style.display = 'none';
   }
+  if (ok) playSuccessSound();
+  else playErrorSound();
 }
 
 function mailStatusText(status, code, provider) {

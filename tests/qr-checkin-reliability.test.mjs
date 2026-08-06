@@ -84,7 +84,7 @@ test('teacher notifications use column P and a versioned cache record', () => {
   assert.match(backend, /findTeacherByQrCached_/);
   assert.match(backend, /email: String\(values\[TEACHER_COL_EMAIL - 1\]/);
   assert.match(backend, /cache\.remove\('CHECKIN_QR_ROW_V1:teacher:'/);
-  assert.match(backend, /notifyEmails = \[teacherEmailState\.email\]/);
+  assert.match(backend, /notifyEmails = \[teacherEmailStateBeforeLock\.email\]/);
 });
 
 test('teacher mail errors are distinct and attendance remains successful', () => {
@@ -97,9 +97,22 @@ test('teacher mail errors are distinct and attendance remains successful', () =>
 });
 
 test('server uses a bounded lock and one-row writes for attendance', () => {
-  assert.match(backend, /tryLock\(3000\)/);
+  assert.match(backend, /tryLock\(5000\)/);
   assert.match(backend, /getRange\(logRow, 1, 1, newRow\.length\)\.setValues/);
   assert.doesNotMatch(backend.slice(backend.indexOf('function handleCheckIn_'), backend.indexOf('function sendEmailViaBrevo')), /UrlFetchApp\.fetch/);
+});
+
+test('burst check-ins shorten lock time, retry BUSY safely, and use distinct result sounds', () => {
+  const handler = backend.slice(backend.indexOf('function handleCheckIn_'), backend.indexOf('function getSharedDuplicateAttendance_'));
+  assert.match(handler, /findQrRowCached_[\s\S]*const lock = LockService\.getScriptLock\(\)/);
+  assert.match(handler, /findTeacherByQrCached_[\s\S]*const lock = LockService\.getScriptLock\(\)/);
+  assert.match(page, /postCheckInWithBusyRetry/);
+  assert.match(page, /data\.code !== 'BUSY'/);
+  assert.match(page, /retry: attempt > 0/);
+  assert.match(page, /順番に受付しています/);
+  assert.match(page, /function playSuccessSound\(\)/);
+  assert.match(page, /function playErrorSound\(\)/);
+  assert.match(page, /if \(ok\) playSuccessSound\(\);[\s\S]*else playErrorSound\(\);/);
 });
 
 test('normal requests use receipt and daily-state caches before persistent scans', () => {

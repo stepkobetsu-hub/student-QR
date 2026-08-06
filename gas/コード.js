@@ -729,11 +729,33 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     return prior;
   }
 
+  // マスタ検索は同時実行しても安全な読み取り処理なので、保存ロックの外で完了させる。
+  // 混雑時にロックを占有する時間を、重複確認と1行保存だけに限定する。
+  let subjectKind = '';
+  let studentValues = null;
+  let teacher = null;
+  let notifyEmails = [];
+  const masterSheet = getMasterSheet_();
+  const studentRow = findQrRowCached_(masterSheet, COL_QR_DATA, qr, 'student');
+  if (studentRow !== -1) {
+    const width = Math.max(masterSheet.getLastColumn(), 70);
+    studentValues = masterSheet.getRange(studentRow, 1, 1, width).getValues()[0];
+    notifyEmails = getNotifyEmailsFromValues_(studentValues);
+    subjectKind = 'student';
+  } else {
+    const teacherSheet = getTeacherMasterSheet_();
+    teacher = findTeacherByQrCached_(teacherSheet, qr);
+    if (!teacher) return checkInFailure_('TEACHER_NOT_FOUND', '講師の登録対象が見つかりません', trace);
+    const teacherEmailStateBeforeLock = classifyTeacherEmail_(teacher.email);
+    if (teacherEmailStateBeforeLock.code === 'OK') notifyEmails = [teacherEmailStateBeforeLock.email];
+    subjectKind = 'teacher';
+  }
+  traceMark_(trace, 'subjectLookup');
+
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(3000)) return checkInFailure_('BUSY', 'ただいま別の受付を保存中です。もう一度お試しください', trace);
+  if (!lock.tryLock(5000)) return checkInFailure_('BUSY', 'ただいま受付が混み合っています。順番に自動受付します', trace);
 
   let attendance;
-  let notifyEmails = [];
   let photoFileId = '';
   try {
     const repeated = getCachedReceiptStatus_(receipt) || (isRetry ? getReceiptStatus_(receipt, true) : null);
@@ -746,29 +768,18 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       return repeated;
     }
 
-    const masterSheet = getMasterSheet_();
-    const studentRow = findQrRowCached_(masterSheet, COL_QR_DATA, qr, 'student');
-    if (studentRow !== -1) {
-      const width = Math.max(masterSheet.getLastColumn(), 70);
-      const values = masterSheet.getRange(studentRow, 1, 1, width).getValues()[0];
-      traceMark_(trace, 'subjectLookup');
-      notifyEmails = getNotifyEmailsFromValues_(values);
-      const code = String(values[COL_STUDENT_ID - 1] || '').trim();
+    if (subjectKind === 'student') {
+      const code = String(studentValues[COL_STUDENT_ID - 1] || '').trim();
       const recentAttendance = getSharedDuplicateAttendance_('student', code, receipt);
       if (recentAttendance) {
         traceMark_(trace, 'sharedDuplicateGuard');
         attendance = recentAttendance;
       } else {
-        attendance = saveStudentAttendance_(values, receipt, trace, notifyEmails.length > 0);
+        attendance = saveStudentAttendance_(studentValues, receipt, trace, notifyEmails.length > 0);
         if (!attendance.duplicate) rememberSharedDuplicateAttendance_('student', code, attendance);
       }
     } else {
-      const teacherSheet = getTeacherMasterSheet_();
-      const teacher = findTeacherByQrCached_(teacherSheet, qr);
-      if (!teacher) return checkInFailure_('TEACHER_NOT_FOUND', '講師の登録対象が見つかりません', trace);
-      traceMark_(trace, 'subjectLookup');
       const teacherEmailState = classifyTeacherEmail_(teacher.email);
-      if (teacherEmailState.code === 'OK') notifyEmails = [teacherEmailState.email];
       const recentAttendance = getSharedDuplicateAttendance_('teacher', teacher.code, receipt);
       if (recentAttendance) {
         traceMark_(trace, 'sharedDuplicateGuard');
