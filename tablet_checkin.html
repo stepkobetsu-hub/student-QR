@@ -6,9 +6,7 @@
 <meta name="theme-color" content="#2e7d5b">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<link rel="preload" as="image" href="assets/checkin/goodbye-director-night-fast.webp?v=20260807" type="image/webp" fetchpriority="high">
 <title>入退室 | Step個別指導ステップ</title>
-<!-- public-build: 20260807-no-processing-overlay -->
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -256,19 +254,6 @@
     background: #4caf50;
   }
   #statusDot.error { background: #e53935; }
-  #pendingBadge {
-    position: absolute;
-    top: 14px; right: 14px;
-    display: none;
-    padding: 7px 12px;
-    border-radius: 18px;
-    background: #c62828;
-    color: #fff;
-    font-size: 14px;
-    font-weight: bold;
-    z-index: 5;
-  }
-  #pendingBadge.show { display: block; }
 </style>
 </head>
 <body>
@@ -298,7 +283,6 @@
   </div>
 
   <div id="statusDot"></div>
-  <div id="pendingBadge" role="status" aria-live="polite"></div>
   <div id="scanHint" role="status" aria-live="polite"></div>
 </div>
 
@@ -323,7 +307,6 @@ const resultPoints = document.getElementById('resultPoints');
 const statusDot = document.getElementById('statusDot');
 const clockEl = document.getElementById('clock');
 const scanHint = document.getElementById('scanHint');
-const pendingBadge = document.getElementById('pendingBadge');
 
 let scanning = true;
 let requestInFlight = false;
@@ -332,30 +315,16 @@ let lastScannedTime = 0;
 let lastAcceptedScan = null;
 let scanStartedAt = Date.now();
 let lastFrameAt = 0;
-let activeScanToken = 0;
 const RESCAN_COOLDOWN_MS = 5000;
 const LOCAL_DUPLICATE_WINDOW_MS = 60 * 1000;
 const NO_QR_HINT_MS = 4000;
 const NO_QR_ERROR_MS = 10000;
-const FRAME_INTERVAL_MS = 1000 / 20;
+const FRAME_INTERVAL_MS = 1000 / 12;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const RESULT_DISPLAY_MS = 2000;
-const DUPLICATE_RESUME_MS = 1500;
-const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
-const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
-const PENDING_CHECKIN_STORAGE_KEY = 'step_pending_checkins_v1';
-const PENDING_RETRY_INTERVAL_MS = 10000;
-const PENDING_AUTO_RETRY_LIMIT_MS = 30 * 60 * 1000;
-const PENDING_MAX_ITEMS = 20;
-let pendingRetryRunning = false;
-
-// 次の読取を妨げないよう、結果表示用の写真はアプリ起動時に先読みしておく。
-const exitPhotoPreload = new Image();
-exitPhotoPreload.decoding = 'async';
-exitPhotoPreload.fetchPriority = 'high';
-exitPhotoPreload.src = PHOTO_EXIT_ASSET;
-if (typeof exitPhotoPreload.decode === 'function') void exitPhotoPreload.decode().catch(() => {});
+const SUCCESS_RESUME_MS = 2500;
+const DUPLICATE_RESUME_MS = 2500;
+const MAIL_FAILURE_RESUME_MS = 3500;
 
 // 時計表示
 function updateClock() {
@@ -427,7 +396,7 @@ function playErrorSound() {
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 } },
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
       audio: false
     });
     video.srcObject = stream;
@@ -462,7 +431,7 @@ function scanLoop(frameTime) {
   lastFrameAt = frameTime;
 
   if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    const scale = Math.min(1, 640 / video.videoWidth, 360 / video.videoHeight);
+    const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
     canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
     canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -512,22 +481,15 @@ function scanLoop(frameTime) {
 async function handleQrDetected(qrData) {
   if (requestInFlight) return;
   requestInFlight = true;
-  const scanToken = ++activeScanToken;
 
   if (!isSupportedQrFormat(qrData)) {
     showResult(false, null, null, null, 'NOT_STARTED', null, 'QRの形式が正しくありません', false, 'INVALID_QR_FORMAT');
-    finishAndResume(DUPLICATE_RESUME_MS);
+    finishAndResume(4500);
     return;
   }
 
-  const feedbackDeadline = Date.now() + RESULT_DISPLAY_MS;
-  setTimeout(() => releaseScannerForNextPerson(scanToken), RESULT_DISPLAY_MS);
-
   const receiptId = createReceiptId();
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
-
-  // 完了画面を先に描画させてから、写真作成と通信をバックグラウンドで始める。
-  await new Promise(resolve => setTimeout(resolve, 0));
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
   const photoScale = Math.min(1, 360 / video.videoWidth);
@@ -535,10 +497,11 @@ async function handleQrDetected(qrData) {
   photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
   const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
-  savePendingCheckIn({ receiptId, qrData, photoBase64, clientTimings, createdAt: Date.now(), attempts: 0 });
 
+  showProcessing(qrData, receiptId);
+  let resumeDelayMs = 4500;
   let slowTimer = setTimeout(() => {
-    if (scanToken === activeScanToken) resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
+    resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
   }, SLOW_NOTICE_MS);
 
   try {
@@ -548,12 +511,12 @@ async function handleQrDetected(qrData) {
     clientTimings.responseReceivedAt = new Date().toISOString();
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
-    settlePendingCheckIn(receiptId, data);
     rememberLocalAcceptedScan(qrData, data);
-    if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
-      renderServerResult(data);
-    }
+    renderServerResult(data);
     if (data && data.attendanceSaved) {
+      resumeDelayMs = data.duplicate
+        ? DUPLICATE_RESUME_MS
+        : (data.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
       if (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING') {
         trackMailCompletionInBackground(receiptId);
       }
@@ -561,39 +524,24 @@ async function handleQrDetected(qrData) {
   } catch (err) {
     if (err && err.name === 'AbortError') {
       const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
-      settlePendingCheckIn(receiptId, status);
       rememberLocalAcceptedScan(qrData, status);
-      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
-        renderServerResult(status);
-      }
+      renderServerResult(status);
       if (status && status.attendanceSaved) {
+        resumeDelayMs = status.duplicate
+          ? DUPLICATE_RESUME_MS
+          : (status.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
         if (status.mailStatus === 'PENDING' || status.mailStatus === 'PROCESSING') {
           trackMailCompletionInBackground(receiptId);
         }
       }
     } else {
-      if (isCurrentScanFeedback(scanToken, feedbackDeadline)) {
-        showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
-      } else {
-        playErrorSound();
-      }
+      showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
     }
   } finally {
     clearTimeout(slowTimer);
   }
-}
 
-function isCurrentScanFeedback(scanToken, feedbackDeadline) {
-  return scanToken === activeScanToken && Date.now() < feedbackDeadline;
-}
-
-function releaseScannerForNextPerson(scanToken) {
-  if (scanToken !== activeScanToken) return;
-  resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate', 'teacher');
-  requestInFlight = false;
-  scanning = true;
-  scanStartedAt = Date.now();
-  scanHint.classList.remove('show');
+  finishAndResume(resumeDelayMs);
 }
 
 function isSupportedQrFormat(value) {
@@ -605,110 +553,6 @@ function createReceiptId() {
   if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
   return 'qr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
 }
-
-function loadPendingCheckIns() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PENDING_CHECKIN_STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed.filter(item => item && item.receiptId && item.qrData) : [];
-  } catch (ignore) {
-    return [];
-  }
-}
-
-function writePendingCheckIns(items) {
-  const normalized = items.slice(-PENDING_MAX_ITEMS);
-  try {
-    localStorage.setItem(PENDING_CHECKIN_STORAGE_KEY, JSON.stringify(normalized));
-  } catch (error) {
-    // 容量不足時は写真を外しても受付IDとQRを保持する。
-    const compact = normalized.map(item => Object.assign({}, item, { photoBase64: '' }));
-    try { localStorage.setItem(PENDING_CHECKIN_STORAGE_KEY, JSON.stringify(compact)); } catch (ignore) {}
-  }
-  updatePendingBadge();
-}
-
-function savePendingCheckIn(item) {
-  const items = loadPendingCheckIns().filter(saved => saved.receiptId !== item.receiptId);
-  items.push(item);
-  writePendingCheckIns(items);
-}
-
-function removePendingCheckIn(receiptId) {
-  writePendingCheckIns(loadPendingCheckIns().filter(item => item.receiptId !== receiptId));
-}
-
-function settlePendingCheckIn(receiptId, result) {
-  if (result && result.attendanceSaved) {
-    removePendingCheckIn(receiptId);
-    return;
-  }
-  const retryable = !result || ['BUSY', 'TIMEOUT', 'INTERNAL_ERROR', 'NETWORK_ERROR'].includes(String(result.code || ''));
-  if (!retryable) removePendingCheckIn(receiptId);
-}
-
-function updatePendingBadge() {
-  if (!pendingBadge) return;
-  const count = loadPendingCheckIns().length;
-  pendingBadge.textContent = count ? '未送信受付 ' + count + '件（自動再送）' : '';
-  pendingBadge.classList.toggle('show', count > 0);
-}
-
-async function retryPendingCheckIns() {
-  if (pendingRetryRunning || !navigator.onLine) return;
-  const items = loadPendingCheckIns();
-  if (!items.length) return;
-  pendingRetryRunning = true;
-  try {
-    const item = items[0];
-    try {
-      const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId: item.receiptId }, 5000);
-      if (status && status.attendanceSaved) {
-        removePendingCheckIn(item.receiptId);
-        return;
-      }
-      // 長時間後の打刻時刻ずれを防ぐため、自動再登録は受付から30分以内だけ行う。
-      if (Date.now() - Number(item.createdAt || 0) > PENDING_AUTO_RETRY_LIMIT_MS) {
-        updatePendingBadge();
-        return;
-      }
-      const retried = await postWithTimeout({
-        action: 'checkIn',
-        qrData: item.qrData,
-        photoBase64: item.photoBase64 || '',
-        receiptId: item.receiptId,
-        clientTimings: item.clientTimings || {},
-        retry: true
-      }, 12000);
-      settlePendingCheckIn(item.receiptId, retried);
-      if (retried && retried.attendanceSaved && (retried.mailStatus === 'PENDING' || retried.mailStatus === 'PROCESSING')) {
-        trackMailCompletionInBackground(item.receiptId);
-      }
-    } catch (ignore) {
-      const current = loadPendingCheckIns();
-      const target = current.find(saved => saved.receiptId === item.receiptId);
-      if (target) {
-        target.attempts = Number(target.attempts || 0) + 1;
-        target.lastAttemptAt = Date.now();
-        writePendingCheckIns(current);
-      }
-    }
-  } finally {
-    pendingRetryRunning = false;
-  }
-}
-
-updatePendingBadge();
-setInterval(() => void retryPendingCheckIns(), PENDING_RETRY_INTERVAL_MS);
-window.addEventListener('online', () => void retryPendingCheckIns());
-setTimeout(() => void retryPendingCheckIns(), 1500);
-
-// 始業時の最初のQRでApps Scriptの起動待ちが起きないよう、画面表示中に温めておく。
-function warmCheckInApi() {
-  const url = API_URL + '?action=myQrHealth&_=' + Date.now();
-  void fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' }).catch(() => {});
-}
-setTimeout(warmCheckInApi, 300);
-setInterval(warmCheckInApi, 3 * 60 * 1000);
 
 async function postWithTimeout(payload, timeoutMs) {
   const controller = new AbortController();
@@ -775,6 +619,18 @@ function trackMailCompletionInBackground(receiptId) {
   });
 }
 
+function showProcessing(qrData, receiptId) {
+  resultOverlay.className = 'show';
+  resultIcon.textContent = '⏳';
+  resultCharacter.style.display = 'none';
+  resultName.textContent = 'QRを確認しました';
+  resultType.textContent = '';
+  resultTime.textContent = '受付処理を開始しています';
+  resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
+  resultPoints.textContent = '';
+  resultPoints.style.display = 'none';
+}
+
 function renderServerResult(data) {
   data = data || {};
   if (data.attendanceSaved) {
@@ -838,7 +694,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultPoints.style.display = 'none';
   } else if (ok) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
-    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < PHOTO_EXIT_PROBABILITY;
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < 0.2;
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
@@ -849,7 +705,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
       : (type === '入室'
         ? 'assets/checkin/welcome.png?v=429da8e'
         : (usePhotoExitVariant
-          ? PHOTO_EXIT_ASSET
+          ? 'assets/checkin/goodbye-director-night.png?v=20260806b'
           : 'assets/checkin/goodbye.png?v=429da8e'));
     resultCharacter.style.display = 'block';
     resultName.textContent = name + ' さん';
