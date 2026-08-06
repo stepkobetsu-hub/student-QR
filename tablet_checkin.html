@@ -323,13 +323,13 @@ const NO_QR_ERROR_MS = 10000;
 const FRAME_INTERVAL_MS = 1000 / 12;
 const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
-const SUCCESS_RESUME_MS = 2500;
-const DUPLICATE_RESUME_MS = 2500;
-const MAIL_FAILURE_RESUME_MS = 3500;
+const SUCCESS_RESUME_MS = 1000;
+const DUPLICATE_RESUME_MS = 1000;
+const MAIL_FAILURE_RESUME_MS = 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const PHOTO_EXIT_PROBABILITY = 0.2; // 通常運用：退室時20％
 
-// 退室結果は2.5秒しか表示しないため、写真版をアプリ起動時に先読みしておく。
+// 結果は1秒表示のため、写真版をアプリ起動時に先読みしておく。
 const exitPhotoPreload = new Image();
 exitPhotoPreload.decoding = 'async';
 exitPhotoPreload.fetchPriority = 'high';

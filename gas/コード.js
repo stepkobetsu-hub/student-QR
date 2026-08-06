@@ -840,6 +840,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       mailStatus = 'FAILED';
       updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'MAIL_QUEUE_CREATE_FAILED');
       resultCode = 'MAIL_QUEUE_CREATE_FAILED';
+      notifyCheckInProcessingFailureSafely_({ receiptId: receipt, name: attendance.name, type: attendance.type, error: 'MAIL_QUEUE_CREATE_FAILED' });
       console.error('check-in mail queue failed', sanitizeCheckInError_(error));
     }
     if (mailStatus !== 'FAILED' && !mailConfig.ok) {
@@ -847,6 +848,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
       resultCode = mailConfig.code;
       markCheckInMailQueueFailed_(receipt, mailConfig.code);
       updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], mailConfig.code);
+      notifyCheckInProcessingFailureSafely_({ receiptId: receipt, name: attendance.name, type: attendance.type, error: mailConfig.code });
     }
   } else if (attendance.notificationCode === 'TEACHER_EMAIL_INVALID') {
     updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'TEACHER_EMAIL_INVALID');
@@ -1042,7 +1044,7 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   state.totalPoints = Number(state.totalPoints || 0) + pointDelta;
   cache.put(stateKey, JSON.stringify(state), 21600);
   const totalPoints = state.totalPoints;
-  return { receiptId: receiptId, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
+  return { receiptId: receiptId, subjectId: code, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
 }
 
 function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
@@ -1116,7 +1118,7 @@ function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
   state.lastType = type;
   state.lastLogRow = row;
   cache.put(stateKey, JSON.stringify(state), 21600);
-  return { receiptId: receiptId, isTeacher: true, name: name, school: '', type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: null, logRow: row, maskedSubjectId: maskCheckInId_(code) };
+  return { receiptId: receiptId, subjectId: code, isTeacher: true, name: name, school: '', type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: null, logRow: row, maskedSubjectId: maskCheckInId_(code) };
 }
 
 function findQrRowCached_(sheet, column, qrData, kind) {
@@ -1228,7 +1230,7 @@ function normalizeMailStatus_(value) {
   const status = String(value || '');
   if (/送信完了|配信完了|送信受付|送信成功/.test(status)) return 'SENT';
   if (/送信エラー|送信失敗/.test(status)) return 'FAILED';
-  if (/通知先なし|通知なし/.test(status)) return 'NOT_REQUIRED';
+  if (/通知先なし|通知なし|重複.*送信省略/.test(status)) return 'NOT_REQUIRED';
   return 'PENDING';
 }
 
@@ -1271,7 +1273,7 @@ function enqueueCheckInMail_(attendance, emails, photoFileId) {
   const recipients = emails.map(email => ({ email: email, status: 'PENDING', messageId: '', correlationId: '', error: '' }));
   const now = new Date();
   sheet.getRange(sheet.getLastRow() + 1, 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).setValues([[
-    attendance.receiptId, now, now, 'PENDING', 0, now, '', attendance.name, attendance.type, now,
+    attendance.receiptId, now, now, 'PENDING', 0, now, attendance.subjectId || '', attendance.name, attendance.type, now,
     JSON.stringify(recipients), photoFileId || '', '', '[]', '[]', '', attendance.logRow
   ]]);
   // キュー行の保存とトリガー点検は別結果として扱う。
@@ -1361,7 +1363,7 @@ function processCheckInMailQueueReceipt_(receiptId, waitMs) {
     const row = sheet.getRange(match.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0];
     const status = String(row[3] || 'PENDING');
     const staleProcessing = status === 'PROCESSING' && row[2] instanceof Date && Date.now() - row[2].getTime() > 10 * 60 * 1000;
-    if (status === 'SENT' || status === 'FAILED') return { processed: 0, status: status, errorCode: checkInMailErrorCode_(row[12]), lockState: 'ACQUIRED' };
+    if (status === 'SENT' || status === 'FAILED' || status === 'SKIPPED_DUPLICATE') return { processed: 0, status: status, errorCode: checkInMailErrorCode_(row[12]), lockState: 'ACQUIRED' };
     if (status === 'PROCESSING' && !staleProcessing) return { processed: 0, status: 'PROCESSING', skipped: 'already_processing', lockState: 'ACQUIRED' };
     const result = processCheckInMailQueueRow_(sheet, match.getRow(), row) || {};
     result.processed = 1;
@@ -1375,6 +1377,19 @@ function processCheckInMailQueueReceipt_(receiptId, waitMs) {
 function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   const mailSendStartedAt = Date.now();
   const receiptId = String(row[0]);
+  const duplicateMail = findPriorQueuedMailWithinDuplicateWindow_(sheet, rowNumber, row);
+  if (duplicateMail) {
+    row[2] = new Date();
+    row[3] = 'SKIPPED_DUPLICATE';
+    row[5] = '';
+    row[12] = 'DUPLICATE_WITHIN_COOLDOWN: 60秒以内の後発受付のためメール送信省略';
+    row[15] = new Date();
+    sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
+    updateCheckInLogMailStatus_(receiptId, '重複のため送信省略', [], [], row[12], '');
+    cleanupCheckInPhotoRef_(row[11]);
+    console.log(JSON.stringify({ event: 'checkin_mail_skipped_duplicate', receiptId: receiptId, priorReceiptId: duplicateMail.receiptId }));
+    return { status: 'SKIPPED_DUPLICATE', errorCode: 'DUPLICATE_WITHIN_COOLDOWN', attempts: Number(row[4] || 0), mailSendMs: Date.now() - mailSendStartedAt };
+  }
   const attempts = Number(row[4] || 0) + 1;
   let recipients;
   try { recipients = JSON.parse(String(row[10] || '[]')); } catch (error) { recipients = []; }
@@ -1442,6 +1457,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   const logStatus = row[3] === 'SENT' ? '送信完了' : (row[3] === 'FAILED' ? '送信エラー' : '送信待ち');
   const provider = Array.from(new Set(recipients.map(recipient => recipient.provider).filter(Boolean))).join(',');
   updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider);
+  if (row[3] === 'FAILED') notifyCheckInProcessingFailureSafely_({ receiptId: receiptId, name: String(row[7] || ''), type: String(row[8] || ''), error: String(row[12] || 'MAIL_SEND_FAILED') });
   if (row[3] !== 'RETRY' && row[11]) {
     try {
       const photoRef = String(row[11]);
@@ -1451,6 +1467,52 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   }
   console.log(JSON.stringify({ event: 'checkin_mail', receiptId: receiptId, status: row[3], provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt, mailDelayMs: row[15] instanceof Date && row[1] instanceof Date ? row[15].getTime() - row[1].getTime() : null }));
   return { status: String(row[3] || ''), errorCode: checkInMailErrorCode_(row[12]), provider: provider, attempts: attempts, mailSendMs: Date.now() - mailSendStartedAt };
+}
+
+function findPriorQueuedMailWithinDuplicateWindow_(sheet, rowNumber, row) {
+  const subjectId = String(row[6] || '').trim();
+  const createdAt = row[1] instanceof Date ? row[1].getTime() : 0;
+  if (!subjectId || !createdAt || rowNumber <= 2) return null;
+  const previousRows = sheet.getRange(2, 1, rowNumber - 2, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues();
+  for (let i = previousRows.length - 1; i >= 0; i--) {
+    const previous = previousRows[i];
+    if (String(previous[6] || '').trim() !== subjectId) continue;
+    const previousAt = previous[1] instanceof Date ? previous[1].getTime() : 0;
+    if (!previousAt || createdAt - previousAt >= CHECKIN_DUPLICATE_WINDOW_MS) return null;
+    if (String(previous[0] || '') === String(row[0] || '')) continue;
+    return { receiptId: String(previous[0] || ''), createdAt: previousAt };
+  }
+  return null;
+}
+
+function cleanupCheckInPhotoRef_(photoRefValue) {
+  if (!photoRefValue) return;
+  try {
+    const photoRef = String(photoRefValue);
+    if (photoRef.indexOf('CACHE:') === 0) CacheService.getScriptCache().remove(photoRef.slice(6));
+    else DriveApp.getFileById(photoRef).setTrashed(true);
+  } catch (ignore) {}
+}
+
+function notifyCheckInProcessingFailureSafely_(failure) {
+  try {
+    if (typeof getDeliveryFailureReportEmails_ !== 'function') return { ok: true, skipped: 'report_settings_unavailable' };
+    const receiptId = String(failure && failure.receiptId || '');
+    const errorText = String(failure && failure.error || 'UNKNOWN_ERROR');
+    const cacheKey = 'CHECKIN_ADMIN_ALERT_V1:' + shortCheckInHash_(receiptId + '|' + errorText);
+    const cache = CacheService.getScriptCache();
+    if (cache.get(cacheKey)) return { ok: true, duplicate: true };
+    const recipients = getDeliveryFailureReportEmails_();
+    if (!recipients.length) return { ok: true, skipped: 'report_email_not_configured' };
+    const subject = '【出退くん障害報告】メール送信に失敗しました';
+    const body = ['出退くんのバックグラウンド処理でエラーが発生しました。', '', '氏名：' + String(failure.name || ''), '種別：' + String(failure.type || ''), '受付ID：' + receiptId, 'エラー：' + errorText, '', '不達メール管理： https://stepkobetsu-hub.github.io/student-QR/delivery_failures.html'].join('\n');
+    recipients.forEach(function(recipient) { MailApp.sendEmail({ to: recipient, subject: subject, body: body }); });
+    cache.put(cacheKey, '1', 21600);
+    return { ok: true, notified: true, recipientCount: recipients.length };
+  } catch (error) {
+    console.warn(JSON.stringify({ event: 'checkin_admin_alert_failed', error: sanitizeCheckInError_(error) }));
+    return { ok: false };
+  }
 }
 
 function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText, provider) {

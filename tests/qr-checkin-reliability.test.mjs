@@ -61,13 +61,22 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(page, /trackMailCompletionInBackground\(receiptId\)/);
   assert.match(page, /void waitForMailCompletion\(receiptId, 7000\)/);
   assert.doesNotMatch(page, /await waitForMailCompletion\(receiptId/);
-  assert.match(page, /SUCCESS_RESUME_MS = 2500/);
+  assert.match(page, /SUCCESS_RESUME_MS = 1000/);
+  assert.match(page, /DUPLICATE_RESUME_MS = 1000/);
+  assert.match(page, /MAIL_FAILURE_RESUME_MS = 1000/);
   assert.match(page, /data\.duplicate[\s\S]*DUPLICATE_RESUME_MS[\s\S]*MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS/);
   assert.match(page, /受付が完了しました。次のQRを読み取れます/);
   assert.match(page, /MailApp一時送信/);
   assert.match(backend, /sendApprovedMailAppFallbackTestToConfiguredSender/);
   assert.match(backend, /CHECKIN_MAILAPP_APPROVED_TEST_ATTEMPTED_AT/);
   assert.match(page, /入退室記録は完了しましたが、通知メールの送信に失敗しました/);
+  assert.match(backend, /subjectId: code/);
+  assert.match(backend, /attendance\.subjectId \|\| ''/);
+  assert.match(backend, /findPriorQueuedMailWithinDuplicateWindow_/);
+  assert.match(backend, /SKIPPED_DUPLICATE/);
+  assert.match(backend, /重複のため送信省略/);
+  assert.match(backend, /notifyCheckInProcessingFailureSafely_/);
+  assert.match(backend, /getDeliveryFailureReportEmails_/);
 });
 
 test('tablet sends a smaller photo and mail remains fully queued', () => {
