@@ -824,19 +824,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
     try {
       enqueueCheckInMail_(attendance, notifyEmails, photoFileId);
       traceMark_(trace, 'mailQueued');
-      // Brevo未設定時のMailAppフォールバックは、1分トリガーを待たずに
-      // 受付ID単位で即時処理する。ワーカーと同じScriptLockを使い二重送信を防ぐ。
-      if (mailConfig.provider === 'MAILAPP_FALLBACK') {
-        const immediate = processCheckInMailQueueReceipt_(receipt, 3000);
-        traceMark_(trace, 'mailImmediate');
-        if (immediate && immediate.status === 'SENT') {
-          mailStatus = 'SENT';
-          resultCode = 'ATTENDANCE_SAVED';
-        } else if (immediate && immediate.status === 'FAILED') {
-          mailStatus = 'FAILED';
-          resultCode = immediate.errorCode || 'MAILAPP_SEND_FAILED';
-        }
-      }
+      // 送信は1分間隔のワーカーへ任せ、受付画面はキュー保存後すぐ返す。
     } catch (error) {
       mailStatus = 'FAILED';
       updateCheckInLogMailStatus_(receipt, '送信エラー', [], [], 'MAIL_QUEUE_CREATE_FAILED');
@@ -1192,11 +1180,7 @@ function getReceiptStatus_(receiptId, skipCache) {
   const receipt = String(receiptId || '').trim();
   if (!isValidReceiptId_(receipt)) return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED', message: '受付情報が見つかりません' };
   if (!skipCache) {
-    let cached = getCachedReceiptStatus_(receipt);
-    if (cached && cached.attendanceSaved && (cached.mailStatus === 'PENDING' || cached.mailStatus === 'PROCESSING')) {
-      processCheckInMailQueueReceipt_(receipt, 3000);
-      cached = getCachedReceiptStatus_(receipt) || cached;
-    }
+    const cached = getCachedReceiptStatus_(receipt);
     if (cached) return cached;
   }
   const studentLog = getLogSheet_();
