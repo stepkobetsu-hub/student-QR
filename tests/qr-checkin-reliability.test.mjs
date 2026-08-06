@@ -64,7 +64,9 @@ test('server persists receipt id and separates attendance from mail state', () =
   assert.match(page, /SCAN_RELEASE_MS = 0/);
   assert.match(page, /FRAME_INTERVAL_MS = 1000 \/ 20/);
   assert.match(page, /640 \/ video\.videoWidth, 360 \/ video\.videoHeight/);
-  assert.match(page, /showProcessing\(qrData, receiptId\);[\s\S]*await new Promise\(resolve => setTimeout\(resolve, 0\)\);[\s\S]*photoCanvas\.toDataURL/);
+  assert.match(page, /通常受付では全画面表示を出さず[\s\S]*await new Promise\(resolve => setTimeout\(resolve, 0\)\);[\s\S]*photoCanvas\.toDataURL/);
+  assert.doesNotMatch(page, /function showProcessing\(/);
+  assert.doesNotMatch(page, /QRを確認しました|受付処理を開始しています/);
   assert.match(page, /PENDING_CHECKIN_STORAGE_KEY = 'step_pending_checkins_v1'/);
   assert.match(page, /savePendingCheckIn\(\{ receiptId, qrData, photoBase64/);
   assert.match(page, /action: 'getReceiptStatus'[\s\S]*action: 'checkIn'[\s\S]*retry: true/);

@@ -523,8 +523,7 @@ async function handleQrDetected(qrData) {
   const receiptId = createReceiptId();
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
-  // QRを検出したら写真変換より先に反応し、次の読取枠を直ちに解放する。
-  showProcessing(qrData, receiptId);
+  // 通常受付では全画面表示を出さず、次の読取枠を直ちに解放する。
   await new Promise(resolve => setTimeout(resolve, 0));
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
@@ -759,18 +758,6 @@ function trackMailCompletionInBackground(receiptId) {
   }).catch(error => {
     console.warn('qr-checkin-mail-background-failed', { receiptId, message: error && error.message || 'unknown' });
   });
-}
-
-function showProcessing(qrData, receiptId) {
-  resultOverlay.className = 'show';
-  resultIcon.textContent = '⏳';
-  resultCharacter.style.display = 'none';
-  resultName.textContent = 'QRを確認しました';
-  resultType.textContent = '';
-  resultTime.textContent = '受付処理を開始しています';
-  resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
-  resultPoints.textContent = '';
-  resultPoints.style.display = 'none';
 }
 
 function renderServerResult(data) {
