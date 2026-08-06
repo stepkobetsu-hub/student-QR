@@ -4,8 +4,8 @@ import fs from 'node:fs';
 
 const page = fs.readFileSync(new URL('../tablet_checkin.html', import.meta.url), 'utf8');
 
-test('student exit uses the supplied photo variant at 100 percent during display verification', () => {
-  assert.match(page, /PHOTO_EXIT_PROBABILITY = 1\.0/);
+test('student exit occasionally uses the supplied photo variant', () => {
+  assert.match(page, /PHOTO_EXIT_PROBABILITY = 0\.2/);
   assert.match(page, /type === '退室' && Math\.random\(\) < PHOTO_EXIT_PROBABILITY/);
   assert.match(page, /assets\/checkin\/goodbye-director-night-fast\.webp/);
   assert.match(page, /rel="preload" as="image"[^>]*goodbye-director-night-fast\.webp/);
