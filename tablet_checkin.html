@@ -173,9 +173,21 @@
     z-index: 2;
   }
   #resultOverlay.entry #resultCharacter { width: min(43vw, 540px); }
-  #resultOverlay.exit.show #resultCharacter {
+  #resultOverlay.exit.show:not(.photo-variant) #resultCharacter {
     transform-origin: 72% 38%;
     animation: goodbye-wave 1.9s ease-in-out 1;
+  }
+  #resultOverlay.photo-variant #resultCharacter {
+    width: min(39vw, 500px);
+    height: 76vh;
+    max-height: 76vh;
+    bottom: 2vh;
+    border: 4px solid rgba(255,255,255,.72);
+    border-radius: 28px;
+    object-fit: cover;
+    object-position: center 22%;
+    box-shadow: 0 18px 42px rgba(0,0,0,.32);
+    filter: none;
   }
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
   #resultOverlay.teacher #resultCharacter {
@@ -609,6 +621,7 @@ function showLocalDuplicate(scan) {
 }
 
 function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
+  resultOverlay.classList.remove('photo-variant');
   if (ok && isTeacher) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
     resultOverlay.className = isCooldownDuplicate
@@ -632,13 +645,19 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultPoints.style.display = 'none';
   } else if (ok) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < 0.2;
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
+    if (usePhotoExitVariant) resultOverlay.classList.add('photo-variant');
     resultIcon.textContent = '';
     resultCharacter.src = isCooldownDuplicate
       ? 'assets/checkin/duplicate.png?v=429da8e'
-      : (type === '入室' ? 'assets/checkin/welcome.png?v=429da8e' : 'assets/checkin/goodbye.png?v=429da8e');
+      : (type === '入室'
+        ? 'assets/checkin/welcome.png?v=429da8e'
+        : (usePhotoExitVariant
+          ? 'assets/checkin/goodbye-director.jpg?v=20260806'
+          : 'assets/checkin/goodbye.png?v=429da8e'));
     resultCharacter.style.display = 'block';
     resultName.textContent = name + ' さん';
     resultType.textContent = isCooldownDuplicate
