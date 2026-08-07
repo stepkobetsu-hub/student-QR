@@ -289,7 +289,15 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 // STEPシステム資産管理台帳で確認した「生徒QR」既存デプロイ。
-const API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+const LEGACY_API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+const DEFAULT_EDGE_API_URL = "https://step-checkin-edge-staging.stepkobetsu.workers.dev";
+const EDGE_CONFIG_KEY = 'stepCheckinEdgeConfigV1';
+const EDGE_DEVICE_ID_KEY = 'stepCheckinEdgeDeviceIdV1';
+
+applyEdgeBootstrap();
+const edgeConfig = loadEdgeConfig();
+const edgeDeviceId = localStorage.getItem(EDGE_DEVICE_ID_KEY) || createEdgeDeviceId();
+localStorage.setItem(EDGE_DEVICE_ID_KEY, edgeDeviceId);
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -313,6 +321,7 @@ let requestInFlight = false;
 let lastScannedCode = null;
 let lastScannedTime = 0;
 let lastAcceptedScan = null;
+let activeReceiptId = '';
 let scanStartedAt = Date.now();
 let lastFrameAt = 0;
 const RESCAN_COOLDOWN_MS = 5000;
@@ -489,6 +498,7 @@ async function handleQrDetected(qrData) {
   }
 
   const receiptId = createReceiptId();
+  activeReceiptId = receiptId;
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
@@ -535,7 +545,11 @@ async function handleQrDetected(qrData) {
         }
       }
     } else {
-      showResult(false, null, null, null, 'NOT_STARTED', null, '通信がタイムアウトしました', false, 'NETWORK_ERROR');
+      const code = err && (err.code || err.message) || 'NETWORK_ERROR';
+      const message = code === 'UNAUTHORIZED'
+        ? 'この端末の校舎設定を確認してください'
+        : (code === 'SUBJECT_NOT_FOUND' ? 'この校舎の同期名簿にQRがありません' : '通信に失敗しました');
+      showResult(false, null, null, null, 'NOT_STARTED', null, message, false, code);
     }
   } finally {
     clearTimeout(slowTimer);
@@ -558,7 +572,7 @@ async function postWithTimeout(payload, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(LEGACY_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
@@ -572,6 +586,18 @@ async function postWithTimeout(payload, timeoutMs) {
 }
 
 async function postCheckInWithBusyRetry(payload) {
+  if (edgeConfig) {
+    try {
+      return await postEdgeCheckIn(payload, REQUEST_TIMEOUT_MS);
+    } catch (error) {
+      if (!shouldUseLegacyFallback(error)) throw error;
+      console.warn('qr-checkin-edge-fallback', { receiptId: payload.receiptId, code: error && error.code || error && error.message || 'unknown' });
+    }
+  }
+  return postLegacyCheckInWithBusyRetry(payload);
+}
+
+async function postLegacyCheckInWithBusyRetry(payload) {
   const retryDelays = [350, 700, 1200, 1800];
   for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
     const data = await postWithTimeout(Object.assign({}, payload, { retry: attempt > 0 }), REQUEST_TIMEOUT_MS);
@@ -583,12 +609,71 @@ async function postCheckInWithBusyRetry(payload) {
   return { ok: false, code: 'BUSY', attendanceSaved: false, message: '受付が混み合っています' };
 }
 
+async function postEdgeCheckIn(payload, timeoutMs) {
+  return postEdgeJson('/v1/checkins', {
+    campus: edgeConfig.campus,
+    qrKey: payload.qrData,
+    receiptId: payload.receiptId,
+    deviceId: edgeDeviceId,
+    photoBase64: payload.photoBase64,
+    clientTimings: payload.clientTimings || {}
+  }, timeoutMs);
+}
+
+async function postReceiptStatus(receiptId, timeoutMs) {
+  if (edgeConfig) {
+    try {
+      return await postEdgeJson('/v1/receipt-status', { campus: edgeConfig.campus, receiptId }, timeoutMs);
+    } catch (error) {
+      if (error && error.code === 'RECEIPT_NOT_FOUND') {
+        return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED' };
+      }
+      if (!shouldUseLegacyFallback(error)) throw error;
+    }
+  }
+  return postWithTimeout({ action: 'getReceiptStatus', receiptId }, timeoutMs);
+}
+
+async function postEdgeJson(path, payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(edgeConfig.apiUrl.replace(/\/$/, '') + path, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + edgeConfig.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    let data = null;
+    try { data = await response.json(); } catch (ignore) {}
+    if (!response.ok || !data || data.ok === false) {
+      const error = new Error(data && data.code || ('HTTP_' + response.status));
+      error.code = data && data.code || ('HTTP_' + response.status);
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function shouldUseLegacyFallback(error) {
+  if (!error) return true;
+  if (error.name === 'AbortError') return true;
+  if (typeof error.httpStatus !== 'number') return true;
+  return error.httpStatus >= 500;
+}
+
 async function resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings) {
   try {
-    const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId }, 7000);
+    const status = await postReceiptStatus(receiptId, 7000);
     if (status && status.attendanceSaved) return status;
     if (status && status.code === 'RECEIPT_NOT_FOUND') {
-      return await postWithTimeout({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings, retry: true }, 12000);
+      return await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings, retry: true });
     }
   } catch (ignore) {}
   return { ok: false, code: 'TIMEOUT', message: '通信がタイムアウトしました', attendanceSaved: false };
@@ -599,7 +684,7 @@ async function waitForMailCompletion(receiptId, maxWaitMs) {
   while (Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, 700));
     try {
-      const status = await postWithTimeout({ action: 'getReceiptStatus', receiptId }, 3000);
+      const status = await postReceiptStatus(receiptId, 3000);
       if (status && status.attendanceSaved && status.mailStatus !== 'PENDING' && status.mailStatus !== 'PROCESSING') return status;
     } catch (ignore) {}
   }
@@ -614,9 +699,52 @@ function trackMailCompletionInBackground(receiptId) {
       mailStatus: status && status.mailStatus || 'PENDING',
       code: status && status.code || ''
     });
+    if (status && receiptId === activeReceiptId) updateVisibleCompletion(status);
   }).catch(error => {
     console.warn('qr-checkin-mail-background-failed', { receiptId, message: error && error.message || 'unknown' });
   });
+}
+
+function updateVisibleCompletion(status) {
+  if (typeof status.totalPoints === 'number' && !status.isTeacher) {
+    resultPoints.textContent = '⭐ 現在のポイント: ' + status.totalPoints + 'pt';
+    resultPoints.style.display = 'inline-block';
+  }
+  if (status.mailStatus && status.mailStatus !== 'PENDING' && status.mailStatus !== 'PROCESSING') {
+    resultSub.textContent = mailStatusText(status.mailStatus, status.code, status.mailProvider);
+  }
+}
+
+function applyEdgeBootstrap() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (params.get('edge') === 'clear') {
+    localStorage.removeItem(EDGE_CONFIG_KEY);
+    history.replaceState(null, '', location.pathname + location.search);
+    return;
+  }
+  const campus = params.get('campus');
+  const token = params.get('token');
+  if (!campus || !token) return;
+  if (!/^(jinryo|otemachi)$/.test(campus)) return;
+  const apiUrl = params.get('api') || DEFAULT_EDGE_API_URL;
+  if (!/^https:\/\/[A-Za-z0-9.-]+(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]*)*$/.test(apiUrl)) return;
+  localStorage.setItem(EDGE_CONFIG_KEY, JSON.stringify({ campus, token, apiUrl }));
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
+function loadEdgeConfig() {
+  try {
+    const value = JSON.parse(localStorage.getItem(EDGE_CONFIG_KEY) || 'null');
+    if (!value || !/^(jinryo|otemachi)$/.test(value.campus) || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
+    return value;
+  } catch (ignore) {
+    return null;
+  }
+}
+
+function createEdgeDeviceId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return 'tablet-' + window.crypto.randomUUID();
+  return 'tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
 }
 
 function showProcessing(qrData, receiptId) {
@@ -787,6 +915,8 @@ function errorTitle(code) {
     SAVE_FAILED: '入退室記録の保存に失敗しました',
     TIMEOUT: '通信がタイムアウトしました',
     NETWORK_ERROR: '通信がタイムアウトしました',
+    UNAUTHORIZED: 'この端末の校舎設定を確認してください',
+    SUBJECT_NOT_FOUND: 'この校舎の同期名簿にQRがありません',
     ALREADY_PROCESSED: 'すでに同じ受付を処理済みです'
   };
   return titles[code] || '処理を完了できませんでした';

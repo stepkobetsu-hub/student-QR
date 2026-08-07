@@ -134,8 +134,12 @@ function doPost(e) {
       result = handleMyQrApiAction_(body);
     } else if (typeof isBrevoWebhookRequest_ === 'function' && isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
+    } else if (action === 'edgeRosterExport') {
+      result = exportEdgeRoster_(body.token);
+    } else if (action === 'edgeCheckInProbe') {
+      result = handleEdgeCheckInProbe_(body);
     } else if (action === 'checkIn') {
-      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true);
+      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true, body.acceptedAt, body.edgeToken);
     } else if (action === 'getReceiptStatus') {
       result = getReceiptStatus_(body.receiptId);
     } else if (action === 'sendQrPdf') {
@@ -709,10 +713,11 @@ function handleTeacherCheckIn_(teacherRow, teacherMasterSheet) {
  * 入退室処理のメイン（タブレットから呼ばれる）
  * ===================================================================
  */
-function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) {
+function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry, acceptedAt, edgeToken) {
   const trace = createCheckInTrace_(receiptId);
   const qr = String(qrData || '').trim();
   const receipt = String(receiptId || '').trim();
+  const acceptedDate = resolveTrustedEdgeAcceptedAt_(acceptedAt, edgeToken);
   traceMark_(trace, 'appsScriptAccepted');
 
   if (!isValidReceiptId_(receipt)) return checkInFailure_('INVALID_RECEIPT_ID', '受付IDの形式が正しくありません', trace);
@@ -770,23 +775,23 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry) 
 
     if (subjectKind === 'student') {
       const code = String(studentValues[COL_STUDENT_ID - 1] || '').trim();
-      const recentAttendance = getSharedDuplicateAttendance_('student', code, receipt);
+      const recentAttendance = getSharedDuplicateAttendance_('student', code, receipt, acceptedDate.getTime());
       if (recentAttendance) {
         traceMark_(trace, 'sharedDuplicateGuard');
         attendance = recentAttendance;
       } else {
-        attendance = saveStudentAttendance_(studentValues, receipt, trace, notifyEmails.length > 0);
-        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('student', code, attendance);
+        attendance = saveStudentAttendance_(studentValues, receipt, trace, notifyEmails.length > 0, acceptedDate);
+        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('student', code, attendance, acceptedDate.getTime());
       }
     } else {
       const teacherEmailState = classifyTeacherEmail_(teacher.email);
-      const recentAttendance = getSharedDuplicateAttendance_('teacher', teacher.code, receipt);
+      const recentAttendance = getSharedDuplicateAttendance_('teacher', teacher.code, receipt, acceptedDate.getTime());
       if (recentAttendance) {
         traceMark_(trace, 'sharedDuplicateGuard');
         attendance = recentAttendance;
       } else {
-        attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code);
-        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('teacher', teacher.code, attendance);
+        attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code, acceptedDate);
+        if (!attendance.duplicate) rememberSharedDuplicateAttendance_('teacher', teacher.code, attendance, acceptedDate.getTime());
       }
       attendance.notificationCode = teacherEmailState.code === 'OK' ? '' : teacherEmailState.code;
     }
@@ -874,10 +879,50 @@ function sharedDuplicateGuardKey_(kind, code) {
   return CHECKIN_DUPLICATE_GUARD_PREFIX + kind + ':' + shortCheckInHash_(code);
 }
 
-function getSharedDuplicateAttendance_(kind, code, receiptId) {
+function resolveTrustedEdgeAcceptedAt_(acceptedAt, edgeToken) {
+  const receivedAt = Date.now();
+  const expected = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_EDGE_ROSTER_TOKEN') || '');
+  const provided = String(edgeToken || '');
+  if (!expected || !provided || !constantTimeCheckInTextEqual_(expected, provided)) return new Date(receivedAt);
+  const timestamp = Number(acceptedAt);
+  if (!Number.isFinite(timestamp)) return new Date(receivedAt);
+  if (timestamp < receivedAt - 36 * 60 * 60 * 1000 || timestamp > receivedAt + 5 * 60 * 1000) return new Date(receivedAt);
+  return new Date(timestamp);
+}
+
+function constantTimeCheckInTextEqual_(leftText, rightText) {
+  const left = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(leftText), Utilities.Charset.UTF_8);
+  const right = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(rightText), Utilities.Charset.UTF_8);
+  let difference = 0;
+  for (let index = 0; index < left.length; index++) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
+function handleEdgeCheckInProbe_(body) {
+  const expected = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_EDGE_ROSTER_TOKEN') || '');
+  const provided = String(body && body.edgeToken || '');
+  if (!expected || !provided || !constantTimeCheckInTextEqual_(expected, provided)) {
+    return { ok: false, code: 'EDGE_PROBE_UNAUTHORIZED', attendanceSaved: false, mailStatus: 'NOT_STARTED' };
+  }
+  const receiptId = String(body && body.receiptId || '');
+  if (!isValidReceiptId_(receiptId)) {
+    return { ok: false, code: 'INVALID_RECEIPT_ID', attendanceSaved: false, mailStatus: 'NOT_STARTED' };
+  }
+  return {
+    ok: true,
+    code: 'EDGE_PROBE_ACCEPTED',
+    attendanceSaved: true,
+    mailStatus: 'NOT_REQUIRED',
+    receiptId: receiptId,
+    acceptedAt: Number(body && body.acceptedAt || 0),
+    probe: true
+  };
+}
+
+function getSharedDuplicateAttendance_(kind, code, receiptId, currentStampMs) {
   const raw = PropertiesService.getScriptProperties().getProperty(sharedDuplicateGuardKey_(kind, code));
   const saved = parseCheckInCache_(raw);
-  if (!saved || !isWithinCheckInDuplicateWindow_(saved.acceptedAtMs, Date.now())) return null;
+  if (!saved || !isWithinCheckInDuplicateWindow_(saved.acceptedAtMs, Number(currentStampMs) || Date.now())) return null;
   return {
     receiptId: receiptId,
     isTeacher: kind === 'teacher',
@@ -892,9 +937,9 @@ function getSharedDuplicateAttendance_(kind, code, receiptId) {
   };
 }
 
-function rememberSharedDuplicateAttendance_(kind, code, attendance) {
+function rememberSharedDuplicateAttendance_(kind, code, attendance, acceptedAtMs) {
   PropertiesService.getScriptProperties().setProperty(sharedDuplicateGuardKey_(kind, code), JSON.stringify({
-    acceptedAtMs: Date.now(),
+    acceptedAtMs: Number(acceptedAtMs) || Date.now(),
     name: attendance.name || '',
     school: attendance.school || '',
     type: attendance.type || '',
@@ -943,14 +988,14 @@ function getLatestTeacherAttendanceFromLog_(logSheet, code) {
   return { stampMs: values[0].getTime(), type: String(values[3] || ''), row: row };
 }
 
-function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets) {
+function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets, acceptedDate) {
   const code = String(values[COL_STUDENT_ID - 1] || '').trim();
   const name = String(values[COL_STUDENT_NAME - 1] || '').trim();
   const school = String(values[COL_SCHOOL - 1] || '').trim();
   const logSheet = getLogSheet_();
   const logSchema = ensureCheckInLogSchema_(logSheet);
   const pointsSheet = getPointsSheet_();
-  const now = new Date();
+  const now = acceptedDate instanceof Date && Number.isFinite(acceptedDate.getTime()) ? new Date(acceptedDate.getTime()) : new Date();
   const todayStr = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
   const stateKey = dailyCheckInStateKey_('student', code, todayStr);
   const cache = CacheService.getScriptCache();
@@ -1047,12 +1092,12 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   return { receiptId: receiptId, subjectId: code, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
 }
 
-function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode) {
+function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode, acceptedDate) {
   const code = String(teacher.code || '').trim();
   const name = String(teacher.name || '').trim();
   const sheet = getTeacherLogSheet_();
   const schema = ensureHeaders_(sheet, ['タイムスタンプ','講師コード','氏名','種別','メール送信結果','送信先メール','メール送信方式','最終エラー理由',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
-  const now = new Date();
+  const now = acceptedDate instanceof Date && Number.isFinite(acceptedDate.getTime()) ? new Date(acceptedDate.getTime()) : new Date();
   const today = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
   const latestSaved = getLatestTeacherAttendanceFromLog_(sheet, code);
   if (latestSaved && isWithinCheckInDuplicateWindow_(latestSaved.stampMs, now.getTime())) {

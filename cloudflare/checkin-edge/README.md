@@ -10,7 +10,7 @@
 - 当日の入退室／出退勤状態
 - 受付ID、端末ID、受付時刻
 
-メールアドレス、写真、メール本文、ポイント履歴は保存しません。
+メールアドレス、メール本文、ポイント履歴は保存しません。写真はApps Scriptへの送信待ちの間だけ一時保存し、送信成功後に削除します。
 
 ## 処理順
 
@@ -18,16 +18,22 @@
 2. QR読取後、校舎ごとのDurable Objectが順番を一元判定
 3. 60秒以内の同一QRは重複として状態を反転しない
 4. 端末は応答を受けて氏名と入退室を即時表示
-5. 写真、正式ログ、メール、ポイントは既存Apps Scriptへバックグラウンド送信
+5. 写真、正式ログ、メール、ポイントは受付ID付きで既存Apps Scriptへバックグラウンド送信
+6. Apps Scriptへの送信に失敗した場合はDurable ObjectのAlarmから自動再送
 
 ## 必要なSecrets
 
-- `TERMINAL_TOKEN`: タブレット受付API用
+- `TERMINAL_TOKEN`: タブレット受付API用（校舎別Secret未登録時の共通予備）
+- `TERMINAL_TOKEN_JINRYO`: 神領校端末用
+- `TERMINAL_TOKEN_OTEMACHI`: 大手町校端末用
 - `SYNC_TOKEN`: 管理者による名簿同期用
-- `ROSTER_SOURCE_URL`: Apps Script名簿出力URL
 - `ROSTER_SOURCE_TOKEN`: Apps Script名簿出力認証用
 
 Secretsはソースや設定ファイルに記載せず、`wrangler secret put`で環境別に登録します。
+
+`ROSTER_SOURCE_URL`、`CHECKIN_WRITE_URL`、`CHECKIN_WRITE_ENABLED`は環境別の通常変数です。
+ステージングは`CHECKIN_WRITE_ACTION=edgeCheckInProbe`を使い、正式記録・ポイント・メールを作らず書き戻し経路だけを検証します。
+本番は検証完了まで`CHECKIN_WRITE_ENABLED=false`のままにします。
 
 ## 手動名簿同期
 

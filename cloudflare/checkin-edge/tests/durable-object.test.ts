@@ -115,4 +115,28 @@ describe("CampusCheckin Durable Object", () => {
     expect(result.subjectId).toBe("current-001");
     expect(result.name).toBe("現登録");
   });
+
+  it("does not send to Apps Script while legacy writes are disabled", async () => {
+    const campus = env.CAMPUS_CHECKIN.getByName("write-disabled-campus");
+    await campus.syncRoster([{
+      id: "dummy-004",
+      name: "検証三郎",
+      qrKey: "dummy-qr-004",
+      role: "student",
+      active: true,
+    }], Date.now());
+
+    const result = await campus.accept({
+      qrKey: "dummy-qr-004",
+      receiptId: "write-disabled-receipt",
+      deviceId: "tablet-a",
+      acceptedAt: Date.parse("2026-08-07T18:00:00+09:00"),
+      photoBase64: "data:image/jpeg;base64,dGVzdA==",
+    });
+    const status = await campus.getLegacyStatus("write-disabled-receipt");
+
+    expect(result.legacyState).toBe("NOT_REQUIRED");
+    expect(status.state).toBe("NOT_REQUIRED");
+  });
+
 });
