@@ -24,7 +24,8 @@
       "name": "step-checkin-edge-staging",
       "vars": {
         "ENVIRONMENT": "staging",
-        "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io"
+        "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io",
+        "ROSTER_SOURCE_URL": "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec"
       },
       "triggers": {
         "crons": ["0 22 * * *"]
