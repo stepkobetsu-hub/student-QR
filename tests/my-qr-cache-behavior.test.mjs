@@ -65,18 +65,14 @@ function createClient(sharedLocal = createStorage()) {
   return context;
 }
 
-test('a restart can reuse only the same unexpired session cache', async () => {
+test('a restart reuses the saved QR without a session or server validation', () => {
   const local = createStorage();
   const first = createClient(local);
-  const sessionA = { kind: 'common', token: 'strong-token-A', expiresAt: new Date(Date.now() + 60_000).toISOString() };
-  await first.saveQrCache(sessionA, { name: 'A', registered: true, qrData: 'QR-A' });
+  first.saveQrCache({ studentId: '1320', name: 'A', registered: true, qrData: 'QR-A' });
 
   const restarted = createClient(local);
-  assert.equal((await restarted.readQrCache(sessionA)).qrData, 'QR-A');
-
-  const sessionB = { ...sessionA, token: 'strong-token-B' };
-  assert.equal(await restarted.readQrCache(sessionB), null);
-  assert.equal(local.getItem('stepMyQrDisplayCacheV2'), null);
+  assert.equal(restarted.readQrCache().qrData, 'QR-A');
+  assert.equal(JSON.parse(local.getItem('stepMyQrDisplayCacheV5')).result.studentId, '1320');
 });
 
 test('logout clears both session tokens and the persistent QR cache before navigation', async () => {
@@ -85,10 +81,10 @@ test('logout clears both session tokens and the persistent QR cache before navig
   const expiresAt = new Date(Date.now() + 60_000).toISOString();
   client.saveSession('qr-token', expiresAt);
   client.saveCommonSession('common-token', expiresAt);
-  await client.saveQrCache({ kind: 'common', token: 'common-token', expiresAt }, { registered: true, qrData: 'QR-A' });
+  client.saveQrCache({ studentId: '1320', registered: true, qrData: 'QR-A' });
 
   client.clearAllSessions();
   assert.equal(local.getItem('stepMyQrSessionToken'), null);
   assert.equal(local.getItem('stepCommonStudentSessionToken'), null);
-  assert.equal(local.getItem('stepMyQrDisplayCacheV2'), null);
+  assert.equal(local.getItem('stepMyQrDisplayCacheV5'), null);
 });
