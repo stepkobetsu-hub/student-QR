@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#2e7d5b">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>入退室・Cloudflare試験 | Step個別指導ステップ</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background: #111;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    overflow: hidden;
+  }
+  #cameraWrap {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* 正面カメラのプレビューを鏡表示。解析・写真Canvasには影響しない */
+    -webkit-transform: scaleX(-1);
+  }
+  canvas { display: none; }
+
+  /* 読み取りエリアを右下・横長に配置（顔が隠れないように） */
+  #scanFrame {
+    position: absolute;
+    bottom: 16vh;
+    right: 4vw;
+    width: min(46vw, 60vh);
+    height: min(28vw, 36vh);
+    max-width: 480px;
+    max-height: 260px;
+    border: 4px solid rgba(255,255,255,0.8);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  #scanFrame .label {
+    position: absolute;
+    bottom: -34px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: #fff;
+    font-size: 14px;
+    background: rgba(0,0,0,0.5);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+
+  #topBar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 20px;
+    text-align: center;
+    color: #fff;
+    background: linear-gradient(rgba(0,0,0,0.5), transparent);
+  }
+  #topBar .clock {
+    font-size: 22px;
+    font-weight: bold;
+  }
+  #topBar .hint {
+    font-size: 14px;
+    opacity: 0.85;
+    margin-top: 4px;
+  }
+
+  #resultOverlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #fff;
+    text-align: center;
+    padding: 30px;
+    overflow: hidden;
+  }
+  #resultOverlay > * { position: relative; z-index: 2; }
+  #resultOverlay.show { display: flex; }
+  #resultOverlay.success { background: rgba(46, 125, 91, 0.95); }
+  #resultOverlay.entry {
+    color: #17324d;
+    background: linear-gradient(145deg, #fff36a 0%, #90e5ff 58%, #ffc8ed 100%);
+  }
+  #resultOverlay.exit {
+    background:
+      radial-gradient(circle at 8% 15%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 19% 32%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 30% 10%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 43% 24%, #d8c7ff 0 3px, transparent 4px),
+      radial-gradient(circle at 58% 9%, #fff 0 2px, transparent 3px),
+      radial-gradient(circle at 72% 29%, #b8d8ff 0 3px, transparent 4px),
+      radial-gradient(circle at 91% 14%, #fff 0 2px, transparent 3px),
+      linear-gradient(150deg, #061a45 0%, #102d67 58%, #28134f 100%);
+  }
+  #resultOverlay.exit::after {
+    content: '';
+    position: absolute;
+    top: 6%; right: 7%;
+    width: 82px; height: 82px;
+    border-radius: 50%;
+    background: #fff2a8;
+    box-shadow: -22px 9px 0 3px #0b2354;
+    z-index: 1;
+  }
+  #resultOverlay.duplicate {
+    color: #171717;
+    background: linear-gradient(145deg, #ffe55c 0%, #ffc928 100%);
+  }
+  #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
+  #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
+  #scanHint {
+    position: absolute;
+    left: 50%; bottom: 7vh;
+    transform: translateX(-50%);
+    max-width: min(90vw, 620px);
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.68);
+    color: #fff;
+    text-align: center;
+    font-size: 15px;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+  }
+  #scanHint.show { opacity: 1; }
+
+  #resultContent { max-width: min(92vw, 720px); }
+  #resultOverlay.entry #resultContent,
+  #resultOverlay.exit #resultContent,
+  #resultOverlay.duplicate #resultContent {
+    max-width: min(58vw, 720px);
+    padding: 24px 30px;
+    border-radius: 28px;
+    box-shadow: 0 14px 34px rgba(0,0,0,.22);
+    backdrop-filter: blur(5px);
+    margin-right: min(34vw, 390px);
+  }
+  #resultOverlay.entry #resultContent {
+    color: #17324d;
+    background: rgba(255,255,255,.86);
+  }
+  #resultOverlay.exit #resultContent {
+    color: #fff;
+    background: rgba(5,18,51,.78);
+    border: 2px solid rgba(255,255,255,.3);
+  }
+  #resultOverlay.duplicate #resultContent {
+    color: #171717;
+    background: rgba(255,255,255,.9);
+  }
+  #resultCharacter {
+    display: none;
+    position: absolute;
+    right: 2vw;
+    bottom: 1vh;
+    width: min(39vw, 500px);
+    max-height: 72vh;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 16px rgba(0,0,0,.24));
+    z-index: 2;
+  }
+  #resultOverlay.entry #resultCharacter { width: min(43vw, 540px); }
+  #resultOverlay.exit.show:not(.photo-variant) #resultCharacter {
+    transform-origin: 72% 38%;
+    animation: goodbye-wave 1.9s ease-in-out 1;
+  }
+  #resultOverlay.photo-variant #resultCharacter {
+    width: min(48vw, 610px);
+    height: 78vh;
+    max-height: 78vh;
+    bottom: 0;
+    border: 0;
+    border-radius: 0;
+    object-fit: contain;
+    object-position: center bottom;
+    box-shadow: none;
+    filter: none;
+  }
+  #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
+  #resultOverlay.teacher #resultCharacter {
+    width: min(49vw, 650px);
+    height: 88vh;
+    max-height: none;
+    object-fit: cover;
+    object-position: center top;
+    bottom: -8vh;
+  }
+  #resultOverlay.teacher.entry::before {
+    content: '';
+    position: absolute;
+    top: 5vh;
+    right: 3vw;
+    width: min(44vw, 560px);
+    height: min(25vw, 320px);
+    border-radius: 50% 50% 0 0;
+    background: repeating-radial-gradient(ellipse at 50% 100%,
+      transparent 0 40%, #ef5350 41% 46%, #ff9800 47% 52%,
+      #ffeb3b 53% 58%, #43a047 59% 64%, #29b6f6 65% 70%,
+      #5c6bc0 71% 76%, #ab47bc 77% 82%, transparent 83% 100%);
+    opacity: .82;
+    z-index: 1;
+  }
+  @keyframes goodbye-wave {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    12% { transform: rotate(-3deg) translateY(-2px); }
+    24% { transform: rotate(3deg) translateY(0); }
+    36% { transform: rotate(-3deg) translateY(-2px); }
+    48% { transform: rotate(3deg) translateY(0); }
+    60% { transform: rotate(-2deg) translateY(-1px); }
+    72% { transform: rotate(2deg) translateY(0); }
+    84% { transform: rotate(-1deg) translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #resultOverlay.exit.show #resultCharacter { animation: none; }
+  }
+
+  #resultIcon { font-size: 90px; margin-bottom: 10px; }
+  #resultName { font-size: 40px; font-weight: bold; margin-bottom: 8px; }
+  #resultType { font-size: 30px; margin-bottom: 4px; font-weight: bold; }
+  #resultTime {
+    font-size: 26px;
+    margin: 10px 0;
+  }
+  #resultSub { font-size: 15px; opacity: 0.85; }
+  #resultPoints {
+    margin-top: 14px;
+    font-size: 24px;
+    font-weight: bold;
+    opacity: 0.95;
+    background: rgba(255,255,255,0.2);
+    padding: 8px 20px;
+    border-radius: 24px;
+    display: inline-block;
+  }
+
+  #statusDot {
+    position: absolute;
+    bottom: 20px; left: 20px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #4caf50;
+  }
+  #statusDot.error { background: #e53935; }
+  #pilotBanner {
+    position: absolute;
+    z-index: 20;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 18px;
+    border-radius: 999px;
+    color: #2b2100;
+    background: #ffd86a;
+    box-shadow: 0 3px 14px rgba(0,0,0,.4);
+    font-size: 16px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div id="cameraWrap">
+  <div id="pilotBanner">試験専用・本番の記録／メール送信なし</div>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <canvas id="photoCanvas"></canvas>
+
+  <div id="scanFrame"><div class="label">ここにQRをかざす</div></div>
+
+  <div id="topBar">
+    <div class="clock" id="clock">--:--</div>
+    <div class="hint">QRコードを右下の枠にかざしてください</div>
+  </div>
+
+  <div id="resultOverlay">
+    <div id="resultContent">
+      <div id="resultIcon"></div>
+      <div id="resultName"></div>
+      <div id="resultType"></div>
+      <div id="resultTime"></div>
+      <div id="resultSub"></div>
+      <div id="resultPoints"></div>
+    </div>
+    <img id="resultCharacter" alt="" aria-hidden="true">
+  </div>
+
+  <div id="statusDot"></div>
+  <div id="scanHint" role="status" aria-live="polite"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+// STEPシステム資産管理台帳で確認した「生徒QR」既存デプロイ。
+const LEGACY_API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
+const DEFAULT_EDGE_API_URL = "https://step-checkin-edge-staging.stepkobetsu.workers.dev";
+const EDGE_CONFIG_KEY = 'stepCheckinEdgePilotConfigV1';
+const EDGE_DEVICE_ID_KEY = 'stepCheckinEdgePilotDeviceIdV1';
+
+applyEdgeBootstrap();
+const edgeConfig = loadEdgeConfig();
+const edgeDeviceId = localStorage.getItem(EDGE_DEVICE_ID_KEY) || createEdgeDeviceId();
+localStorage.setItem(EDGE_DEVICE_ID_KEY, edgeDeviceId);
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const photoCanvas = document.getElementById('photoCanvas');
+const photoCtx = photoCanvas.getContext('2d');
+const resultOverlay = document.getElementById('resultOverlay');
+const resultIcon = document.getElementById('resultIcon');
+const resultCharacter = document.getElementById('resultCharacter');
+const resultName = document.getElementById('resultName');
+const resultType = document.getElementById('resultType');
+const resultTime = document.getElementById('resultTime');
+const resultSub = document.getElementById('resultSub');
+const resultPoints = document.getElementById('resultPoints');
+const statusDot = document.getElementById('statusDot');
+const clockEl = document.getElementById('clock');
+const scanHint = document.getElementById('scanHint');
+
+let scanning = true;
+let requestInFlight = false;
+let lastScannedCode = null;
+let lastScannedTime = 0;
+let lastAcceptedScan = null;
+let activeReceiptId = '';
+let scanStartedAt = Date.now();
+let lastFrameAt = 0;
+const RESCAN_COOLDOWN_MS = 5000;
+const LOCAL_DUPLICATE_WINDOW_MS = 60 * 1000;
+const NO_QR_HINT_MS = 4000;
+const NO_QR_ERROR_MS = 10000;
+const FRAME_INTERVAL_MS = 1000 / 12;
+const SLOW_NOTICE_MS = 8000;
+const REQUEST_TIMEOUT_MS = 15000;
+const SUCCESS_RESUME_MS = 2500;
+const DUPLICATE_RESUME_MS = 2500;
+const MAIL_FAILURE_RESUME_MS = 3500;
+
+// 時計表示
+function updateClock() {
+  const now = new Date();
+  clockEl.textContent = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ===================================================================
+// QR検知音（ファイル不要、Web Audioで生成する「ピッ」という電子音）
+// ===================================================================
+let audioCtx = null;
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1300, audioCtx.currentTime);
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.18);
+  } catch (e) {
+    // 音が鳴らせない環境では無視
+  }
+}
+
+function playToneSequence(tones) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') void audioCtx.resume();
+    const startedAt = audioCtx.currentTime + 0.02;
+    tones.forEach((tone, index) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const at = startedAt + index * tone.gap;
+      osc.type = tone.type || 'sine';
+      osc.frequency.setValueAtTime(tone.hz, at);
+      gain.gain.setValueAtTime(tone.volume || 0.22, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + tone.duration);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(at);
+      osc.stop(at + tone.duration);
+    });
+  } catch (ignore) {}
+}
+
+function playSuccessSound() {
+  playToneSequence([
+    { hz: 740, duration: 0.16, gap: 0.18, volume: 0.2 },
+    { hz: 1040, duration: 0.24, gap: 0.18, volume: 0.24 }
+  ]);
+  if (navigator.vibrate) navigator.vibrate(80);
+}
+
+function playErrorSound() {
+  playToneSequence([
+    { hz: 260, duration: 0.22, gap: 0.25, volume: 0.3, type: 'square' },
+    { hz: 190, duration: 0.22, gap: 0.25, volume: 0.3, type: 'square' },
+    { hz: 150, duration: 0.34, gap: 0.25, volume: 0.32, type: 'square' }
+  ]);
+  if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+}
+
+// カメラ起動
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    const track = stream.getVideoTracks()[0];
+    if (track && typeof track.getCapabilities === 'function') {
+      const caps = track.getCapabilities();
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+        try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (ignore) {}
+      }
+    }
+    statusDot.classList.remove('error');
+    scanStartedAt = Date.now();
+    requestAnimationFrame(scanLoop);
+  } catch (err) {
+    statusDot.classList.add('error');
+    alert('カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。\n' + err.message);
+  }
+}
+
+// QRスキャンループ
+function scanLoop(frameTime) {
+  if (!scanning || requestInFlight) {
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+
+  if (frameTime - lastFrameAt < FRAME_INTERVAL_MS) {
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+  lastFrameAt = frameTime;
+
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let code = null;
+    try {
+      code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      statusDot.classList.remove('error');
+    } catch (error) {
+      statusDot.classList.add('error');
+      scanHint.textContent = 'カメラ映像の解析を再試行しています';
+      scanHint.classList.add('show');
+    }
+
+    if (code && code.data) {
+      scanHint.classList.remove('show');
+      const now = Date.now();
+      if (code.data === lastScannedCode && (now - lastScannedTime) < RESCAN_COOLDOWN_MS) {
+        // 直近で同じQRを読み取り済みなのでスキップ
+      } else if (lastAcceptedScan && code.data === lastAcceptedScan.qrData &&
+          (now - lastAcceptedScan.acceptedAt) < LOCAL_DUPLICATE_WINDOW_MS) {
+        // 同じタブレットの60秒以内の再読取は、写真送信とサーバー通信を省略する。
+        lastScannedCode = code.data;
+        lastScannedTime = now;
+        scanning = false;
+        playBeep();
+        showLocalDuplicate(lastAcceptedScan);
+        finishAndResume(DUPLICATE_RESUME_MS);
+      } else {
+        lastScannedCode = code.data;
+        lastScannedTime = now;
+        scanning = false;
+        playBeep();
+        handleQrDetected(code.data);
+      }
+    } else if (Date.now() - scanStartedAt >= NO_QR_HINT_MS) {
+      scanHint.textContent = Date.now() - scanStartedAt >= NO_QR_ERROR_MS
+        ? 'QRを認識できません。QRを枠の中央に近づけてください'
+        : 'QRを枠の中央に近づけてください';
+      scanHint.classList.add('show');
+    }
+  }
+  requestAnimationFrame(scanLoop);
+}
+
+// QR検出時の処理
+async function handleQrDetected(qrData) {
+  if (requestInFlight) return;
+  requestInFlight = true;
+
+  if (!isSupportedQrFormat(qrData)) {
+    showResult(false, null, null, null, 'NOT_STARTED', null, 'QRの形式が正しくありません', false, 'INVALID_QR_FORMAT');
+    finishAndResume(4500);
+    return;
+  }
+
+  const receiptId = createReceiptId();
+  activeReceiptId = receiptId;
+  const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
+
+  // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
+  const photoScale = Math.min(1, 360 / video.videoWidth);
+  photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
+  photoCanvas.height = Math.max(1, Math.round(video.videoHeight * photoScale));
+  photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+  const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
+
+  showProcessing(qrData, receiptId);
+  let resumeDelayMs = 4500;
+  let slowTimer = setTimeout(() => {
+    resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
+  }, SLOW_NOTICE_MS);
+
+  try {
+    clientTimings.requestStartedAt = new Date().toISOString();
+    const requestStartedMs = performance.now();
+    const data = await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings });
+    clientTimings.responseReceivedAt = new Date().toISOString();
+    clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
+    console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
+    rememberLocalAcceptedScan(qrData, data);
+    renderServerResult(data);
+    if (data && data.attendanceSaved) {
+      resumeDelayMs = data.duplicate
+        ? DUPLICATE_RESUME_MS
+        : (data.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
+      if (data.mailStatus === 'PENDING' || data.mailStatus === 'PROCESSING') {
+        trackMailCompletionInBackground(receiptId);
+      }
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const status = await resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings);
+      rememberLocalAcceptedScan(qrData, status);
+      renderServerResult(status);
+      if (status && status.attendanceSaved) {
+        resumeDelayMs = status.duplicate
+          ? DUPLICATE_RESUME_MS
+          : (status.mailStatus === 'FAILED' ? MAIL_FAILURE_RESUME_MS : SUCCESS_RESUME_MS);
+        if (status.mailStatus === 'PENDING' || status.mailStatus === 'PROCESSING') {
+          trackMailCompletionInBackground(receiptId);
+        }
+      }
+    } else {
+      const code = err && (err.code || err.message) || 'NETWORK_ERROR';
+      const message = code === 'UNAUTHORIZED'
+        ? 'この端末の校舎設定を確認してください'
+        : (code === 'SUBJECT_NOT_FOUND' ? 'この校舎の同期名簿にQRがありません' : '通信に失敗しました');
+      showResult(false, null, null, null, 'NOT_STARTED', null, message, false, code);
+    }
+  } finally {
+    clearTimeout(slowTimer);
+  }
+
+  finishAndResume(resumeDelayMs);
+}
+
+function isSupportedQrFormat(value) {
+  const qr = String(value || '').trim();
+  return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(qr);
+}
+
+function createReceiptId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return 'qr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
+}
+
+async function postWithTimeout(payload, timeoutMs) {
+  const error = new Error('PILOT_LEGACY_DISABLED');
+  error.code = 'PILOT_LEGACY_DISABLED';
+  throw error;
+}
+
+async function postCheckInWithBusyRetry(payload) {
+  if (!edgeConfig) {
+    const error = new Error('PILOT_CONFIG_MISSING');
+    error.code = 'PILOT_CONFIG_MISSING';
+    throw error;
+  }
+  return postEdgeCheckIn(payload, REQUEST_TIMEOUT_MS);
+}
+
+async function postLegacyCheckInWithBusyRetry(payload) {
+  const retryDelays = [350, 700, 1200, 1800];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+    const data = await postWithTimeout(Object.assign({}, payload, { retry: attempt > 0 }), REQUEST_TIMEOUT_MS);
+    if (!data || data.code !== 'BUSY') return data;
+    if (attempt === retryDelays.length) return data;
+    resultSub.textContent = 'ただいま混み合っています。順番に受付しています…（' + (attempt + 1) + '回目）';
+    await new Promise(resolve => setTimeout(resolve, retryDelays[attempt]));
+  }
+  return { ok: false, code: 'BUSY', attendanceSaved: false, message: '受付が混み合っています' };
+}
+
+async function postEdgeCheckIn(payload, timeoutMs) {
+  return postEdgeJson('/v1/checkins', {
+    campus: edgeConfig.campus,
+    qrKey: payload.qrData,
+    receiptId: payload.receiptId,
+    deviceId: edgeDeviceId,
+    photoBase64: payload.photoBase64,
+    clientTimings: payload.clientTimings || {}
+  }, timeoutMs);
+}
+
+async function postReceiptStatus(receiptId, timeoutMs) {
+  if (!edgeConfig) {
+    return { ok: false, code: 'PILOT_CONFIG_MISSING', attendanceSaved: false, mailStatus: 'NOT_STARTED' };
+  }
+  try {
+    return await postEdgeJson('/v1/receipt-status', { campus: edgeConfig.campus, receiptId }, timeoutMs);
+  } catch (error) {
+    if (error && error.code === 'RECEIPT_NOT_FOUND') {
+      return { ok: false, code: 'RECEIPT_NOT_FOUND', attendanceSaved: false, mailStatus: 'NOT_STARTED' };
+    }
+    throw error;
+  }
+}
+
+async function postEdgeJson(path, payload, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(edgeConfig.apiUrl.replace(/\/$/, '') + path, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + edgeConfig.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    let data = null;
+    try { data = await response.json(); } catch (ignore) {}
+    if (!response.ok || !data || data.ok === false) {
+      const error = new Error(data && data.code || ('HTTP_' + response.status));
+      error.code = data && data.code || ('HTTP_' + response.status);
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function shouldUseLegacyFallback(error) {
+  if (!error) return true;
+  if (error.name === 'AbortError') return true;
+  if (typeof error.httpStatus !== 'number') return true;
+  return error.httpStatus >= 500;
+}
+
+async function resolveTimedOutReceipt(receiptId, qrData, photoBase64, clientTimings) {
+  try {
+    const status = await postReceiptStatus(receiptId, 7000);
+    if (status && status.attendanceSaved) return status;
+    if (status && status.code === 'RECEIPT_NOT_FOUND') {
+      return await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings, retry: true });
+    }
+  } catch (ignore) {}
+  return { ok: false, code: 'TIMEOUT', message: '通信がタイムアウトしました', attendanceSaved: false };
+}
+
+async function waitForMailCompletion(receiptId, maxWaitMs) {
+  const deadline = Date.now() + Math.max(1000, Number(maxWaitMs || 0));
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 700));
+    try {
+      const status = await postReceiptStatus(receiptId, 3000);
+      if (status && status.attendanceSaved && status.mailStatus !== 'PENDING' && status.mailStatus !== 'PROCESSING') return status;
+    } catch (ignore) {}
+  }
+  return null;
+}
+
+function trackMailCompletionInBackground(receiptId) {
+  // 入退室受付と次のスキャンを止めず、メール状態だけ非同期で確認する。
+  void waitForMailCompletion(receiptId, 7000).then(status => {
+    console.info('qr-checkin-mail-background', {
+      receiptId,
+      mailStatus: status && status.mailStatus || 'PENDING',
+      code: status && status.code || ''
+    });
+    if (status && receiptId === activeReceiptId) updateVisibleCompletion(status);
+  }).catch(error => {
+    console.warn('qr-checkin-mail-background-failed', { receiptId, message: error && error.message || 'unknown' });
+  });
+}
+
+function updateVisibleCompletion(status) {
+  if (typeof status.totalPoints === 'number' && !status.isTeacher) {
+    resultPoints.textContent = '⭐ 現在のポイント: ' + status.totalPoints + 'pt';
+    resultPoints.style.display = 'inline-block';
+  }
+  if (status.mailStatus && status.mailStatus !== 'PENDING' && status.mailStatus !== 'PROCESSING') {
+    resultSub.textContent = mailStatusText(status.mailStatus, status.code, status.mailProvider);
+  }
+}
+
+function applyEdgeBootstrap() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (params.get('edge') === 'clear') {
+    localStorage.removeItem(EDGE_CONFIG_KEY);
+    history.replaceState(null, '', location.pathname + location.search);
+    return;
+  }
+  const campus = params.get('campus');
+  const token = params.get('token');
+  if (!campus || !token) return;
+  if (!/^(jinryo|otemachi)$/.test(campus)) return;
+  localStorage.setItem(EDGE_CONFIG_KEY, JSON.stringify({ campus, token, apiUrl: DEFAULT_EDGE_API_URL }));
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
+function loadEdgeConfig() {
+  try {
+    const value = JSON.parse(localStorage.getItem(EDGE_CONFIG_KEY) || 'null');
+    if (!value || !/^(jinryo|otemachi)$/.test(value.campus) || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
+    return value;
+  } catch (ignore) {
+    return null;
+  }
+}
+
+function createEdgeDeviceId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return 'tablet-' + window.crypto.randomUUID();
+  return 'tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
+}
+
+function showProcessing(qrData, receiptId) {
+  resultOverlay.className = 'show';
+  resultIcon.textContent = '⏳';
+  resultCharacter.style.display = 'none';
+  resultName.textContent = 'QRを確認しました';
+  resultType.textContent = '';
+  resultTime.textContent = '受付処理を開始しています';
+  resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
+  resultPoints.textContent = '';
+  resultPoints.style.display = 'none';
+}
+
+function renderServerResult(data) {
+  data = data || {};
+  if (data.attendanceSaved) {
+    showResult(true, data.name, data.type, data.label, data.mailStatus, data.totalPoints, data.message, data.isTeacher, data.code, data.duplicate, data.mailProvider);
+  } else {
+    showResult(false, null, null, null, data.mailStatus || 'NOT_STARTED', null, data.message, false, data.code, false, data.mailProvider);
+  }
+}
+
+function rememberLocalAcceptedScan(qrData, data) {
+  if (!data || !data.attendanceSaved || !data.name || !data.type) return;
+  lastAcceptedScan = {
+    qrData: qrData,
+    acceptedAt: Date.now(),
+    name: data.name,
+    type: data.type,
+    label: data.label,
+    totalPoints: data.totalPoints,
+    isTeacher: !!data.isTeacher
+  };
+}
+
+function showLocalDuplicate(scan) {
+  showResult(
+    true,
+    scan.name,
+    scan.type,
+    scan.label,
+    'NOT_REQUIRED',
+    scan.totalPoints,
+    '',
+    scan.isTeacher,
+    'DUPLICATE_WITHIN_COOLDOWN',
+    true,
+    ''
+  );
+}
+
+function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
+  resultOverlay.classList.remove('photo-variant');
+  if (ok && isTeacher) {
+    const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
+    resultOverlay.className = isCooldownDuplicate
+      ? 'show duplicate teacher'
+      : (mailStatus === 'FAILED' ? 'show warning teacher' : 'show teacher ' + (type === '出勤' ? 'entry' : 'exit'));
+    resultIcon.textContent = '';
+    resultCharacter.src = isCooldownDuplicate
+      ? 'assets/checkin/duplicate.png?v=429da8e'
+      : (type === '出勤'
+        ? 'assets/checkin/teacher-arrival.png?v=20260806'
+        : 'assets/checkin/teacher-goodbye.png?v=20260806');
+    resultCharacter.style.display = 'block';
+    resultName.textContent = name + ' 先生';
+    resultType.textContent = isCooldownDuplicate
+      ? name + '先生は受付済みです'
+      : (type === '出勤' ? '出勤しました' : '退勤しました');
+    resultTime.textContent = label;
+    resultSub.textContent = isCooldownDuplicate
+      ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
+      : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
+    resultPoints.style.display = 'none';
+  } else if (ok) {
+    const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < 0.2;
+    resultOverlay.className = isCooldownDuplicate
+      ? 'show duplicate'
+      : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
+    if (usePhotoExitVariant) resultOverlay.classList.add('photo-variant');
+    resultIcon.textContent = '';
+    resultCharacter.src = isCooldownDuplicate
+      ? 'assets/checkin/duplicate.png?v=429da8e'
+      : (type === '入室'
+        ? 'assets/checkin/welcome.png?v=429da8e'
+        : (usePhotoExitVariant
+          ? 'assets/checkin/goodbye-director-night.png?v=20260806b'
+          : 'assets/checkin/goodbye.png?v=429da8e'));
+    resultCharacter.style.display = 'block';
+    resultName.textContent = name + ' さん';
+    resultType.textContent = isCooldownDuplicate
+      ? name + 'は受付済みです'
+      : (type === '入室' ? '入室しました' : '退室しました');
+    resultTime.textContent = label;
+    resultSub.textContent = isCooldownDuplicate
+      ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
+      : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
+    if (typeof totalPoints === 'number') {
+      resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
+      resultPoints.style.display = 'inline-block';
+    } else {
+      resultPoints.style.display = 'none';
+    }
+  } else {
+    resultOverlay.className = 'show error';
+    resultIcon.textContent = '⚠️';
+    resultCharacter.style.display = 'none';
+    resultName.textContent = errorTitle(errorCode);
+    resultType.textContent = '';
+    resultTime.textContent = '';
+    resultSub.textContent = errorMsg || 'もう一度お試しください';
+    resultPoints.style.display = 'none';
+  }
+  if (ok) playSuccessSound();
+  else playErrorSound();
+}
+
+function mailStatusText(status, code, provider) {
+  if (provider === 'MAILAPP_FALLBACK' && status === 'SENT') return '入退室記録と通知メール送信が完了しました（MailApp一時送信）';
+  if (provider === 'MAILAPP_FALLBACK' && status !== 'FAILED') return '受付完了（通知メールはMailAppでバックグラウンド送信）';
+  if (code === 'MAILAPP_FALLBACK_ACTIVE') return '受付完了（通知メールはMailAppでバックグラウンド送信）';
+  if (code === 'MAILAPP_SEND_FAILED') return '入退室記録は完了しましたが、MailAppでの通知送信に失敗しました';
+  if (code === 'MAILAPP_DELIVERY_UNCERTAIN') return '入退室記録は完了しました。二重送信防止のためメール再送を停止しました';
+  if (code === 'TEACHER_EMAIL_EMPTY') return '入退室記録が完了しました（講師メールアドレスが空欄のため通知先なし）';
+  if (code === 'TEACHER_EMAIL_INVALID') return '入退室記録は完了しましたが、講師メールアドレスの形式が正しくありません';
+  if (code === 'NOTIFICATION_CONFIG_ERROR') return '入退室記録は完了しましたが、通知設定に不備があります';
+  if (code === 'BREVO_NOT_CONFIGURED') return '入退室記録は完了しましたが、メール送信APIが未設定です';
+  if (code === 'BREVO_API_KEY_MISSING') return '入退室記録は完了しましたが、メール送信APIの認証設定がありません';
+  if (code === 'MAIL_QUEUE_CREATE_FAILED') return '入退室記録は完了しましたが、メール送信予約を作成できませんでした';
+  if (code === 'MAIL_WORKER_NOT_RUNNING') return '入退室記録は完了しましたが、メール送信処理が起動していません';
+  if (code === 'BREVO_AUTH_FAILED') return '入退室記録は完了しましたが、メール送信APIの認証に失敗しました';
+  if (code === 'BREVO_SEND_REJECTED') return '入退室記録は完了しましたが、メール送信APIに拒否されました';
+  if (code === 'SENDER_CONFIG_INVALID') return '入退室記録は完了しましたが、送信元設定が正しくありません';
+  if (code === 'RECIPIENT_INVALID') return '入退室記録は完了しましたが、通知先メールアドレスの形式が正しくありません';
+  if (code === 'PHOTO_PROCESS_FAILED') return '入退室記録は完了しましたが、通知用写真を処理できませんでした';
+  if (code === 'BREVO_API_TIMEOUT') return '入退室記録は完了しましたが、メール送信APIがタイムアウトしました';
+  if (code === 'BREVO_SEND_FAILED') return '入退室記録は完了しましたが、通知メールの送信に失敗しました';
+  if (status === 'FAILED') return '入退室記録は完了しましたが、通知メールの送信に失敗しました';
+  if (status === 'SENT') return '入退室記録と通知メール送信が完了しました';
+  if (status === 'NOT_REQUIRED') return '入退室記録が完了しました（通知先なし）';
+  return '受付が完了しました。次のQRを読み取れます';
+}
+
+function errorTitle(code) {
+  const titles = {
+    INVALID_QR_FORMAT: 'QRの形式が正しくありません',
+    TARGET_NOT_FOUND: '登録対象が見つかりません',
+    TEACHER_NOT_FOUND: '講師の登録対象が見つかりません',
+    TEACHER_EMAIL_EMPTY: '講師メールアドレスが空欄です',
+    TEACHER_EMAIL_INVALID: '講師メールアドレスの形式が正しくありません',
+    NOTIFICATION_CONFIG_ERROR: '通知設定に不備があります',
+    BREVO_NOT_CONFIGURED: 'メール送信APIが未設定です',
+    BREVO_API_KEY_MISSING: 'メール送信APIの認証設定がありません',
+    MAILAPP_FALLBACK_ACTIVE: 'MailAppで一時送信します',
+    MAILAPP_SEND_FAILED: 'MailAppでの通知送信に失敗しました',
+    MAILAPP_DELIVERY_UNCERTAIN: '二重送信防止のためメール再送を停止しました',
+    MAIL_QUEUE_CREATE_FAILED: 'メール送信予約を作成できませんでした',
+    MAIL_WORKER_NOT_RUNNING: 'メール送信処理が起動していません',
+    BREVO_AUTH_FAILED: 'メール送信APIの認証に失敗しました',
+    BREVO_SEND_REJECTED: 'メール送信APIに拒否されました',
+    SENDER_CONFIG_INVALID: '送信元設定が正しくありません',
+    RECIPIENT_INVALID: '通知先メールアドレスの形式が正しくありません',
+    PHOTO_PROCESS_FAILED: '通知用写真を処理できませんでした',
+    BREVO_API_TIMEOUT: 'メール送信APIがタイムアウトしました',
+    BREVO_SEND_FAILED: '通知メールの送信に失敗しました',
+    SAVE_FAILED: '入退室記録の保存に失敗しました',
+    TIMEOUT: '通信がタイムアウトしました',
+    NETWORK_ERROR: '通信がタイムアウトしました',
+    UNAUTHORIZED: 'この端末の校舎設定を確認してください',
+    SUBJECT_NOT_FOUND: 'この校舎の同期名簿にQRがありません',
+    ALREADY_PROCESSED: 'すでに同じ受付を処理済みです'
+  };
+  return titles[code] || '処理を完了できませんでした';
+}
+
+function finishAndResume(delayMs) {
+  setTimeout(() => {
+    resultOverlay.classList.remove('show', 'success', 'error', 'warning', 'entry', 'exit', 'duplicate', 'teacher');
+    requestInFlight = false;
+    scanning = true;
+    scanStartedAt = Date.now();
+    scanHint.classList.remove('show');
+  }, delayMs);
+}
+
+const previewMode = new URLSearchParams(location.search).get('preview');
+if (previewMode === 'entry') {
+  showResult(true, 'ステップ太郎', '入室', '16:30', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'exit') {
+  showResult(true, 'ステップ太郎', '退室', '19:45', 'SENT', 120, '', false, '', false, 'BREVO');
+} else if (previewMode === 'duplicate') {
+  showResult(true, 'ステップ太郎', '入室', '16:31', 'NOT_REQUIRED', null, '', false, 'DUPLICATE_WITHIN_COOLDOWN', true, '');
+} else if (previewMode === 'teacher-entry') {
+  showResult(true, '山田', '出勤', '15:30', 'SENT', null, '', true, '', false, 'BREVO');
+} else if (previewMode === 'teacher-exit') {
+  showResult(true, '山田', '退勤', '21:15', 'SENT', null, '', true, '', false, 'BREVO');
+} else if (previewMode === 'teacher-duplicate') {
+  showResult(true, '山田', '出勤', '15:31', 'NOT_REQUIRED', null, '', true, 'DUPLICATE_WITHIN_COOLDOWN', true, '');
+} else {
+  startCamera();
+}
+</script>
+
+</body>
+</html>
