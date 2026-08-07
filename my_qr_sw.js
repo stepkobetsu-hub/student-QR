@@ -1,4 +1,4 @@
-const CACHE_NAME = 'step-my-qr-v8-no-attendance-panel';
+const CACHE_NAME = 'step-my-qr-v9-persistent-local-qr';
 const APP_ASSETS = [
   './my_qr.html',
   './my_qr_runtime.js',
