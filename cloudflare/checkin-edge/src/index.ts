@@ -1,4 +1,10 @@
-import { CampusCheckin, type AcceptRequest, type RosterSubject } from "./checkin-do";
+import {
+  CampusCheckin,
+  type AcceptRequest,
+  type AcceptResponse,
+  type LegacyStatusResponse,
+  type RosterSubject,
+} from "./checkin-do";
 
 export { CampusCheckin };
 
@@ -13,16 +19,32 @@ interface RosterSyncResult {
   duplicateQrKeys: number;
 }
 
+interface CheckinRequest extends AcceptRequest {
+  campus: string;
+}
+
+interface ReceiptStatusRequest {
+  campus: string;
+  receiptId: string;
+}
+
 type AppEnv = Env & {
   ENVIRONMENT: string;
   ALLOWED_ORIGIN: string;
-  TERMINAL_TOKEN: string;
+  TERMINAL_TOKEN?: string;
+  TERMINAL_TOKEN_JINRYO?: string;
+  TERMINAL_TOKEN_OTEMACHI?: string;
+  INTEGRATION_TEST_TOKEN?: string;
   SYNC_TOKEN: string;
   ROSTER_SOURCE_URL: string;
   ROSTER_SOURCE_TOKEN: string;
+  CHECKIN_WRITE_URL?: string;
+  CHECKIN_WRITE_ENABLED?: string;
+  CHECKIN_WRITE_ACTION?: string;
 };
 
 const MAX_BODY_BYTES = 2_000_000;
+const MAX_PHOTO_BASE64_LENGTH = 1_600_000;
 const CAMPUS_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 const RECEIPT_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 
@@ -37,18 +59,37 @@ export default {
         return json({ ok: true, service: "step-checkin-edge", environment: env.ENVIRONMENT }, 200, origin, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/checkins") {
-        if (!await authorized(request, env.TERMINAL_TOKEN)) return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
-        const body = await readJson<AcceptRequest & { campus: string }>(request);
+        const body = await readJson<CheckinRequest>(request);
         validateCheckin(body);
+        if (!await authorized(request, terminalTokenForCampus(env, body.campus))) {
+          return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
+        }
         const stub = env.CAMPUS_CHECKIN.getByName(body.campus);
         const result = await stub.accept({
-          qrKey: body.qrKey,
+          qrKey: body.qrKey.trim(),
           receiptId: body.receiptId,
-          deviceId: body.deviceId,
+          deviceId: body.deviceId.trim(),
           acceptedAt: Date.now(),
+          photoBase64: body.photoBase64,
+          clientTimings: body.clientTimings,
         });
-        console.log(JSON.stringify({ event: "checkin", campus: body.campus, code: result.code, receiptId: body.receiptId }));
-        return json(result, result.ok ? 200 : 404, origin, env);
+        console.log(JSON.stringify({
+          event: "checkin",
+          campus: body.campus,
+          code: result.code,
+          receiptId: body.receiptId,
+          legacyState: result.legacyState,
+        }));
+        return json(checkinClientResponse(result), result.ok ? 200 : 404, origin, env);
+      }
+      if (request.method === "POST" && url.pathname === "/v1/receipt-status") {
+        const body = await readJson<ReceiptStatusRequest>(request);
+        validateReceiptStatus(body);
+        if (!await authorized(request, terminalTokenForCampus(env, body.campus))) {
+          return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
+        }
+        const status = await env.CAMPUS_CHECKIN.getByName(body.campus).getLegacyStatus(body.receiptId);
+        return json(receiptStatusClientResponse(status), status.ok ? 200 : 404, origin, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/admin/sync-roster") {
         if (!await authorized(request, env.SYNC_TOKEN)) return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
@@ -79,13 +120,8 @@ async function syncFromGoogle(env: AppEnv): Promise<RosterSyncResult[]> {
   if (!env.ROSTER_SOURCE_URL || !env.ROSTER_SOURCE_TOKEN) throw new Error("ROSTER_SOURCE_NOT_CONFIGURED");
   const response = await fetch(env.ROSTER_SOURCE_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      action: "edgeRosterExport",
-      token: env.ROSTER_SOURCE_TOKEN,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "edgeRosterExport", token: env.ROSTER_SOURCE_TOKEN }),
   });
   if (!response.ok) throw new Error(`ROSTER_SOURCE_HTTP_${response.status}`);
   const payload = await response.json<RosterSourceResponse>();
@@ -95,10 +131,7 @@ async function syncFromGoogle(env: AppEnv): Promise<RosterSyncResult[]> {
   return result;
 }
 
-async function syncCampuses(
-  env: AppEnv,
-  campuses: RosterSourceResponse["campuses"],
-): Promise<RosterSyncResult[]> {
+async function syncCampuses(env: AppEnv, campuses: RosterSourceResponse["campuses"]): Promise<RosterSyncResult[]> {
   const syncedAt = Date.now();
   const output: RosterSyncResult[] = [];
   for (const item of campuses) {
@@ -141,18 +174,110 @@ function validateSubject(subject: RosterSubject): RosterSubject {
   return { id, name, qrKey, role, active: subject.active !== false };
 }
 
-function validateCheckin(body: AcceptRequest & { campus: string }): void {
+function validateCheckin(body: CheckinRequest): void {
   if (!body || typeof body !== "object") throw new Error("INVALID_BODY");
-  if (!CAMPUS_PATTERN.test(String(body.campus ?? ""))) throw new Error("INVALID_CAMPUS");
+  validateCampus(body.campus);
   if (!String(body.qrKey ?? "").trim() || String(body.qrKey).length > 500) throw new Error("INVALID_QR_KEY");
   if (!RECEIPT_PATTERN.test(String(body.receiptId ?? ""))) throw new Error("INVALID_RECEIPT_ID");
   if (!String(body.deviceId ?? "").trim() || String(body.deviceId).length > 120) throw new Error("INVALID_DEVICE_ID");
+  if (body.photoBase64 !== undefined) {
+    if (typeof body.photoBase64 !== "string" || body.photoBase64.length > MAX_PHOTO_BASE64_LENGTH) throw new Error("INVALID_PHOTO");
+    if (body.photoBase64 && !/^data:image\/jpeg;base64,/i.test(body.photoBase64)) throw new Error("INVALID_PHOTO");
+  }
+  if (body.clientTimings !== undefined && (
+    typeof body.clientTimings !== "object" || body.clientTimings === null || Array.isArray(body.clientTimings)
+  )) throw new Error("INVALID_CLIENT_TIMINGS");
+}
+
+function validateReceiptStatus(body: ReceiptStatusRequest): void {
+  if (!body || typeof body !== "object") throw new Error("INVALID_BODY");
+  validateCampus(body.campus);
+  if (!RECEIPT_PATTERN.test(String(body.receiptId ?? ""))) throw new Error("INVALID_RECEIPT_ID");
+}
+
+function validateCampus(campus: string): void {
+  if (!CAMPUS_PATTERN.test(String(campus ?? ""))) throw new Error("INVALID_CAMPUS");
+}
+
+function terminalTokenForCampus(env: AppEnv, campus: string): string | undefined {
+  if (campus === "integration-test" && env.INTEGRATION_TEST_TOKEN) return env.INTEGRATION_TEST_TOKEN;
+  if (campus === "jinryo" && env.TERMINAL_TOKEN_JINRYO) return env.TERMINAL_TOKEN_JINRYO;
+  if (campus === "otemachi" && env.TERMINAL_TOKEN_OTEMACHI) return env.TERMINAL_TOKEN_OTEMACHI;
+  return env.TERMINAL_TOKEN;
+}
+
+function checkinClientResponse(result: AcceptResponse): Record<string, unknown> {
+  if (!result.ok) return { ...result };
+  return {
+    ...result,
+    attendanceSaved: true,
+    isTeacher: result.role === "teacher",
+    label: result.acceptedAt ? formatTokyoLabel(result.acceptedAt) : "",
+    mailStatus: result.legacyState === "PENDING" || result.legacyState === "RETRYING" ? "PENDING" : "NOT_REQUIRED",
+    message: result.duplicate ? "60秒以内の同じ受付です" : "受付しました",
+  };
+}
+
+function receiptStatusClientResponse(status: LegacyStatusResponse): Record<string, unknown> {
+  if (status.state === "COMPLETED" && status.responseJson) {
+    const response = JSON.parse(status.responseJson) as Record<string, unknown>;
+    return { ...response, edgeWriteState: status.state };
+  }
+  if (status.state === "PENDING" || status.state === "RETRYING") {
+    return {
+      ok: true,
+      code: "EDGE_WRITE_PENDING",
+      attendanceSaved: true,
+      receiptId: status.receiptId,
+      mailStatus: "PENDING",
+      edgeWriteState: status.state,
+      attempts: status.attempts ?? 0,
+      retryReason: status.lastError,
+    };
+  }
+  if (status.state === "NOT_REQUIRED") {
+    return {
+      ok: true,
+      code: "EDGE_WRITE_NOT_REQUIRED",
+      attendanceSaved: true,
+      receiptId: status.receiptId,
+      mailStatus: "NOT_REQUIRED",
+      edgeWriteState: status.state,
+    };
+  }
+  return {
+    ok: false,
+    code: "RECEIPT_NOT_FOUND",
+    attendanceSaved: false,
+    receiptId: status.receiptId,
+    mailStatus: "NOT_STARTED",
+    edgeWriteState: status.state,
+  };
+}
+
+function formatTokyoLabel(timestamp: number): string {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(timestamp));
+  const value = (type: Intl.DateTimeFormatPartTypes): string => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("month")}月${value("day")}日${value("hour")}時${value("minute")}分`;
 }
 
 async function readJson<T>(request: Request): Promise<T> {
   const length = Number(request.headers.get("Content-Length") ?? 0);
   if (length > MAX_BODY_BYTES) throw new Error("BODY_TOO_LARGE");
-  return request.json<T>();
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new Error("BODY_TOO_LARGE");
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("INVALID_JSON");
+  }
 }
 
 async function authorized(request: Request, expected: string | undefined): Promise<boolean> {
@@ -172,10 +297,7 @@ async function authorized(request: Request, expected: string | undefined): Promi
 
 function corsPreflight(origin: string, env: AppEnv): Response {
   if (origin !== env.ALLOWED_ORIGIN) return new Response(null, { status: 403 });
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders(origin),
-  });
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
 }
 
 function corsHeaders(origin: string): HeadersInit {
@@ -189,10 +311,7 @@ function corsHeaders(origin: string): HeadersInit {
 }
 
 function json(data: unknown, status: number, origin: string, env: AppEnv): Response {
-  const headers = new Headers({
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-  });
+  const headers = new Headers({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   if (origin === env.ALLOWED_ORIGIN) {
     for (const [key, value] of Object.entries(corsHeaders(origin))) headers.set(key, value);
   }
