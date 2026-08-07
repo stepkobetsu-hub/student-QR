@@ -7,6 +7,12 @@ interface RosterSourceResponse {
   campuses: Array<{ campus: string; subjects: RosterSubject[] }>;
 }
 
+interface RosterSyncResult {
+  campus: string;
+  count: number;
+  duplicateQrKeys: number;
+}
+
 type AppEnv = Env & {
   ENVIRONMENT: string;
   ALLOWED_ORIGIN: string;
@@ -69,7 +75,7 @@ export default {
   },
 } satisfies ExportedHandler<AppEnv>;
 
-async function syncFromGoogle(env: AppEnv): Promise<Array<{ campus: string; count: number }>> {
+async function syncFromGoogle(env: AppEnv): Promise<RosterSyncResult[]> {
   if (!env.ROSTER_SOURCE_URL || !env.ROSTER_SOURCE_TOKEN) throw new Error("ROSTER_SOURCE_NOT_CONFIGURED");
   const response = await fetch(env.ROSTER_SOURCE_URL, {
     method: "POST",
@@ -92,16 +98,36 @@ async function syncFromGoogle(env: AppEnv): Promise<Array<{ campus: string; coun
 async function syncCampuses(
   env: AppEnv,
   campuses: RosterSourceResponse["campuses"],
-): Promise<Array<{ campus: string; count: number }>> {
+): Promise<RosterSyncResult[]> {
   const syncedAt = Date.now();
-  const output: Array<{ campus: string; count: number }> = [];
+  const output: RosterSyncResult[] = [];
   for (const item of campuses) {
     if (!CAMPUS_PATTERN.test(item.campus) || !Array.isArray(item.subjects)) throw new Error("INVALID_CAMPUS");
-    const subjects = item.subjects.map(validateSubject);
+    const validated = item.subjects.map(validateSubject);
+    const { subjects, duplicateQrKeys } = dedupeRosterSubjects(validated);
+    if (duplicateQrKeys > 0) {
+      console.warn(JSON.stringify({ event: "roster_duplicate_qr", campus: item.campus, duplicateQrKeys }));
+    }
     const result = await env.CAMPUS_CHECKIN.getByName(item.campus).syncRoster(subjects, syncedAt);
-    output.push({ campus: item.campus, count: result.count });
+    output.push({ campus: item.campus, count: result.count, duplicateQrKeys });
   }
   return output;
+}
+
+function dedupeRosterSubjects(subjects: RosterSubject[]): { subjects: RosterSubject[]; duplicateQrKeys: number } {
+  const owners = new Map<string, RosterSubject>();
+  const output: RosterSubject[] = [];
+  let duplicateQrKeys = 0;
+  for (const subject of subjects) {
+    const existing = owners.get(subject.qrKey);
+    if (existing) {
+      if (existing.id !== subject.id) duplicateQrKeys += 1;
+      continue;
+    }
+    owners.set(subject.qrKey, subject);
+    output.push(subject);
+  }
+  return { subjects: output, duplicateQrKeys };
 }
 
 function validateSubject(subject: RosterSubject): RosterSubject {
