@@ -13,7 +13,7 @@
     h1 { margin: 0 0 6px; font-size: clamp(22px, 5vw, 34px); }
     .notice { margin: 0 0 16px; color: #b7cae7; }
     .card { padding: 18px; border: 1px solid #294263; border-radius: 18px; background: #10243e; box-shadow: 0 18px 50px #0007; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }
     label { display: grid; gap: 6px; font-size: 14px; color: #cad8ec; }
     input, select, button { min-height: 48px; border-radius: 12px; font: inherit; }
     input, select { width: 100%; border: 1px solid #526c8f; padding: 0 12px; color: #fff; background: #07111f; }
@@ -34,6 +34,7 @@
     .result .type { margin-top: 4px; font-size: clamp(22px, 6vw, 36px); font-weight: 800; }
     .status { min-height: 24px; margin-top: 12px; color: #b7cae7; }
     .badge { display: inline-block; margin-bottom: 10px; padding: 5px 10px; border-radius: 999px; color: #ffe69a; background: #6b4b00; font-size: 13px; font-weight: 700; }
+    .auth { min-height: 48px; display: grid; place-items: center; padding: 0 16px; border: 1px solid #27745d; border-radius: 12px; color: #79e1bb; background: #0a3028; font-weight: 800; }
     @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -51,9 +52,7 @@
           <option value="otemachi">大手町</option>
         </select>
       </label>
-      <label>試験用端末トークン
-        <input id="token" type="password" autocomplete="off" placeholder="このタブを閉じるまで保持">
-      </label>
+      <div class="auth" id="authStatus">試験認証を確認中…</div>
     </div>
     <div class="actions">
       <button id="start" type="button">カメラを開始</button>
@@ -78,7 +77,7 @@
 <script>
 const API_URL = 'https://step-checkin-edge-staging.stepkobetsu.workers.dev/v1/checkins';
 const campusEl = document.getElementById('campus');
-const tokenEl = document.getElementById('token');
+const authStatusEl = document.getElementById('authStatus');
 const cameraEl = document.getElementById('camera');
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -104,22 +103,34 @@ const deviceId = sessionStorage.getItem('edgeDeviceId') ||
   ('edge-test-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)));
 sessionStorage.setItem('edgeDeviceId', deviceId);
 campusEl.value = sessionStorage.getItem('edgeCampus') || 'jinryo';
-tokenEl.value = sessionStorage.getItem('edgeTerminalToken') || '';
-if (tokenEl.value) statusEl.textContent = '端末認証は設定済みです。「カメラを開始」を押してください。';
+let terminalToken = sessionStorage.getItem('edgeTerminalToken') || '';
+authStatusEl.textContent = terminalToken ? '試験認証：設定済み' : '試験認証：未設定';
+if (terminalToken) statusEl.textContent = 'カメラを自動で開始します。開始しない場合だけボタンを押してください。';
 
-document.getElementById('start').addEventListener('click', startCamera);
+document.getElementById('start').addEventListener('click', () => void startCamera(false));
 document.getElementById('stop').addEventListener('click', stopCamera);
+campusEl.addEventListener('change', () => sessionStorage.setItem('edgeCampus', campusEl.value));
 window.addEventListener('pagehide', stopCamera);
+window.addEventListener('load', () => {
+  if (terminalToken) setTimeout(() => void startCamera(true), 250);
+});
 
-async function startCamera() {
-  const token = tokenEl.value.trim();
-  if (!token) {
-    statusEl.textContent = '試験用端末トークンを入力してください。';
-    tokenEl.focus();
+async function startCamera(automatic) {
+  if (!terminalToken) {
+    statusEl.textContent = '試験認証がありません。新しい試験用リンクを開いてください。';
     return;
   }
-  sessionStorage.setItem('edgeTerminalToken', token);
   sessionStorage.setItem('edgeCampus', campusEl.value);
+  if (stream && video.srcObject) {
+    running = true;
+    requestInFlight = false;
+    resultEl.className = 'result';
+    cameraEl.classList.add('active');
+    document.getElementById('start').textContent = '読取を再開';
+    statusEl.textContent = 'QRコードを枠内にかざしてください。';
+    requestAnimationFrame(scanFrame);
+    return;
+  }
   stopCamera();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -129,11 +140,15 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
     running = true;
+    requestInFlight = false;
     cameraEl.classList.add('active');
+    document.getElementById('start').textContent = '読取を再開';
     statusEl.textContent = 'QRコードを枠内にかざしてください。';
     requestAnimationFrame(scanFrame);
   } catch (error) {
-    statusEl.textContent = 'カメラを開始できません。ブラウザのカメラ許可を確認してください。';
+    statusEl.textContent = automatic
+      ? '自動開始できませんでした。「カメラを開始」を押してください。'
+      : 'カメラを開始できません。ブラウザのカメラ許可を確認してください。';
   }
 }
 
@@ -161,6 +176,7 @@ function scanFrame(now) {
 
 async function submitQr(qrKey) {
   requestInFlight = true;
+  running = false;
   resultEl.className = 'result';
   statusEl.textContent = 'Cloudflareで照合しています…';
   const receiptId = crypto.randomUUID ? crypto.randomUUID() :
@@ -169,7 +185,7 @@ async function submitQr(qrKey) {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + tokenEl.value.trim(),
+        'Authorization': 'Bearer ' + terminalToken,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -187,17 +203,20 @@ async function submitQr(qrKey) {
       ? '60秒以内の重複読取です。状態は変更していません。'
       : 'Cloudflare側の判定を受け付けました。';
     resultEl.className = 'result show ' + (data.duplicate ? 'duplicate' : 'ok');
-    statusEl.textContent = '受付ID: ' + receiptId.slice(-8) + ' / 端末: ' + deviceId.slice(-8);
+    statusEl.textContent = '結果を確認後、「読取を再開」を押してください。受付ID: ' + receiptId.slice(-8);
   } catch (error) {
+    const code = error && error.message || 'UNKNOWN';
     nameEl.textContent = '受付できませんでした';
     typeEl.textContent = '';
-    detailEl.textContent = error && error.message === 'SUBJECT_NOT_FOUND'
-      ? 'この校舎の同期名簿にQRがありません。'
-      : '接続または認証を確認してください（' + (error && error.message || 'UNKNOWN') + '）。';
+    detailEl.textContent = code === 'SUBJECT_NOT_FOUND'
+      ? 'この校舎の同期名簿にQRがありません。校舎選択を確認してください。（SUBJECT_NOT_FOUND）'
+      : code === 'UNAUTHORIZED'
+        ? '試験認証が一致しません。新しい試験用リンクを開き直してください。（UNAUTHORIZED）'
+        : '接続を確認してください。（' + code + '）';
     resultEl.className = 'result show error';
-    statusEl.textContent = '再試行できます。';
+    statusEl.textContent = '表示は自動で消えません。確認後、「読取を再開」を押してください。';
   } finally {
-    setTimeout(() => { requestInFlight = false; }, 2500);
+    document.getElementById('start').textContent = '読取を再開';
   }
 }
 </script>
