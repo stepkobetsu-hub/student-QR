@@ -88,7 +88,9 @@ export class CampusCheckin extends DurableObject<Env> {
 
   syncRoster(subjects: RosterSubject[], syncedAt: number): { ok: true; count: number } {
     this.ctx.storage.transactionSync(() => {
-      this.ctx.storage.sql.exec("UPDATE roster SET active = 0, updated_at = ?", syncedAt);
+      // The source response is a complete snapshot. Removing stale rows first also
+      // releases QR keys that were reassigned after a student or teacher left.
+      this.ctx.storage.sql.exec("DELETE FROM roster");
       for (const subject of subjects) {
         this.ctx.storage.sql.exec(
           `INSERT INTO roster (subject_id, name, qr_key, role, active, updated_at)
