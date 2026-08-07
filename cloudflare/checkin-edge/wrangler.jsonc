@@ -26,6 +26,9 @@
         "ENVIRONMENT": "staging",
         "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io"
       },
+      "triggers": {
+        "crons": ["0 22 * * *"]
+      },
       "durable_objects": {
         "bindings": [
           { "name": "CAMPUS_CHECKIN", "class_name": "CampusCheckin" }
@@ -37,6 +40,9 @@
       "vars": {
         "ENVIRONMENT": "production",
         "ALLOWED_ORIGIN": "https://stepkobetsu-hub.github.io"
+      },
+      "triggers": {
+        "crons": ["0 22 * * *"]
       },
       "durable_objects": {
         "bindings": [

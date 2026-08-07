@@ -85,4 +85,34 @@ describe("CampusCheckin Durable Object", () => {
     expect(retry.type).toBe("入室");
     expect(retry.code).toBe("ALREADY_ACCEPTED");
   });
+
+  it("releases a QR key removed from the latest roster snapshot", async () => {
+    const campus = env.CAMPUS_CHECKIN.getByName("qr-reassignment-campus");
+    await campus.syncRoster([{
+      id: "former-001",
+      name: "旧登録",
+      qrKey: "reassigned-qr-001",
+      role: "student",
+      active: true,
+    }], Date.now());
+
+    await campus.syncRoster([{
+      id: "current-001",
+      name: "現登録",
+      qrKey: "reassigned-qr-001",
+      role: "student",
+      active: true,
+    }], Date.now() + 1);
+
+    const result = await campus.accept({
+      qrKey: "reassigned-qr-001",
+      receiptId: "reassigned-qr-receipt",
+      deviceId: "tablet-a",
+      acceptedAt: Date.parse("2026-08-07T17:00:00+09:00"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.subjectId).toBe("current-001");
+    expect(result.name).toBe("現登録");
+  });
 });
