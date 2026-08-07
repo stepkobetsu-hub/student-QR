@@ -22,8 +22,9 @@
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .camera { position: relative; display: none; overflow: hidden; aspect-ratio: 4 / 3; margin-top: 16px; border-radius: 18px; background: #000; }
     .camera.active { display: block; }
-    video { width: 100%; height: 100%; object-fit: cover; }
-    .frame { position: absolute; inset: 23% 12%; border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
+    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); -webkit-transform: scaleX(-1); }
+    .frame { position: absolute; right: 4%; bottom: 10%; width: min(46%, 480px); height: min(36%, 260px); border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
+    .frame::after { content: 'ここにQRをかざす'; position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); white-space: nowrap; padding: 4px 10px; border-radius: 999px; color: #fff; background: #0009; font-size: 14px; }
     canvas { display: none; }
     .result { display: none; margin-top: 16px; padding: 22px; border-radius: 18px; text-align: center; }
     .result.show { display: block; }
@@ -134,11 +135,18 @@ async function startCamera(automatic) {
   stopCamera();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
       audio: false
     });
     video.srcObject = stream;
     await video.play();
+    const track = stream.getVideoTracks()[0];
+    if (track && typeof track.getCapabilities === 'function') {
+      const caps = track.getCapabilities();
+      if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+        try { await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch (ignore) {}
+      }
+    }
     running = true;
     requestInFlight = false;
     cameraEl.classList.add('active');
@@ -165,12 +173,24 @@ function scanFrame(now) {
   requestAnimationFrame(scanFrame);
   if (requestInFlight || now - lastFrameAt < 100) return;
   lastFrameAt = now;
-  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+  const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
   const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+  let code = null;
+  try {
+    if (typeof jsQR !== 'function') throw new Error('QR_READER_NOT_LOADED');
+    code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+  } catch (error) {
+    running = false;
+    nameEl.textContent = 'QR解析を開始できませんでした';
+    detailEl.textContent = '画面を再読込してください。（' + (error && error.message || 'QR_READER_ERROR') + '）';
+    resultEl.className = 'result show error';
+    statusEl.textContent = 'この表示は自動で消えません。';
+    return;
+  }
   if (code && code.data) void submitQr(code.data);
 }
 
