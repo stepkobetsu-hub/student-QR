@@ -28,3 +28,9 @@
 - `ROSTER_SOURCE_TOKEN`: Apps Script名簿出力認証用
 
 Secretsはソースや設定ファイルに記載せず、`wrangler secret put`で環境別に登録します。
+
+## 手動名簿同期
+
+Apps Scriptの名簿出力APIから即時同期するときは、`SYNC_TOKEN`で認証した
+`POST /v1/admin/sync-from-source`を使用します。応答には校舎名と同期人数だけを返し、
+名簿本文は返しません。毎朝7時の自動同期は従来どおりCronから同じ処理を呼び出します。
