@@ -89,6 +89,13 @@ const typeEl = document.getElementById('type');
 const detailEl = document.getElementById('detail');
 const statusEl = document.getElementById('status');
 
+const bootstrapParams = new URLSearchParams(location.hash.slice(1));
+const bootstrapToken = bootstrapParams.get('token');
+if (bootstrapToken) {
+  sessionStorage.setItem('edgeTerminalToken', bootstrapToken);
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
 let stream = null;
 let running = false;
 let requestInFlight = false;
@@ -98,6 +105,7 @@ const deviceId = sessionStorage.getItem('edgeDeviceId') ||
 sessionStorage.setItem('edgeDeviceId', deviceId);
 campusEl.value = sessionStorage.getItem('edgeCampus') || 'jinryo';
 tokenEl.value = sessionStorage.getItem('edgeTerminalToken') || '';
+if (tokenEl.value) statusEl.textContent = '端末認証は設定済みです。「カメラを開始」を押してください。';
 
 document.getElementById('start').addEventListener('click', startCamera);
 document.getElementById('stop').addEventListener('click', stopCamera);
