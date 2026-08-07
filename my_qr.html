@@ -51,9 +51,8 @@ const TOKEN_KEY = 'stepMyQrSessionToken';
 const EXPIRES_KEY = 'stepMyQrSessionExpiresAt';
 const COMMON_TOKEN_KEY = 'stepCommonStudentSessionToken';
 const COMMON_EXPIRES_KEY = 'stepCommonStudentSessionExpiresAt';
-const QR_CACHE_KEY = 'stepMyQrDisplayCacheV4';
-const LEGACY_QR_CACHE_KEY = 'stepMyQrDisplayCache';
-const QR_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
+const QR_CACHE_KEY = 'stepMyQrDisplayCacheV5';
+const LEGACY_QR_CACHE_KEYS = ['stepMyQrDisplayCacheV4', 'stepMyQrDisplayCache'];
 const API_URL = String(window.STEP_MY_QR_API_URL || '');
 const $ = id => document.getElementById(id);
 let lastRenderedQrData = '';
@@ -93,39 +92,42 @@ function clearSession() {
 function clearQrCache() {
   try {
     localStorage.removeItem(QR_CACHE_KEY);
-    sessionStorage.removeItem(LEGACY_QR_CACHE_KEY);
+    LEGACY_QR_CACHE_KEYS.forEach(key => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
   } catch (error) {}
 }
 
-async function tokenFingerprint(token) {
-  const bytes = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function readQrCache(session) {
+function readQrCache() {
   try {
-    const cached = JSON.parse(localStorage.getItem(QR_CACHE_KEY) || 'null');
-    const now = Date.now();
-    const sessionExpires = new Date(session.expiresAt).getTime();
-    if (!cached || cached.sessionKind !== session.kind || cached.fingerprint !== await tokenFingerprint(session.token) || cached.cachedUntil <= now || sessionExpires <= now) {
-      clearQrCache();
-      return null;
+    let cached = JSON.parse(localStorage.getItem(QR_CACHE_KEY) || 'null');
+    if (!cached) {
+      for (const key of LEGACY_QR_CACHE_KEYS) {
+        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (!raw) continue;
+        const legacy = JSON.parse(raw);
+        cached = legacy && legacy.result ? { result: legacy.result } : null;
+        if (cached) break;
+      }
     }
-    return cached.result;
+    const result = cached && cached.result;
+    if (!result || !result.studentId || !Object.prototype.hasOwnProperty.call(result, 'registered')) return null;
+    saveQrCache(result);
+    return result;
   } catch (error) {
-    clearQrCache();
     return null;
   }
 }
 
-async function saveQrCache(session, result) {
-  const sessionExpires = new Date(session.expiresAt).getTime();
-  const cachedUntil = Math.min(sessionExpires, Date.now() + QR_CACHE_MAX_AGE_MS);
-  if (!Number.isFinite(cachedUntil) || cachedUntil <= Date.now()) return clearQrCache();
+function saveQrCache(result) {
   try {
-    const safeResult = { studentId: result.studentId || '', name: result.name || '', campus: result.campus || '', registered: !!result.registered, qrData: result.qrData || '', expiresAt: session.expiresAt };
-    localStorage.setItem(QR_CACHE_KEY, JSON.stringify({ sessionKind: session.kind, fingerprint: await tokenFingerprint(session.token), cachedUntil, result: safeResult }));
+    const safeResult = { studentId: result.studentId || '', name: result.name || '', campus: result.campus || '', registered: !!result.registered, qrData: result.qrData || '' };
+    localStorage.setItem(QR_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), result: safeResult }));
+    LEGACY_QR_CACHE_KEYS.forEach(key => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
   } catch (error) {}
 }
 
@@ -165,18 +167,19 @@ async function api(payload) {
 
 async function loadMyQr() {
   mark('myqr:load-start');
+  const cached = readQrCache();
+  if (cached) {
+    renderMyQr(cached, true);
+    mark('myqr:cache-rendered');
+    measure('html-to-cache-qr', 'myqr:html-start', 'myqr:cache-rendered');
+    return;
+  }
   const session = getPreferredSession();
   if (!session) {
     clearSession();
     clearCommonSession();
     showPanel('loginPanel');
     return;
-  }
-  const cached = await readQrCache(session);
-  if (cached) {
-    renderMyQr(cached, true);
-    mark('myqr:cache-rendered');
-    measure('html-to-cache-qr', 'myqr:html-start', 'myqr:cache-rendered');
   }
   try {
     const apiMark = session.kind === 'common' ? 'common-get' : 'qr-get';
@@ -187,9 +190,8 @@ async function loadMyQr() {
     mark('myqr:' + apiMark + '-end');
     measure(apiMark + '-api', 'myqr:' + apiMark + '-start', 'myqr:' + apiMark + '-end');
     if (session.kind === 'qr' && result.expiresAt) saveSession(session.token, result.expiresAt);
-    const refreshed = getPreferredSession() || session;
-    await saveQrCache(refreshed, result);
-    renderMyQr({ ...result, expiresAt: refreshed.expiresAt }, false, !!cached);
+    saveQrCache(result);
+    renderMyQr(result, false);
     mark('myqr:complete');
     measure('html-to-complete', 'myqr:html-start', 'myqr:complete');
   } catch (error) {
@@ -206,7 +208,7 @@ function clearQrVisual() {
   lastRenderedQrData = '';
 }
 
-function renderMyQr(result, validating = false, reuseExisting = false) {
+function renderMyQr(result, fromCache = false, reuseExisting = false) {
   $('studentName').textContent = result.name ? result.name + ' さん' : '自分のQR';
   $('studentIdDisplay').textContent = result.studentId ? '生徒ID：' + result.studentId : '';
   $('campus').textContent = result.campus ? '校舎：' + result.campus : '';
@@ -232,8 +234,9 @@ function renderMyQr(result, validating = false, reuseExisting = false) {
     mark('myqr:generate-end');
     measure('qr-generation', 'myqr:generate-start', 'myqr:generate-end');
   }
-  const expires = new Date(result.expiresAt);
-  $('sessionNote').textContent = validating ? 'QRを表示しました。セッションを確認しています…' : (Number.isNaN(expires.getTime()) ? '' : 'ログイン有効期限: ' + expires.toLocaleString('ja-JP'));
+  $('sessionNote').textContent = fromCache
+    ? 'この端末に保存したQRを表示しています。通信確認なしですぐに使えます。'
+    : 'QRをこの端末に保存しました。ログアウトするまで次回からすぐ表示されます。';
   showPanel('qrPanel');
 }
 
@@ -257,8 +260,8 @@ $('loginForm').addEventListener('submit', async event => {
     if (result.commonToken && result.commonExpiresAt) saveCommonSession(result.commonToken, result.commonExpiresAt);
     const session = getPreferredSession();
     if (session && Object.prototype.hasOwnProperty.call(result, 'registered')) {
-      await saveQrCache(session, result);
-      renderMyQr({ ...result, expiresAt: session.expiresAt });
+      saveQrCache(result);
+      renderMyQr(result);
     } else {
       showPanel('loadingPanel');
       await loadMyQr();
@@ -299,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
   measure('html-to-api-url', 'myqr:html-start', 'myqr:api-url-ready');
   measure('html-to-qr-library', 'myqr:html-start', 'myqr:qr-library-ready');
   loadMyQr();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./my_qr_sw.js?v=8').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./my_qr_sw.js?v=9').catch(() => {});
 });
 </script>
 </body>
