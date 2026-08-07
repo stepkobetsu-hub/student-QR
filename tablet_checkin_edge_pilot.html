@@ -533,7 +533,8 @@ async function handleQrDetected(qrData) {
   try {
     clientTimings.requestStartedAt = new Date().toISOString();
     const requestStartedMs = performance.now();
-    const data = await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings });
+    let data = await postCheckInWithBusyRetry({ action: 'checkIn', qrData, photoBase64, receiptId, clientTimings });
+    data = normalizeLegacyEdgeResult(data);
     clientTimings.responseReceivedAt = new Date().toISOString();
     clientTimings.requestMs = Math.round(performance.now() - requestStartedMs);
     console.info('qr-checkin-timing', { receiptId, requestMs: clientTimings.requestMs, server: data && data.timings || null, code: data && data.code || '' });
@@ -757,6 +758,21 @@ function showProcessing(qrData, receiptId) {
   resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
   resultPoints.textContent = '';
   resultPoints.style.display = 'none';
+}
+
+function normalizeLegacyEdgeResult(data) {
+  if (!data || data.ok !== true || Object.prototype.hasOwnProperty.call(data, 'attendanceSaved')) return data;
+  if (!data.name || !data.type) return data;
+  const acceptedAt = Number(data.acceptedAt) || Date.now();
+  return Object.assign({}, data, {
+    attendanceSaved: true,
+    label: new Date(acceptedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+    mailStatus: 'NOT_REQUIRED',
+    isTeacher: data.role === 'teacher',
+    message: data.duplicate
+      ? '60秒以内の重複読取のため、追加の受付はしていません'
+      : 'Cloudflare試験受付が完了しました'
+  });
 }
 
 function renderServerResult(data) {
