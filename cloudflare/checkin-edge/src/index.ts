@@ -50,6 +50,11 @@ export default {
         const result = await syncCampuses(env, body.campuses);
         return json({ ok: true, campuses: result }, 200, origin, env);
       }
+      if (request.method === "POST" && url.pathname === "/v1/admin/sync-from-source") {
+        if (!await authorized(request, env.SYNC_TOKEN)) return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
+        const result = await syncFromGoogle(env);
+        return json({ ok: true, campuses: result }, 200, origin, env);
+      }
       return json({ ok: false, code: "NOT_FOUND" }, 404, origin, env);
     } catch (error) {
       const message = error instanceof Error ? error.message : "UNKNOWN_ERROR";
@@ -64,7 +69,7 @@ export default {
   },
 } satisfies ExportedHandler<AppEnv>;
 
-async function syncFromGoogle(env: AppEnv): Promise<void> {
+async function syncFromGoogle(env: AppEnv): Promise<Array<{ campus: string; count: number }>> {
   if (!env.ROSTER_SOURCE_URL || !env.ROSTER_SOURCE_TOKEN) throw new Error("ROSTER_SOURCE_NOT_CONFIGURED");
   const response = await fetch(env.ROSTER_SOURCE_URL, {
     method: "POST",
@@ -81,6 +86,7 @@ async function syncFromGoogle(env: AppEnv): Promise<void> {
   if (!payload.ok || !Array.isArray(payload.campuses)) throw new Error("INVALID_ROSTER_SOURCE_RESPONSE");
   const result = await syncCampuses(env, payload.campuses);
   console.log(JSON.stringify({ event: "roster_sync", result }));
+  return result;
 }
 
 async function syncCampuses(
