@@ -99,7 +99,11 @@ if (bootstrapToken) {
 let stream = null;
 let running = false;
 let requestInFlight = false;
+let decodeInFlight = false;
 let lastFrameAt = 0;
+let decodedFrames = 0;
+let lastProgressAt = 0;
+let barcodeDetector = null;
 const deviceId = sessionStorage.getItem('edgeDeviceId') ||
   ('edge-test-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)));
 sessionStorage.setItem('edgeDeviceId', deviceId);
@@ -113,8 +117,29 @@ document.getElementById('stop').addEventListener('click', stopCamera);
 campusEl.addEventListener('change', () => sessionStorage.setItem('edgeCampus', campusEl.value));
 window.addEventListener('pagehide', stopCamera);
 window.addEventListener('load', () => {
+  void prepareBarcodeDetector();
   if (terminalToken) setTimeout(() => void startCamera(true), 250);
 });
+window.addEventListener('error', (event) => {
+  running = false;
+  nameEl.textContent = 'QR解析でエラーが発生しました';
+  typeEl.textContent = '';
+  detailEl.textContent = String(event && event.message || 'CLIENT_ERROR');
+  resultEl.className = 'result show error';
+  statusEl.textContent = 'この表示は自動で消えません。';
+});
+
+async function prepareBarcodeDetector() {
+  if (!('BarcodeDetector' in window)) return;
+  try {
+    const formats = typeof window.BarcodeDetector.getSupportedFormats === 'function'
+      ? await window.BarcodeDetector.getSupportedFormats()
+      : ['qr_code'];
+    if (formats.includes('qr_code')) barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  } catch (ignore) {
+    barcodeDetector = null;
+  }
+}
 
 async function startCamera(automatic) {
   if (!terminalToken) {
@@ -125,6 +150,8 @@ async function startCamera(automatic) {
   if (stream && video.srcObject) {
     running = true;
     requestInFlight = false;
+    decodeInFlight = false;
+    decodedFrames = 0;
     resultEl.className = 'result';
     cameraEl.classList.add('active');
     document.getElementById('start').textContent = '読取を再開';
@@ -149,6 +176,8 @@ async function startCamera(automatic) {
     }
     running = true;
     requestInFlight = false;
+    decodeInFlight = false;
+    decodedFrames = 0;
     cameraEl.classList.add('active');
     document.getElementById('start').textContent = '読取を再開';
     statusEl.textContent = 'QRコードを枠内にかざしてください。';
@@ -168,21 +197,37 @@ function stopCamera() {
   cameraEl.classList.remove('active');
 }
 
-function scanFrame(now) {
+async function scanFrame(now) {
   if (!running) return;
   requestAnimationFrame(scanFrame);
-  if (requestInFlight || now - lastFrameAt < 100) return;
+  if (requestInFlight || decodeInFlight || now - lastFrameAt < 100) return;
   lastFrameAt = now;
-  if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
-  const scale = Math.min(1, 960 / video.videoWidth, 540 / video.videoHeight);
+  if (video.readyState < video.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+  decodeInFlight = true;
+  const scale = Math.min(1, 1280 / video.videoWidth, 720 / video.videoHeight);
   canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
   canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
   context.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const image = context.getImageData(0, 0, canvas.width, canvas.height);
   let code = null;
   try {
-    if (typeof jsQR !== 'function') throw new Error('QR_READER_NOT_LOADED');
-    code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+    if (barcodeDetector) {
+      try {
+        const detected = await barcodeDetector.detect(canvas);
+        if (detected && detected[0] && detected[0].rawValue) code = { data: detected[0].rawValue };
+      } catch (ignore) {
+        barcodeDetector = null;
+      }
+    }
+    if (!code) {
+      if (typeof jsQR !== 'function') throw new Error('QR_READER_NOT_LOADED');
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'attemptBoth' });
+    }
+    decodedFrames += 1;
+    if (!code && now - lastProgressAt > 1000) {
+      lastProgressAt = now;
+      statusEl.textContent = 'QRを探しています… 映像解析 ' + decodedFrames + '回';
+    }
   } catch (error) {
     running = false;
     nameEl.textContent = 'QR解析を開始できませんでした';
@@ -190,6 +235,8 @@ function scanFrame(now) {
     resultEl.className = 'result show error';
     statusEl.textContent = 'この表示は自動で消えません。';
     return;
+  } finally {
+    decodeInFlight = false;
   }
   if (code && code.data) void submitQr(code.data);
 }
