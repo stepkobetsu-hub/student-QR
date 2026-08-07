@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10243e">
+  <title>Cloudflare受付テスト | STEP</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #07111f; color: #fff; font-family: system-ui, sans-serif; }
+    body { display: grid; place-items: center; padding: 18px; }
+    main { width: min(100%, 720px); }
+    h1 { margin: 0 0 6px; font-size: clamp(22px, 5vw, 34px); }
+    .notice { margin: 0 0 16px; color: #b7cae7; }
+    .card { padding: 18px; border: 1px solid #294263; border-radius: 18px; background: #10243e; box-shadow: 0 18px 50px #0007; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { display: grid; gap: 6px; font-size: 14px; color: #cad8ec; }
+    input, select, button { min-height: 48px; border-radius: 12px; font: inherit; }
+    input, select { width: 100%; border: 1px solid #526c8f; padding: 0 12px; color: #fff; background: #07111f; }
+    button { border: 0; padding: 0 18px; font-weight: 700; color: #07111f; background: #79e1bb; cursor: pointer; }
+    button.secondary { color: #dce9fa; background: #294263; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .camera { position: relative; display: none; overflow: hidden; aspect-ratio: 4 / 3; margin-top: 16px; border-radius: 18px; background: #000; }
+    .camera.active { display: block; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    .frame { position: absolute; inset: 23% 12%; border: 4px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px #0006; }
+    canvas { display: none; }
+    .result { display: none; margin-top: 16px; padding: 22px; border-radius: 18px; text-align: center; }
+    .result.show { display: block; }
+    .result.ok { color: #06281d; background: #79e1bb; }
+    .result.duplicate { color: #2e2200; background: #ffd86a; }
+    .result.error { background: #a9323c; }
+    .result strong { display: block; font-size: clamp(28px, 8vw, 52px); }
+    .result .type { margin-top: 4px; font-size: clamp(22px, 6vw, 36px); font-weight: 800; }
+    .status { min-height: 24px; margin-top: 12px; color: #b7cae7; }
+    .badge { display: inline-block; margin-bottom: 10px; padding: 5px 10px; border-radius: 999px; color: #ffe69a; background: #6b4b00; font-size: 13px; font-weight: 700; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <span class="badge">試験専用・本番の記録／メール送信なし</span>
+  <h1>Cloudflare受付テスト</h1>
+  <p class="notice">名簿照合・入退室判定・60秒重複・複数端末の動作だけを確認します。</p>
+
+  <section class="card" id="settings">
+    <div class="grid">
+      <label>校舎
+        <select id="campus">
+          <option value="jinryo">神領</option>
+          <option value="otemachi">大手町</option>
+        </select>
+      </label>
+      <label>試験用端末トークン
+        <input id="token" type="password" autocomplete="off" placeholder="このタブを閉じるまで保持">
+      </label>
+    </div>
+    <div class="actions">
+      <button id="start" type="button">カメラを開始</button>
+      <button id="stop" class="secondary" type="button">停止</button>
+    </div>
+  </section>
+
+  <section class="camera" id="camera">
+    <video id="video" autoplay muted playsinline></video>
+    <div class="frame" aria-hidden="true"></div>
+    <canvas id="canvas"></canvas>
+  </section>
+  <section class="result" id="result" aria-live="polite">
+    <strong id="name"></strong>
+    <div class="type" id="type"></div>
+    <div id="detail"></div>
+  </section>
+  <div class="status" id="status" role="status">設定して「カメラを開始」を押してください。</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const API_URL = 'https://step-checkin-edge-staging.stepkobetsu.workers.dev/v1/checkins';
+const campusEl = document.getElementById('campus');
+const tokenEl = document.getElementById('token');
+const cameraEl = document.getElementById('camera');
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const context = canvas.getContext('2d', { willReadFrequently: true });
+const resultEl = document.getElementById('result');
+const nameEl = document.getElementById('name');
+const typeEl = document.getElementById('type');
+const detailEl = document.getElementById('detail');
+const statusEl = document.getElementById('status');
+
+let stream = null;
+let running = false;
+let requestInFlight = false;
+let lastFrameAt = 0;
+const deviceId = sessionStorage.getItem('edgeDeviceId') ||
+  ('edge-test-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)));
+sessionStorage.setItem('edgeDeviceId', deviceId);
+campusEl.value = sessionStorage.getItem('edgeCampus') || 'jinryo';
+tokenEl.value = sessionStorage.getItem('edgeTerminalToken') || '';
+
+document.getElementById('start').addEventListener('click', startCamera);
+document.getElementById('stop').addEventListener('click', stopCamera);
+window.addEventListener('pagehide', stopCamera);
+
+async function startCamera() {
+  const token = tokenEl.value.trim();
+  if (!token) {
+    statusEl.textContent = '試験用端末トークンを入力してください。';
+    tokenEl.focus();
+    return;
+  }
+  sessionStorage.setItem('edgeTerminalToken', token);
+  sessionStorage.setItem('edgeCampus', campusEl.value);
+  stopCamera();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    running = true;
+    cameraEl.classList.add('active');
+    statusEl.textContent = 'QRコードを枠内にかざしてください。';
+    requestAnimationFrame(scanFrame);
+  } catch (error) {
+    statusEl.textContent = 'カメラを開始できません。ブラウザのカメラ許可を確認してください。';
+  }
+}
+
+function stopCamera() {
+  running = false;
+  if (stream) stream.getTracks().forEach(track => track.stop());
+  stream = null;
+  video.srcObject = null;
+  cameraEl.classList.remove('active');
+}
+
+function scanFrame(now) {
+  if (!running) return;
+  requestAnimationFrame(scanFrame);
+  if (requestInFlight || now - lastFrameAt < 100) return;
+  lastFrameAt = now;
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' });
+  if (code && code.data) void submitQr(code.data);
+}
+
+async function submitQr(qrKey) {
+  requestInFlight = true;
+  resultEl.className = 'result';
+  statusEl.textContent = 'Cloudflareで照合しています…';
+  const receiptId = crypto.randomUUID ? crypto.randomUUID() :
+    ('edge-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + tokenEl.value.trim(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        campus: campusEl.value,
+        qrKey: String(qrKey).trim(),
+        receiptId,
+        deviceId
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.code || ('HTTP_' + response.status));
+    nameEl.textContent = (data.name || '受付完了') + (data.role === 'teacher' ? ' 先生' : ' さん');
+    typeEl.textContent = data.type || '';
+    detailEl.textContent = data.duplicate
+      ? '60秒以内の重複読取です。状態は変更していません。'
+      : 'Cloudflare側の判定を受け付けました。';
+    resultEl.className = 'result show ' + (data.duplicate ? 'duplicate' : 'ok');
+    statusEl.textContent = '受付ID: ' + receiptId.slice(-8) + ' / 端末: ' + deviceId.slice(-8);
+  } catch (error) {
+    nameEl.textContent = '受付できませんでした';
+    typeEl.textContent = '';
+    detailEl.textContent = error && error.message === 'SUBJECT_NOT_FOUND'
+      ? 'この校舎の同期名簿にQRがありません。'
+      : '接続または認証を確認してください（' + (error && error.message || 'UNKNOWN') + '）。';
+    resultEl.className = 'result show error';
+    statusEl.textContent = '再試行できます。';
+  } finally {
+    setTimeout(() => { requestInFlight = false; }, 2500);
+  }
+}
+</script>
+</body>
+</html>
