@@ -14,6 +14,8 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("/v1/checkins");
     expect(html).toContain("width:30%;height:38%");
     expect(html).toContain("displayProcessing()");
+    expect(html).toContain("result.className = ''");
+    expect(html).not.toContain("typeEl.innerHTML = '受付中'");
     expect(html).toContain("teacher-arrival.png");
     expect(html).toContain("teacher-goodbye.png");
     expect(html).toContain("teacher-duplicate.png");

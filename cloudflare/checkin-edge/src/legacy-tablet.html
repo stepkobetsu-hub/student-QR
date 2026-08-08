@@ -255,7 +255,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       if (xhr.status >= 200 && xhr.status < 300 && data.attendanceSaved) {
         displayResult(true, data.name || '', data.type || '', data.label || '', !!data.duplicate, !!data.isTeacher);
       } else if (data.code === 'UNAUTHORIZED') {
-        displayResult(false, '', '', 'この端末の校舎設定を確認してください');
+        displayResult(false, '', '', 'この端末の受付設定を確認してください');
       } else if (data.code === 'SUBJECT_NOT_FOUND') {
         displayResult(false, '', '', '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください');
       } else {
@@ -275,10 +275,8 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   function displayProcessing() {
     if (resultTimer) clearTimeout(resultTimer);
     clearCharacter();
-    result.className = 'show processing';
-    nameEl.innerHTML = 'QRを確認しました';
-    typeEl.innerHTML = '受付中';
-    detailEl.innerHTML = '記録を確認しています。少しお待ちください';
+    result.className = '';
+    message.innerHTML = '確認しています。少しお待ちください';
   }
 
   function displayResult(ok, name, type, detail, duplicate, isTeacher) {

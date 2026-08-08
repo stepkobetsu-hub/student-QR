@@ -46,6 +46,13 @@ type AppEnv = Env & {
   CHECKIN_WRITE_ACTION?: string;
 };
 
+export interface TerminalTokenEnv {
+  TERMINAL_TOKEN?: string;
+  TERMINAL_TOKEN_JINRYO?: string;
+  TERMINAL_TOKEN_OTEMACHI?: string;
+  INTEGRATION_TEST_TOKEN?: string;
+}
+
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_PHOTO_BASE64_LENGTH = 1_600_000;
 const CAMPUS_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
@@ -97,7 +104,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/checkins") {
         const body = await readJson<CheckinRequest>(request);
         validateCheckin(body);
-        if (!await authorized(request, terminalTokenForCampus(env, body.campus))) {
+        if (!await terminalAuthorized(request, env, body.campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const stub = env.CAMPUS_CHECKIN.getByName(body.campus);
@@ -131,7 +138,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/receipt-status") {
         const body = await readJson<ReceiptStatusRequest>(request);
         validateReceiptStatus(body);
-        if (!await authorized(request, terminalTokenForCampus(env, body.campus))) {
+        if (!await terminalAuthorized(request, env, body.campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const alternate = alternateCampus(body.campus);
@@ -315,11 +322,18 @@ function validateCampus(campus: string): void {
   if (!CAMPUS_PATTERN.test(String(campus ?? ""))) throw new Error("INVALID_CAMPUS");
 }
 
-function terminalTokenForCampus(env: AppEnv, campus: string): string | undefined {
-  if (campus === "integration-test" && env.INTEGRATION_TEST_TOKEN) return env.INTEGRATION_TEST_TOKEN;
-  if (campus === "jinryo" && env.TERMINAL_TOKEN_JINRYO) return env.TERMINAL_TOKEN_JINRYO;
-  if (campus === "otemachi" && env.TERMINAL_TOKEN_OTEMACHI) return env.TERMINAL_TOKEN_OTEMACHI;
-  return env.TERMINAL_TOKEN;
+export async function terminalAuthorized(
+  request: Request,
+  env: TerminalTokenEnv,
+  campus: string,
+): Promise<boolean> {
+  if (campus === "integration-test") return authorized(request, env.INTEGRATION_TEST_TOKEN);
+  if (campus !== "jinryo" && campus !== "otemachi") return false;
+  return authorizedAny(request, [
+    env.TERMINAL_TOKEN,
+    env.TERMINAL_TOKEN_JINRYO,
+    env.TERMINAL_TOKEN_OTEMACHI,
+  ]);
 }
 
 function checkinClientResponse(result: AcceptResponse): Record<string, unknown> {
@@ -397,18 +411,25 @@ async function readJson<T>(request: Request): Promise<T> {
 }
 
 async function authorized(request: Request, expected: string | undefined): Promise<boolean> {
-  if (!expected) return false;
+  return authorizedAny(request, [expected]);
+}
+
+async function authorizedAny(request: Request, expectedValues: Array<string | undefined>): Promise<boolean> {
+  const expectedTokens = [...new Set(expectedValues.filter((value): value is string => typeof value === "string" && value.length > 0))];
+  if (expectedTokens.length === 0) return false;
   const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   const encoder = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(supplied)),
-    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
-  ]);
-  const left = new Uint8Array(a);
-  const right = new Uint8Array(b);
-  let difference = 0;
-  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
-  return difference === 0;
+  const suppliedDigest = await crypto.subtle.digest("SHA-256", encoder.encode(supplied));
+  const expectedDigests = await Promise.all(expectedTokens.map((token) => (
+    crypto.subtle.digest("SHA-256", encoder.encode(token))
+  )));
+  const left = new Uint8Array(suppliedDigest);
+  return expectedDigests.some((digest) => {
+    const right = new Uint8Array(digest);
+    let difference = 0;
+    for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+    return difference === 0;
+  });
 }
 
 function corsPreflight(origin: string, env: AppEnv): Response {

@@ -27,7 +27,7 @@
 Google側へ同期要求が集中しないようにします。これにより、朝7時以降に登録された生徒も、
 原則として最初のQR読取時から利用できます。
 
-校舎設定は端末認証と運用記録のために保持しますが、受付可否の制限には使用しません。
+校舎設定は運用記録のために保持しますが、受付可否や端末認証の制限には使用しません。
 したがって、神領設定の端末でも大手町の生徒・講師を、大手町設定の端末でも神領の
 生徒・講師を受け付けられます。既存端末のURLや初期設定を変更する必要はありません。
 
@@ -40,13 +40,15 @@ GitHub Pages上のインストール済みPWA自体が強制終了する端末�
 
 ## 必要なSecrets
 
-- `TERMINAL_TOKEN`: タブレット受付API用（校舎別Secret未登録時の共通予備）
-- `TERMINAL_TOKEN_JINRYO`: 神領校端末用
-- `TERMINAL_TOKEN_OTEMACHI`: 大手町校端末用
+- `TERMINAL_TOKEN`: タブレット受付API用（共通）
+- `TERMINAL_TOKEN_JINRYO`: 既存の神領校端末との互換用
+- `TERMINAL_TOKEN_OTEMACHI`: 既存の大手町校端末との互換用
 - `SYNC_TOKEN`: 管理者による名簿同期用
 - `ROSTER_SOURCE_TOKEN`: Apps Script名簿出力認証用
 
 Secretsはソースや設定ファイルに記載せず、`wrangler secret put`で環境別に登録します。
+3種類の端末トークンはいずれも神領・大手町の両方で有効です。校舎とトークンの
+組み合わせで受付を拒否しないため、既存タブレットの再設定は不要です。
 
 `ROSTER_SOURCE_URL`、`CHECKIN_WRITE_URL`、`CHECKIN_WRITE_ENABLED`は環境別の通常変数です。
 ステージングは`CHECKIN_WRITE_ACTION=edgeCheckInProbe`を使い、正式記録・ポイント・メールを作らず書き戻し経路だけを検証します。
