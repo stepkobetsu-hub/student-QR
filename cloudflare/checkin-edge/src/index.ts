@@ -3,6 +3,7 @@ import {
   type AcceptRequest,
   type AcceptResponse,
   type LegacyStatusResponse,
+  type RosterRefreshClaim,
   type RosterSubject,
 } from "./checkin-do";
 
@@ -47,6 +48,14 @@ const MAX_BODY_BYTES = 2_000_000;
 const MAX_PHOTO_BASE64_LENGTH = 1_600_000;
 const CAMPUS_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 const RECEIPT_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
+const ROSTER_REFRESH_COOLDOWN_MS = 30_000;
+const ROSTER_REFRESH_LEASE_MS = 30_000;
+
+export interface CampusCheckinApi {
+  accept(input: AcceptRequest): Promise<AcceptResponse>;
+  claimRosterRefresh(now: number, cooldownMs: number, leaseMs: number): Promise<RosterRefreshClaim>;
+  completeRosterRefresh(completedAt: number, succeeded: boolean): Promise<void>;
+}
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
@@ -65,14 +74,22 @@ export default {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const stub = env.CAMPUS_CHECKIN.getByName(body.campus);
-        const result = await stub.accept({
+        const acceptedAt = Date.now();
+        const input: AcceptRequest = {
           qrKey: body.qrKey.trim(),
           receiptId: body.receiptId,
           deviceId: body.deviceId.trim(),
-          acceptedAt: Date.now(),
+          acceptedAt,
           photoBase64: body.photoBase64,
           clientTimings: body.clientTimings,
-        });
+        };
+        const result = await acceptWithRosterRefresh(
+          stub,
+          input,
+          () => syncFromGoogle(env),
+          () => Date.now(),
+          body.campus,
+        );
         console.log(JSON.stringify({
           event: "checkin",
           campus: body.campus,
@@ -116,12 +133,53 @@ export default {
   },
 } satisfies ExportedHandler<AppEnv>;
 
+export async function acceptWithRosterRefresh(
+  stub: CampusCheckinApi,
+  input: AcceptRequest,
+  refreshRoster: () => Promise<unknown>,
+  now: () => number = () => Date.now(),
+  campus = "unknown",
+): Promise<AcceptResponse> {
+  const firstResult = await stub.accept(input);
+  if (firstResult.code !== "SUBJECT_NOT_FOUND") return firstResult;
+
+  const claim = await stub.claimRosterRefresh(now(), ROSTER_REFRESH_COOLDOWN_MS, ROSTER_REFRESH_LEASE_MS);
+  let refreshSucceeded = false;
+  if (claim.claimed) {
+    try {
+      await refreshRoster();
+      refreshSucceeded = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "ROSTER_REFRESH_FAILED";
+      console.error(JSON.stringify({ event: "roster_refresh_on_miss_failed", campus, code: message }));
+    } finally {
+      try {
+        await stub.completeRosterRefresh(now(), refreshSucceeded);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "ROSTER_REFRESH_COMPLETION_FAILED";
+        console.error(JSON.stringify({ event: "roster_refresh_completion_failed", campus, code: message }));
+      }
+    }
+  }
+
+  console.log(JSON.stringify({
+    event: "roster_refresh_on_miss",
+    campus,
+    claimed: claim.claimed,
+    reason: claim.reason,
+    refreshSucceeded,
+    retryAfterMs: claim.retryAfterMs,
+  }));
+  return stub.accept(input);
+}
+
 async function syncFromGoogle(env: AppEnv): Promise<RosterSyncResult[]> {
   if (!env.ROSTER_SOURCE_URL || !env.ROSTER_SOURCE_TOKEN) throw new Error("ROSTER_SOURCE_NOT_CONFIGURED");
   const response = await fetch(env.ROSTER_SOURCE_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "edgeRosterExport", token: env.ROSTER_SOURCE_TOKEN }),
+    signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) throw new Error(`ROSTER_SOURCE_HTTP_${response.status}`);
   const payload = await response.json<RosterSourceResponse>();
