@@ -6,6 +6,8 @@ import {
   type RosterRefreshClaim,
   type RosterSubject,
 } from "./checkin-do";
+import legacyTabletHtml from "./legacy-tablet.html";
+import legacyJsQr from "./legacy-jsqr.txt";
 
 export { CampusCheckin };
 
@@ -66,6 +68,27 @@ export default {
     try {
       if (request.method === "GET" && url.pathname === "/health") {
         return json({ ok: true, service: "step-checkin-edge", environment: env.ENVIRONMENT }, 200, origin, env);
+      }
+      if (request.method === "GET" && (url.pathname === "/legacy-tablet" || url.pathname === "/legacy-tablet/")) {
+        return new Response(legacyTabletHtml, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+      if (request.method === "GET" && url.pathname === "/legacy-jsqr.js") {
+        return new Response(legacyJsQr, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/javascript; charset=utf-8",
+            "Cache-Control": "public, max-age=604800, immutable",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
       }
       if (request.method === "POST" && url.pathname === "/v1/checkins") {
         const body = await readJson<CheckinRequest>(request);
