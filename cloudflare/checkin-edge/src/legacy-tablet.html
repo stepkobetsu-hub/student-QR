@@ -108,11 +108,12 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   function loadConfig() {
     try {
       var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-      if (!value || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
-      return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
+      if (value && value.token && /^https:\/\//.test(value.apiUrl)) {
+        return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
+      }
     } catch (ignore) {
-      return null;
     }
+    return { campus: 'jinryo', token: '', apiUrl: API_DEFAULT };
   }
 
   function makeDeviceId() {
@@ -226,10 +227,6 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       displayResult(false, '', '', 'QRの形式が正しくありません');
       return;
     }
-    if (!config) {
-      displayResult(false, '', '', 'この端末の受付設定を読み込めません。画面を開き直してください');
-      return;
-    }
     busy = true;
     displayProcessing();
     message.innerHTML = '確認しています。初回の名簿更新には20秒ほどかかる場合があります';
@@ -245,7 +242,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     xhr = new XMLHttpRequest();
     xhr.open('POST', String(config.apiUrl).replace(/\/$/, '') + '/v1/checkins', true);
     xhr.timeout = REQUEST_TIMEOUT;
-    xhr.setRequestHeader('Authorization', 'Bearer ' + config.token);
+    if (config.token) xhr.setRequestHeader('Authorization', 'Bearer ' + config.token);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = function () {
       var data;
