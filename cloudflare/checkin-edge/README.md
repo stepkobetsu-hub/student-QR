@@ -26,6 +26,13 @@
 Google側へ同期要求が集中しないようにします。これにより、朝7時以降に登録された生徒も、
 原則として最初のQR読取時から利用できます。
 
+## 古いAndroidタブレット
+
+GitHub Pages上のインストール済みPWA自体が強制終了する端末向けに、Workerから直接
+`GET /legacy-tablet` を配信します。QR解析ライブラリも同じWorkerの
+`GET /legacy-jsqr.js` から配信するため、壊れたPWAや外部CDNを経由しません。
+校舎・端末トークンは通常画面と同じURLハッシュ形式で初回設定します。
+
 ## 必要なSecrets
 
 - `TERMINAL_TOKEN`: タブレット受付API用（校舎別Secret未登録時の共通予備）

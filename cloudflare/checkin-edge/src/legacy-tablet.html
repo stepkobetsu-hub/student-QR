@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#17324d">
+<title>入退室 | 軽量モード</title>
+<style>
+html,body{width:100%;height:100%;margin:0;background:#111;color:#fff;font-family:sans-serif;overflow:hidden}
+#wrap{position:relative;width:100%;height:100%}video{width:100%;height:100%;object-fit:cover;-webkit-transform:scaleX(-1);transform:scaleX(-1)}
+canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;height:28%;border:4px solid #fff;border-radius:14px}
+#frame span{position:absolute;left:0;right:0;bottom:-34px;text-align:center;font-size:15px;text-shadow:0 1px 3px #000}
+#top{position:absolute;left:0;right:0;top:0;padding:16px;text-align:center;background:rgba(0,0,0,.55)}#clock{font-size:23px;font-weight:bold}
+#mode{font-size:13px;margin-top:4px;color:#d6e7ff}#status{position:absolute;left:12px;bottom:12px;width:14px;height:14px;border-radius:50%;background:#45c879}
+#message{position:absolute;left:4%;right:4%;bottom:4%;padding:10px;text-align:center;background:rgba(0,0,0,.7);border-radius:12px;font-size:15px}
+#result{display:none;position:absolute;left:0;right:0;top:0;bottom:0;text-align:center;padding-top:24%;background:#17324d}
+#result.show{display:block}#result.entry{background:#f5df4d;color:#17324d}#result.exit{background:#173b7a}#result.error{background:#a83232}
+#name{font-size:36px;font-weight:bold}#type{font-size:30px;font-weight:bold;margin-top:14px}#detail{font-size:16px;margin:14px 22px;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="scanCanvas"></canvas>
+  <canvas id="photoCanvas"></canvas>
+  <div id="frame"><span>ここにQRをかざす</span></div>
+  <div id="top"><div id="clock">--:--</div><div id="mode">古いタブレット用・軽量モード</div></div>
+  <div id="status"></div>
+  <div id="message">カメラを準備しています</div>
+  <div id="result"><div id="name"></div><div id="type"></div><div id="detail"></div></div>
+</div>
+<script src="/legacy-jsqr.js"></script>
+<script>
+(function () {
+  'use strict';
+  var API_DEFAULT = 'https://step-checkin-edge-staging.stepkobetsu.workers.dev';
+  var CONFIG_KEY = 'stepCheckinEdgeConfigV1';
+  var DEVICE_KEY = 'stepCheckinEdgeDeviceIdV1';
+  var FRAME_INTERVAL = 200;
+  var REQUEST_TIMEOUT = 25000;
+  var video = document.getElementById('video');
+  var scanCanvas = document.getElementById('scanCanvas');
+  var scanContext = scanCanvas.getContext('2d');
+  var photoCanvas = document.getElementById('photoCanvas');
+  var photoContext = photoCanvas.getContext('2d');
+  var message = document.getElementById('message');
+  var status = document.getElementById('status');
+  var result = document.getElementById('result');
+  var nameEl = document.getElementById('name');
+  var typeEl = document.getElementById('type');
+  var detailEl = document.getElementById('detail');
+  var config;
+  var deviceId;
+  var busy = false;
+  var lastFrameAt = 0;
+  var lastCode = '';
+  var lastCodeAt = 0;
+  var raf = window.requestAnimationFrame || function (callback) { return setTimeout(function () { callback(Date.now()); }, 40); };
+
+  function parseParams(raw) {
+    var values = {};
+    var items = String(raw || '').replace(/^[?#]/, '').split('&');
+    var i;
+    var pair;
+    var key;
+    var value;
+    for (i = 0; i < items.length; i += 1) {
+      if (!items[i]) continue;
+      pair = items[i].split('=');
+      try {
+        key = decodeURIComponent(pair.shift().replace(/\+/g, ' '));
+        value = decodeURIComponent(pair.join('=').replace(/\+/g, ' '));
+        values[key] = value;
+      } catch (ignore) {}
+    }
+    return values;
+  }
+
+  function bootstrapConfig() {
+    var params = parseParams(location.hash);
+    var campus = params.campus;
+    var token = params.token;
+    var apiUrl = params.api || API_DEFAULT;
+    if (campus && token && /^(jinryo|otemachi)$/.test(campus) && /^https:\/\//.test(apiUrl)) {
+      try {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: campus, token: token, apiUrl: apiUrl }));
+        if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
+      } catch (ignore) {}
+    }
+  }
+
+  function loadConfig() {
+    try {
+      var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+      if (!value || !/^(jinryo|otemachi)$/.test(value.campus) || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
+      return value;
+    } catch (ignore) {
+      return null;
+    }
+  }
+
+  function makeDeviceId() {
+    return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function updateClock() {
+    var now = new Date();
+    var hours = String(now.getHours());
+    var minutes = String(now.getMinutes());
+    if (hours.length < 2) hours = '0' + hours;
+    if (minutes.length < 2) minutes = '0' + minutes;
+    document.getElementById('clock').innerHTML = hours + ':' + minutes;
+  }
+
+  function showError(text) {
+    status.style.background = '#e34b4b';
+    message.innerHTML = text;
+  }
+
+  function requestCamera(success, failure) {
+    var modern = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    var legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    var constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
+    if (modern) {
+      navigator.mediaDevices.getUserMedia(constraints).then(success, function () {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(success, failure);
+      });
+      return;
+    }
+    if (legacy) {
+      legacy.call(navigator, { video: true, audio: false }, success, failure);
+      return;
+    }
+    failure({ message: 'このブラウザーはカメラに対応していません' });
+  }
+
+  function attachStream(stream) {
+    try {
+      if ('srcObject' in video) video.srcObject = stream;
+      else video.src = (window.URL || window.webkitURL).createObjectURL(stream);
+      var played = video.play();
+      if (played && played.catch) played.catch(function () {});
+      status.style.background = '#45c879';
+      message.innerHTML = 'QRコードを右下の枠にかざしてください';
+      raf(scanLoop);
+    } catch (error) {
+      showError('カメラ映像を表示できませんでした');
+    }
+  }
+
+  function scanLoop(frameTime) {
+    var width;
+    var height;
+    var scale;
+    var image;
+    var code;
+    var now;
+    if (!busy && frameTime - lastFrameAt >= FRAME_INTERVAL && video.readyState >= 2) {
+      lastFrameAt = frameTime;
+      width = video.videoWidth || 640;
+      height = video.videoHeight || 480;
+      scale = Math.min(1, 480 / width, 360 / height);
+      scanCanvas.width = Math.max(1, Math.round(width * scale));
+      scanCanvas.height = Math.max(1, Math.round(height * scale));
+      try {
+        scanContext.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+        image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+        code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null;
+        if (code && code.data) {
+          now = Date.now();
+          if (code.data !== lastCode || now - lastCodeAt >= 5000) {
+            lastCode = code.data;
+            lastCodeAt = now;
+            submitCode(code.data);
+          }
+        }
+      } catch (ignore) {}
+    }
+    raf(scanLoop);
+  }
+
+  function validQr(value) {
+    return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(String(value || '').replace(/^\s+|\s+$/g, ''));
+  }
+
+  function receiptId() {
+    return 'legacy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+  }
+
+  function takePhoto() {
+    var width = video.videoWidth || 640;
+    var height = video.videoHeight || 480;
+    var scale = Math.min(1, 280 / width);
+    try {
+      photoCanvas.width = Math.max(1, Math.round(width * scale));
+      photoCanvas.height = Math.max(1, Math.round(height * scale));
+      photoContext.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
+      return photoCanvas.toDataURL('image/jpeg', 0.28);
+    } catch (ignore) {
+      return '';
+    }
+  }
+
+  function submitCode(qrData) {
+    var xhr;
+    var id;
+    var payload;
+    if (busy) return;
+    if (!validQr(qrData)) {
+      displayResult(false, '', '', 'QRの形式が正しくありません');
+      return;
+    }
+    if (!config) {
+      displayResult(false, '', '', 'この端末の校舎設定がありません。設定用QRをもう一度読み取ってください');
+      return;
+    }
+    busy = true;
+    message.innerHTML = '確認しています。初回の名簿更新には20秒ほどかかる場合があります';
+    id = receiptId();
+    payload = {
+      campus: config.campus,
+      qrKey: String(qrData).replace(/^\s+|\s+$/g, ''),
+      receiptId: id,
+      deviceId: deviceId,
+      photoBase64: takePhoto(),
+      clientTimings: { compatibilityMode: true }
+    };
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', String(config.apiUrl).replace(/\/$/, '') + '/v1/checkins', true);
+    xhr.timeout = REQUEST_TIMEOUT;
+    xhr.setRequestHeader('Authorization', 'Bearer ' + config.token);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function () {
+      var data;
+      if (xhr.readyState !== 4) return;
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch (ignore) { data = {}; }
+      if (xhr.status >= 200 && xhr.status < 300 && data.attendanceSaved) {
+        displayResult(true, data.name || '', data.type || '', data.duplicate ? '60秒以内の同じ受付です' : (data.label || '受付しました'));
+      } else if (data.code === 'UNAUTHORIZED') {
+        displayResult(false, '', '', 'この端末の校舎設定を確認してください');
+      } else if (data.code === 'SUBJECT_NOT_FOUND') {
+        displayResult(false, '', '', 'この校舎の名簿にQRがありません');
+      } else {
+        displayResult(false, '', '', '通信に失敗しました。もう一度かざしてください');
+      }
+    };
+    xhr.ontimeout = function () { displayResult(false, '', '', '確認に時間がかかりました。もう一度かざしてください'); };
+    xhr.onerror = function () { displayResult(false, '', '', '通信できませんでした。接続を確認してください'); };
+    try { xhr.send(JSON.stringify(payload)); } catch (error) { displayResult(false, '', '', '通信を開始できませんでした'); }
+  }
+
+  function displayResult(ok, name, type, detail) {
+    result.className = 'show ' + (ok ? (type === '入室' || type === '出勤' ? 'entry' : 'exit') : 'error');
+    nameEl.innerHTML = ok ? escapeText(name) + ' さん' : '受付できませんでした';
+    typeEl.innerHTML = ok ? escapeText(type) : '';
+    detailEl.innerHTML = escapeText(detail || '');
+    setTimeout(function () {
+      result.className = '';
+      message.innerHTML = 'QRコードを右下の枠にかざしてください';
+      busy = false;
+    }, ok ? 2500 : 4000);
+  }
+
+  function escapeText(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  bootstrapConfig();
+  config = loadConfig();
+  try {
+    deviceId = localStorage.getItem(DEVICE_KEY) || makeDeviceId();
+    localStorage.setItem(DEVICE_KEY, deviceId);
+  } catch (ignore) {
+    deviceId = makeDeviceId();
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+  if (!window.jsQR) {
+    showError('QR読取機能を読み込めませんでした');
+  } else {
+    requestCamera(attachStream, function (error) {
+      showError('カメラを起動できませんでした。カメラ権限を確認してください');
+    });
+  }
+})();
+</script>
+</body>
+</html>
