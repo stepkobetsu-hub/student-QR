@@ -23,6 +23,9 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("goodbye.png");
     expect(html).toContain("duplicate.png");
     expect(html).toContain("resultCharacter.removeAttribute('src')");
+    expect(html).toContain("return { campus: 'jinryo'");
+    expect(html).not.toContain("/^(jinryo|otemachi)$/.test(value.campus)");
+    expect(html).not.toContain("この端末の校舎設定");
   });
 
   it("serves the bundled ES5 QR reader from the same Worker origin", async () => {

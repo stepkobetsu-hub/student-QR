@@ -104,11 +104,12 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/checkins") {
         const body = await readJson<CheckinRequest>(request);
         validateCheckin(body);
-        if (!await terminalAuthorized(request, env, body.campus)) {
+        const campus = resolveCheckinCampus(body.campus);
+        if (!await terminalAuthorized(request, env, campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
-        const stub = env.CAMPUS_CHECKIN.getByName(body.campus);
-        const alternate = alternateCampus(body.campus);
+        const stub = env.CAMPUS_CHECKIN.getByName(campus);
+        const alternate = alternateCampus(campus);
         const acceptedAt = Date.now();
         const input: AcceptRequest = {
           qrKey: body.qrKey.trim(),
@@ -123,12 +124,12 @@ export default {
           input,
           () => syncFromGoogle(env),
           () => Date.now(),
-          body.campus,
+          campus,
           alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
         );
         console.log(JSON.stringify({
           event: "checkin",
-          campus: body.campus,
+          campus,
           code: result.code,
           receiptId: body.receiptId,
           legacyState: result.legacyState,
@@ -138,12 +139,13 @@ export default {
       if (request.method === "POST" && url.pathname === "/v1/receipt-status") {
         const body = await readJson<ReceiptStatusRequest>(request);
         validateReceiptStatus(body);
-        if (!await terminalAuthorized(request, env, body.campus)) {
+        const campus = resolveCheckinCampus(body.campus);
+        if (!await terminalAuthorized(request, env, campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
-        const alternate = alternateCampus(body.campus);
+        const alternate = alternateCampus(campus);
         const status = await getLegacyStatusWithCampusFallback(
-          env.CAMPUS_CHECKIN.getByName(body.campus),
+          env.CAMPUS_CHECKIN.getByName(campus),
           body.receiptId,
           alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
         );
@@ -299,7 +301,6 @@ function validateSubject(subject: RosterSubject): RosterSubject {
 
 function validateCheckin(body: CheckinRequest): void {
   if (!body || typeof body !== "object") throw new Error("INVALID_BODY");
-  validateCampus(body.campus);
   if (!String(body.qrKey ?? "").trim() || String(body.qrKey).length > 500) throw new Error("INVALID_QR_KEY");
   if (!RECEIPT_PATTERN.test(String(body.receiptId ?? ""))) throw new Error("INVALID_RECEIPT_ID");
   if (!String(body.deviceId ?? "").trim() || String(body.deviceId).length > 120) throw new Error("INVALID_DEVICE_ID");
@@ -314,12 +315,11 @@ function validateCheckin(body: CheckinRequest): void {
 
 function validateReceiptStatus(body: ReceiptStatusRequest): void {
   if (!body || typeof body !== "object") throw new Error("INVALID_BODY");
-  validateCampus(body.campus);
   if (!RECEIPT_PATTERN.test(String(body.receiptId ?? ""))) throw new Error("INVALID_RECEIPT_ID");
 }
 
-function validateCampus(campus: string): void {
-  if (!CAMPUS_PATTERN.test(String(campus ?? ""))) throw new Error("INVALID_CAMPUS");
+export function resolveCheckinCampus(campus: unknown): "jinryo" | "integration-test" {
+  return campus === "integration-test" ? "integration-test" : "jinryo";
 }
 
 export async function terminalAuthorized(
