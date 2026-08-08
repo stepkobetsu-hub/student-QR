@@ -95,12 +95,11 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 
   function bootstrapConfig() {
     var params = parseParams(location.hash);
-    var campus = params.campus;
     var token = params.token;
     var apiUrl = params.api || API_DEFAULT;
-    if (campus && token && /^(jinryo|otemachi)$/.test(campus) && /^https:\/\//.test(apiUrl)) {
+    if (token && /^https:\/\//.test(apiUrl)) {
       try {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: campus, token: token, apiUrl: apiUrl }));
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token: token, apiUrl: apiUrl }));
         if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
       } catch (ignore) {}
     }
@@ -109,8 +108,8 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   function loadConfig() {
     try {
       var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-      if (!value || !/^(jinryo|otemachi)$/.test(value.campus) || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
-      return value;
+      if (!value || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
+      return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
     } catch (ignore) {
       return null;
     }
@@ -228,7 +227,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       return;
     }
     if (!config) {
-      displayResult(false, '', '', 'この端末の校舎設定がありません。設定用QRをもう一度読み取ってください');
+      displayResult(false, '', '', 'この端末の受付設定を読み込めません。画面を開き直してください');
       return;
     }
     busy = true;

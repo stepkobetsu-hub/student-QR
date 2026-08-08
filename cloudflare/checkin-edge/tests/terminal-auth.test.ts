@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { terminalAuthorized, type TerminalTokenEnv } from "../src/index";
+import { resolveCheckinCampus, terminalAuthorized, type TerminalTokenEnv } from "../src/index";
 
 const env: TerminalTokenEnv = {
   TERMINAL_TOKEN: "common-token",
@@ -39,5 +39,18 @@ describe("terminalAuthorized", () => {
   it("keeps integration-test authentication isolated", async () => {
     await expect(terminalAuthorized(terminalRequest("integration-token"), env, "integration-test")).resolves.toBe(true);
     await expect(terminalAuthorized(terminalRequest("common-token"), env, "integration-test")).resolves.toBe(false);
+  });
+});
+
+describe("resolveCheckinCampus", () => {
+  it("uses one shared operational campus for both tablets", () => {
+    expect(resolveCheckinCampus("jinryo")).toBe("jinryo");
+    expect(resolveCheckinCampus("otemachi")).toBe("jinryo");
+    expect(resolveCheckinCampus("古い校舎設定")).toBe("jinryo");
+    expect(resolveCheckinCampus(undefined)).toBe("jinryo");
+  });
+
+  it("keeps the isolated integration test namespace", () => {
+    expect(resolveCheckinCampus("integration-test")).toBe("integration-test");
   });
 });

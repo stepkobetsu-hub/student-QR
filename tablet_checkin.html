@@ -744,21 +744,19 @@ function applyEdgeBootstrap() {
     history.replaceState(null, '', location.pathname + location.search);
     return;
   }
-  const campus = params.get('campus');
   const token = params.get('token');
-  if (!campus || !token) return;
-  if (!/^(jinryo|otemachi)$/.test(campus)) return;
+  if (!token) return;
   const apiUrl = params.get('api') || DEFAULT_EDGE_API_URL;
   if (!/^https:\/\/[A-Za-z0-9.-]+(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%-]*)*$/.test(apiUrl)) return;
-  localStorage.setItem(EDGE_CONFIG_KEY, JSON.stringify({ campus, token, apiUrl }));
+  localStorage.setItem(EDGE_CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token, apiUrl }));
   history.replaceState(null, '', location.pathname + location.search);
 }
 
 function loadEdgeConfig() {
   try {
     const value = JSON.parse(localStorage.getItem(EDGE_CONFIG_KEY) || 'null');
-    if (!value || !/^(jinryo|otemachi)$/.test(value.campus) || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
-    return value;
+    if (!value || !value.token || !/^https:\/\//.test(value.apiUrl)) return null;
+    return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
   } catch (ignore) {
     return null;
   }
