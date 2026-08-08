@@ -7,6 +7,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>入退室 | Step個別指導ステップ</title>
+<script>
+(function () {
+  try {
+    var ua = navigator.userAgent || '';
+    var androidMatch = ua.match(/Android\s+([0-9]+)/i);
+    var chromeMatch = ua.match(/(?:Chrome|CriOS)\/([0-9]+)/i);
+    var androidMajor = androidMatch ? parseInt(androidMatch[1], 10) : 0;
+    var chromeMajor = chromeMatch ? parseInt(chromeMatch[1], 10) : 0;
+    var forceCompat = /(?:^|[?&])compat=1(?:&|$)/.test(location.search || '');
+    var missingModernApi = !window.Promise || !window.fetch || !window.AbortController ||
+      !window.URLSearchParams || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia;
+    var oldAndroid = androidMajor > 0 && androidMajor < 9;
+    var oldChrome = chromeMajor > 0 && chromeMajor < 70;
+    if (forceCompat || missingModernApi || oldAndroid || oldChrome) {
+      location.replace('tablet_checkin_compat.html' + location.search + location.hash);
+    }
+  } catch (ignore) {
+    location.replace('tablet_checkin_compat.html' + location.search + location.hash);
+  }
+})();
+</script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -286,7 +307,7 @@
   <div id="scanHint" role="status" aria-live="polite"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="vendor/jsQR.js"></script>
 <script>
 // STEPシステム資産管理台帳で確認した「生徒QR」既存デプロイ。
 const LEGACY_API_URL = "https://script.google.com/macros/s/AKfycbw8L36Fj8SKtvNHQBi41FMqAPvDLGAdu1bbLxvd-78A8dFUOkWGnYRE-8PRNq7QZOl70w/exec";
