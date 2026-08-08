@@ -518,6 +518,7 @@ const LOGIN_NAME_KEY = 'studentQrLoginName';
 const PERMISSION_KEY = 'studentQrPermissionLevel';
 const SESSION_TOKEN_KEY = 'studentQrSessionToken';
 const SESSION_EXPIRES_KEY = 'studentQrSessionExpiresAt';
+const EXPLICIT_LOGOUT_KEY = 'studentQrExplicitlyLoggedOut';
 const QR_ALLOWED_PERMISSION_LEVELS = ['2', '3', '4'];
 
 let studentQrAuth = null;
@@ -554,10 +555,11 @@ function saveStudentQrAuth(auth) {
   localStorage.setItem(PERMISSION_KEY, String(auth.permissionLevel || ''));
   localStorage.setItem(SESSION_TOKEN_KEY, auth.sessionToken || '');
   localStorage.setItem(SESSION_EXPIRES_KEY, auth.expiresAt || '');
+  localStorage.removeItem(EXPLICIT_LOGOUT_KEY);
 }
 
-function clearStudentQrAuth() {
-  localStorage.removeItem(LOGIN_ID_KEY);
+function clearStudentQrSession(keepLoginId = true) {
+  if (!keepLoginId) localStorage.removeItem(LOGIN_ID_KEY);
   localStorage.removeItem(LOGIN_NAME_KEY);
   localStorage.removeItem(PERMISSION_KEY);
   localStorage.removeItem(SESSION_TOKEN_KEY);
@@ -565,9 +567,40 @@ function clearStudentQrAuth() {
   studentQrAuth = null;
 }
 
+async function saveStudentQrCredential(loginId, password, name) {
+  if (!loginId || !password || !window.PasswordCredential || !navigator.credentials?.store) return;
+  try {
+    await navigator.credentials.store(new PasswordCredential({
+      id: loginId,
+      password,
+      name: name || loginId
+    }));
+  } catch (e) {
+    // ブラウザーのパスワード保存が使えない場合は、通常の自動入力に任せる
+  }
+}
+
+async function getStudentQrCredential() {
+  if (!navigator.credentials?.get || localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') return null;
+  try {
+    const credential = await navigator.credentials.get({
+      password: true,
+      mediation: 'silent'
+    });
+    if (credential?.id && credential?.password) {
+      return { loginId: credential.id, password: credential.password };
+    }
+  } catch (e) {
+    // 対応していないブラウザーでは通常のログイン画面へ進む
+  }
+  return null;
+}
+
 function showLoginPanel(message) {
   document.getElementById('appContainer').classList.add('hidden');
   document.getElementById('loginPanel').classList.remove('hidden');
+  const savedId = localStorage.getItem(LOGIN_ID_KEY) || '';
+  if (savedId) document.getElementById('loginId').value = savedId;
   if (message) showLoginMsg(message, 'error');
 }
 
@@ -586,35 +619,81 @@ function showLoginMsg(text, type) {
   el.className = text ? 'msg ' + type : 'msg';
 }
 
+function normalizeStudentQrAuth(result, saved) {
+  return {
+    loginId: result.loginId || result.code || saved?.loginId || '',
+    name: result.name || saved?.name || '',
+    permissionLevel: String(result.permissionLevel || saved?.permissionLevel || '').trim(),
+    sessionToken: result.sessionToken || saved?.sessionToken || '',
+    expiresAt: result.expiresAt || saved?.expiresAt || ''
+  };
+}
+
+function isAllowedStudentQrResult(result) {
+  return Boolean(result?.success) &&
+    QR_ALLOWED_PERMISSION_LEVELS.includes(String(result.permissionLevel || '').trim());
+}
+
+async function loginStudentQrWithCredentials(loginId, password, options = {}) {
+  const { showErrors = false, remember = false } = options;
+  try {
+    const result = await authApi({ action: 'studentQrLogin', code: loginId, password });
+    if (!isAllowedStudentQrResult(result)) {
+      clearStudentQrSession(true);
+      if (showErrors) showLoginMsg('ID、パスワード、または利用権限を確認してください。', 'error');
+      return false;
+    }
+    const auth = normalizeStudentQrAuth(result, { loginId });
+    saveStudentQrAuth(auth);
+    if (remember) await saveStudentQrCredential(loginId, password, auth.name);
+    showAppPanel(auth);
+    return true;
+  } catch (e) {
+    if (showErrors) showLoginMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+    return false;
+  }
+}
+
+async function resumeStudentQrLogin() {
+  const credential = await getStudentQrCredential();
+  if (!credential) return false;
+  document.getElementById('loginId').value = credential.loginId;
+  return loginStudentQrWithCredentials(credential.loginId, credential.password, {
+    showErrors: false,
+    remember: false
+  });
+}
+
+async function verifySavedStudentQrAuth(saved) {
+  const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
+  if (!isAllowedStudentQrResult(result)) return false;
+  const auth = normalizeStudentQrAuth(result, saved);
+  saveStudentQrAuth(auth);
+  showAppPanel(auth);
+  return true;
+}
+
 async function initStudentQrAuth() {
-  const saved = getSavedStudentQrAuth();
-  if (saved?.loginId) document.getElementById('loginId').value = saved.loginId;
-  if (!saved || new Date(saved.expiresAt).getTime() <= Date.now()) {
-    clearStudentQrAuth();
+  const savedId = localStorage.getItem(LOGIN_ID_KEY) || '';
+  if (savedId) document.getElementById('loginId').value = savedId;
+
+  if (localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') {
     showLoginPanel();
     return;
   }
 
-  showLoginMsg('ログイン状態を確認しています...', 'success');
-  try {
-    const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
-    if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(String(result.permissionLevel || '').trim())) {
-      clearStudentQrAuth();
-      showLoginPanel(result.error || 'この機能を利用する権限がありません。管理者へ確認してください。');
-      return;
+  const saved = getSavedStudentQrAuth();
+  if (saved && new Date(saved.expiresAt).getTime() > Date.now()) {
+    try {
+      if (await verifySavedStudentQrAuth(saved)) return;
+    } catch (e) {
+      // 保存済みID・パスワードで静かに再ログインを試す
     }
-    const auth = {
-      loginId: result.loginId || saved.loginId,
-      name: result.name || saved.name || '',
-      permissionLevel: String(result.permissionLevel || '').trim(),
-      sessionToken: result.sessionToken || saved.sessionToken,
-      expiresAt: result.expiresAt || saved.expiresAt
-    };
-    saveStudentQrAuth(auth);
-    showAppPanel(auth);
-  } catch (e) {
-    showLoginPanel('ログイン状態を確認できませんでした。もう一度ログインしてください。');
   }
+
+  clearStudentQrSession(true);
+  if (await resumeStudentQrLogin()) return;
+  showLoginPanel();
 }
 
 async function loginStudentQr() {
@@ -630,25 +709,11 @@ async function loginStudentQr() {
   btn.textContent = '確認中...';
   showLoginMsg('確認しています...', 'success');
   try {
-    const result = await authApi({ action: 'studentQrLogin', code: loginId, password });
-    const permissionLevel = String(result.permissionLevel || '').trim();
-    if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(permissionLevel)) {
-      clearStudentQrAuth();
-      showLoginMsg('ID、パスワード、または利用権限を確認してください。', 'error');
-      return;
-    }
-    const auth = {
-      loginId: result.loginId || result.code || loginId,
-      name: result.name || '',
-      permissionLevel,
-      sessionToken: result.sessionToken || '',
-      expiresAt: result.expiresAt || ''
-    };
-    saveStudentQrAuth(auth);
-    document.getElementById('loginPassword').value = '';
-    showAppPanel(auth);
-  } catch (e) {
-    showLoginMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
+    const success = await loginStudentQrWithCredentials(loginId, password, {
+      showErrors: true,
+      remember: true
+    });
+    if (success) document.getElementById('loginPassword').value = '';
   } finally {
     btn.disabled = false;
     btn.textContent = 'ログイン';
@@ -656,29 +721,35 @@ async function loginStudentQr() {
 }
 
 async function requireStudentQrAuth() {
-  const saved = studentQrAuth || getSavedStudentQrAuth();
-  if (!saved || !saved.sessionToken || new Date(saved.expiresAt).getTime() <= Date.now()) {
-    clearStudentQrAuth();
+  if (localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') {
     showLoginPanel('ログインしてください。');
     throw new Error('ログインしてください。');
   }
-  const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
-  const permissionLevel = String(result.permissionLevel || '').trim();
-  if (!result.success || !QR_ALLOWED_PERMISSION_LEVELS.includes(permissionLevel)) {
-    clearStudentQrAuth();
-    showLoginPanel(result.error || 'この機能を利用する権限がありません。管理者へ確認してください。');
-    throw new Error(result.error || '権限がありません。');
+
+  let saved = studentQrAuth || getSavedStudentQrAuth();
+  if (!saved || !saved.sessionToken || new Date(saved.expiresAt).getTime() <= Date.now()) {
+    clearStudentQrSession(true);
+    if (await resumeStudentQrLogin()) return studentQrAuth;
+    showLoginPanel('ログインしてください。');
+    throw new Error('ログインしてください。');
   }
-  const auth = {
-    loginId: result.loginId || saved.loginId,
-    name: result.name || saved.name || '',
-    permissionLevel,
-    sessionToken: result.sessionToken || saved.sessionToken,
-    expiresAt: result.expiresAt || saved.expiresAt
-  };
-  saveStudentQrAuth(auth);
-  studentQrAuth = auth;
-  return auth;
+
+  try {
+    const result = await authApi({ action: 'studentQrVerify', sessionToken: saved.sessionToken });
+    if (isAllowedStudentQrResult(result)) {
+      const auth = normalizeStudentQrAuth(result, saved);
+      saveStudentQrAuth(auth);
+      studentQrAuth = auth;
+      return auth;
+    }
+  } catch (e) {
+    // セッション再作成へ進む
+  }
+
+  clearStudentQrSession(true);
+  if (await resumeStudentQrLogin()) return studentQrAuth;
+  showLoginPanel('ログイン状態を更新できませんでした。もう一度ログインしてください。');
+  throw new Error('ログインしてください。');
 }
 
 function getStudentQrAuthParams() {
@@ -703,7 +774,8 @@ async function logoutStudentQr() {
   } catch (e) {
     // ローカルのログアウトは必ず実行する
   }
-  clearStudentQrAuth();
+  clearStudentQrSession(true);
+  localStorage.setItem(EXPLICIT_LOGOUT_KEY, '1');
   if (scanning) await stopScanner();
   document.getElementById('loginPassword').value = '';
   showLoginPanel();
