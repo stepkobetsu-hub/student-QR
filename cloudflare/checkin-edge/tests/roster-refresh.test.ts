@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { acceptWithRosterRefresh, type CampusCheckinApi } from "../src/index";
-import type { AcceptRequest, AcceptResponse } from "../src/checkin-do";
+import {
+  acceptWithRosterRefresh,
+  getLegacyStatusWithCampusFallback,
+  type CampusCheckinApi,
+  type LegacyStatusApi,
+} from "../src/index";
+import type { AcceptRequest, AcceptResponse, LegacyStatusResponse } from "../src/checkin-do";
 
 const input: AcceptRequest = {
   qrKey: "new-student-qr",
@@ -65,5 +70,76 @@ describe("acceptWithRosterRefresh", () => {
     expect(stub.accept).toHaveBeenCalledTimes(2);
     expect(refreshRoster).not.toHaveBeenCalled();
     expect(stub.completeRosterRefresh).not.toHaveBeenCalled();
+  });
+
+  it("accepts an Otemachi student even when the tablet is configured for Jinryo", async () => {
+    const missing: AcceptResponse = {
+      ok: false,
+      code: "SUBJECT_NOT_FOUND",
+      receiptId: input.receiptId,
+    };
+    const accepted: AcceptResponse = {
+      ok: true,
+      code: "ACCEPTED",
+      receiptId: input.receiptId,
+      subjectId: "otemachi-student-001",
+      name: "大手町生徒",
+      role: "student",
+      type: "入室",
+      duplicate: false,
+      acceptedAt: input.acceptedAt,
+      dateKey: "2026-08-07",
+      legacyState: "PENDING",
+    };
+    const primary: CampusCheckinApi = {
+      accept: vi.fn(async () => missing),
+      claimRosterRefresh: vi.fn(async () => ({ claimed: true, reason: "CLAIMED" as const, retryAfterMs: 0 })),
+      completeRosterRefresh: vi.fn(async () => undefined),
+    };
+    const alternate: CampusCheckinApi = {
+      accept: vi.fn(async () => accepted),
+      claimRosterRefresh: vi.fn(async () => ({ claimed: true, reason: "CLAIMED" as const, retryAfterMs: 0 })),
+      completeRosterRefresh: vi.fn(async () => undefined),
+    };
+    const refreshRoster = vi.fn(async () => undefined);
+
+    const result = await acceptWithRosterRefresh(
+      primary,
+      input,
+      refreshRoster,
+      () => 200_000,
+      "jinryo",
+      alternate,
+    );
+
+    expect(result).toBe(accepted);
+    expect(primary.accept).toHaveBeenCalledTimes(1);
+    expect(alternate.accept).toHaveBeenCalledTimes(1);
+    expect(refreshRoster).not.toHaveBeenCalled();
+    expect(primary.claimRosterRefresh).not.toHaveBeenCalled();
+  });
+});
+
+describe("getLegacyStatusWithCampusFallback", () => {
+  it("finds the receipt in the student's roster campus", async () => {
+    const missing: LegacyStatusResponse = {
+      ok: false,
+      receiptId: input.receiptId,
+      state: "NOT_FOUND",
+    };
+    const completed: LegacyStatusResponse = {
+      ok: true,
+      receiptId: input.receiptId,
+      state: "COMPLETED",
+      responseJson: JSON.stringify({ attendanceSaved: true }),
+    };
+    const primary: LegacyStatusApi = { getLegacyStatus: vi.fn(async () => missing) };
+    const alternate: LegacyStatusApi = { getLegacyStatus: vi.fn(async () => completed) };
+
+    const result = await getLegacyStatusWithCampusFallback(primary, input.receiptId, alternate);
+
+    expect(result).toBe(completed);
+    expect(primary.getLegacyStatus).toHaveBeenCalledWith(input.receiptId);
+    expect(alternate.getLegacyStatus).toHaveBeenCalledWith(input.receiptId);
   });
 });

@@ -59,6 +59,10 @@ export interface CampusCheckinApi {
   completeRosterRefresh(completedAt: number, succeeded: boolean): Promise<void>;
 }
 
+export interface LegacyStatusApi {
+  getLegacyStatus(receiptId: string): Promise<LegacyStatusResponse>;
+}
+
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const origin = request.headers.get("Origin") ?? "";
@@ -97,6 +101,7 @@ export default {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const stub = env.CAMPUS_CHECKIN.getByName(body.campus);
+        const alternate = alternateCampus(body.campus);
         const acceptedAt = Date.now();
         const input: AcceptRequest = {
           qrKey: body.qrKey.trim(),
@@ -112,6 +117,7 @@ export default {
           () => syncFromGoogle(env),
           () => Date.now(),
           body.campus,
+          alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
         );
         console.log(JSON.stringify({
           event: "checkin",
@@ -128,7 +134,12 @@ export default {
         if (!await authorized(request, terminalTokenForCampus(env, body.campus))) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
-        const status = await env.CAMPUS_CHECKIN.getByName(body.campus).getLegacyStatus(body.receiptId);
+        const alternate = alternateCampus(body.campus);
+        const status = await getLegacyStatusWithCampusFallback(
+          env.CAMPUS_CHECKIN.getByName(body.campus),
+          body.receiptId,
+          alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
+        );
         return json(receiptStatusClientResponse(status), status.ok ? 200 : 404, origin, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/admin/sync-roster") {
@@ -162,9 +173,15 @@ export async function acceptWithRosterRefresh(
   refreshRoster: () => Promise<unknown>,
   now: () => number = () => Date.now(),
   campus = "unknown",
+  alternateStub?: CampusCheckinApi,
 ): Promise<AcceptResponse> {
   const firstResult = await stub.accept(input);
   if (firstResult.code !== "SUBJECT_NOT_FOUND") return firstResult;
+
+  if (alternateStub) {
+    const alternateResult = await alternateStub.accept(input);
+    if (alternateResult.code !== "SUBJECT_NOT_FOUND") return alternateResult;
+  }
 
   const claim = await stub.claimRosterRefresh(now(), ROSTER_REFRESH_COOLDOWN_MS, ROSTER_REFRESH_LEASE_MS);
   let refreshSucceeded = false;
@@ -193,7 +210,25 @@ export async function acceptWithRosterRefresh(
     refreshSucceeded,
     retryAfterMs: claim.retryAfterMs,
   }));
-  return stub.accept(input);
+  const retryResult = await stub.accept(input);
+  if (retryResult.code !== "SUBJECT_NOT_FOUND" || !alternateStub) return retryResult;
+  return alternateStub.accept(input);
+}
+
+export async function getLegacyStatusWithCampusFallback(
+  stub: LegacyStatusApi,
+  receiptId: string,
+  alternateStub?: LegacyStatusApi,
+): Promise<LegacyStatusResponse> {
+  const firstStatus = await stub.getLegacyStatus(receiptId);
+  if (firstStatus.state !== "NOT_FOUND" || !alternateStub) return firstStatus;
+  return alternateStub.getLegacyStatus(receiptId);
+}
+
+function alternateCampus(campus: string): "jinryo" | "otemachi" | null {
+  if (campus === "jinryo") return "otemachi";
+  if (campus === "otemachi") return "jinryo";
+  return null;
 }
 
 async function syncFromGoogle(env: AppEnv): Promise<RosterSyncResult[]> {
