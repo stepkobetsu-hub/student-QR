@@ -12,6 +12,15 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("古いタブレット用・軽量モード");
     expect(html).toContain('<script src="/legacy-jsqr.js"></script>');
     expect(html).toContain("/v1/checkins");
+    expect(html).toContain("width:30%;height:38%");
+    expect(html).toContain("displayProcessing()");
+    expect(html).toContain("teacher-arrival.png");
+    expect(html).toContain("teacher-goodbye.png");
+    expect(html).toContain("teacher-duplicate.png");
+    expect(html).toContain("welcome.png");
+    expect(html).toContain("goodbye.png");
+    expect(html).toContain("duplicate.png");
+    expect(html).toContain("resultCharacter.removeAttribute('src')");
   });
 
   it("serves the bundled ES5 QR reader from the same Worker origin", async () => {
