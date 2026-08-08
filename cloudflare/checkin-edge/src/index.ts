@@ -61,6 +61,29 @@ const ROSTER_REFRESH_COOLDOWN_MS = 30_000;
 const ROSTER_REFRESH_LEASE_MS = 30_000;
 const LEGACY_TERMINAL_COOKIE = "__Host-step_legacy_terminal";
 const LEGACY_TERMINAL_COOKIE_MAX_AGE = 31_536_000;
+const LEGACY_TABLET_MANIFEST = JSON.stringify({
+  name: "入退室チェックイン",
+  short_name: "入退室",
+  start_url: "/legacy-tablet",
+  scope: "/",
+  display: "standalone",
+  background_color: "#2e7d5b",
+  theme_color: "#2e7d5b",
+  icons: [
+    {
+      src: "https://stepkobetsu-hub.github.io/student-QR/icon-192.png",
+      sizes: "192x192",
+      type: "image/png",
+      purpose: "any maskable",
+    },
+    {
+      src: "https://stepkobetsu-hub.github.io/student-QR/icon-512.png",
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "any maskable",
+    },
+  ],
+});
 
 export interface CampusCheckinApi {
   accept(input: AcceptRequest): Promise<AcceptResponse>;
@@ -94,6 +117,16 @@ export default {
         return new Response(legacyTabletHtml, {
           status: 200,
           headers,
+        });
+      }
+      if (request.method === "GET" && url.pathname === "/legacy-tablet-manifest.json") {
+        return new Response(LEGACY_TABLET_MANIFEST, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/manifest+json; charset=utf-8",
+            "Cache-Control": "public, max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+          },
         });
       }
       if (request.method === "GET" && url.pathname === "/legacy-jsqr.js") {
