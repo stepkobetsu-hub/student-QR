@@ -32,6 +32,12 @@ export interface AcceptResponse {
   legacyState?: LegacyState;
 }
 
+export interface RosterRefreshClaim {
+  claimed: boolean;
+  reason: "CLAIMED" | "IN_PROGRESS" | "COOLDOWN";
+  retryAfterMs: number;
+}
+
 export interface CheckinEnv {
   CHECKIN_WRITE_URL?: string;
   CHECKIN_WRITE_ENABLED?: string;
@@ -94,6 +100,13 @@ export interface LegacyWriteItem {
 interface LegacyResultRow {
   [key: string]: string | number;
   response_json: string;
+}
+
+interface RosterRefreshRow {
+  [key: string]: number;
+  last_attempt_at: number;
+  lease_until: number;
+  last_success_at: number;
 }
 
 const LEGACY_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000];
@@ -196,6 +209,16 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
           completed_at INTEGER NOT NULL
         );
         INSERT OR IGNORE INTO _sql_schema_migrations (id) VALUES (2);
+        CREATE TABLE IF NOT EXISTS roster_refresh_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_attempt_at INTEGER NOT NULL DEFAULT 0,
+          lease_until INTEGER NOT NULL DEFAULT 0,
+          last_success_at INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR IGNORE INTO roster_refresh_state
+          (id, last_attempt_at, lease_until, last_success_at)
+        VALUES (1, 0, 0, 0);
+        INSERT OR IGNORE INTO _sql_schema_migrations (id) VALUES (4);
       `);
       const outboxColumns = this.ctx.storage.sql.exec<{ name: string }>("PRAGMA table_info(legacy_outbox)").toArray();
       if (!outboxColumns.some((column) => column.name === "subject_id")) {
@@ -230,6 +253,44 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       }
     });
     return { ok: true, count: subjects.length };
+  }
+
+  claimRosterRefresh(now: number, cooldownMs: number, leaseMs: number): RosterRefreshClaim {
+    const safeNow = Math.max(0, Math.trunc(now));
+    const safeCooldownMs = Math.min(5 * 60_000, Math.max(1_000, Math.trunc(cooldownMs)));
+    const safeLeaseMs = Math.min(2 * 60_000, Math.max(1_000, Math.trunc(leaseMs)));
+    const state = this.ctx.storage.sql.exec<RosterRefreshRow>(
+      "SELECT last_attempt_at, lease_until, last_success_at FROM roster_refresh_state WHERE id = 1",
+    ).toArray()[0] ?? { last_attempt_at: 0, lease_until: 0, last_success_at: 0 };
+
+    if (safeNow < state.lease_until) {
+      return { claimed: false, reason: "IN_PROGRESS", retryAfterMs: state.lease_until - safeNow };
+    }
+    const cooldownUntil = state.last_attempt_at + safeCooldownMs;
+    if (safeNow < cooldownUntil) {
+      return { claimed: false, reason: "COOLDOWN", retryAfterMs: cooldownUntil - safeNow };
+    }
+
+    this.ctx.storage.sql.exec(
+      `UPDATE roster_refresh_state
+       SET last_attempt_at = ?, lease_until = ?
+       WHERE id = 1`,
+      safeNow,
+      safeNow + safeLeaseMs,
+    );
+    return { claimed: true, reason: "CLAIMED", retryAfterMs: 0 };
+  }
+
+  completeRosterRefresh(completedAt: number, succeeded: boolean): void {
+    const safeCompletedAt = Math.max(0, Math.trunc(completedAt));
+    this.ctx.storage.sql.exec(
+      `UPDATE roster_refresh_state
+       SET lease_until = 0,
+           last_success_at = CASE WHEN ? = 1 THEN ? ELSE last_success_at END
+       WHERE id = 1`,
+      succeeded ? 1 : 0,
+      safeCompletedAt,
+    );
   }
 
   async accept(input: AcceptRequest): Promise<AcceptResponse> {

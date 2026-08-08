@@ -139,4 +139,19 @@ describe("CampusCheckin Durable Object", () => {
     expect(status.state).toBe("NOT_REQUIRED");
   });
 
+  it("allows only one roster refresh per campus during the cooldown", async () => {
+    const campus = env.CAMPUS_CHECKIN.getByName("refresh-cooldown-campus");
+    const first = await campus.claimRosterRefresh(100_000, 30_000, 30_000);
+    const whileRunning = await campus.claimRosterRefresh(100_001, 30_000, 30_000);
+
+    await campus.completeRosterRefresh(101_000, true);
+    const duringCooldown = await campus.claimRosterRefresh(101_001, 30_000, 30_000);
+    const afterCooldown = await campus.claimRosterRefresh(130_001, 30_000, 30_000);
+
+    expect(first).toEqual({ claimed: true, reason: "CLAIMED", retryAfterMs: 0 });
+    expect(whileRunning).toEqual({ claimed: false, reason: "IN_PROGRESS", retryAfterMs: 29_999 });
+    expect(duringCooldown).toEqual({ claimed: false, reason: "COOLDOWN", retryAfterMs: 28_999 });
+    expect(afterCooldown).toEqual({ claimed: true, reason: "CLAIMED", retryAfterMs: 0 });
+  });
+
 });
