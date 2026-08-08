@@ -59,6 +59,8 @@ const CAMPUS_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
 const RECEIPT_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ROSTER_REFRESH_COOLDOWN_MS = 30_000;
 const ROSTER_REFRESH_LEASE_MS = 30_000;
+const LEGACY_TERMINAL_COOKIE = "__Host-step_legacy_terminal";
+const LEGACY_TERMINAL_COOKIE_MAX_AGE = 31_536_000;
 
 export interface CampusCheckinApi {
   accept(input: AcceptRequest): Promise<AcceptResponse>;
@@ -81,14 +83,17 @@ export default {
         return json({ ok: true, service: "step-checkin-edge", environment: env.ENVIRONMENT }, 200, origin, env);
       }
       if (request.method === "GET" && (url.pathname === "/legacy-tablet" || url.pathname === "/legacy-tablet/")) {
+        const headers = new Headers({
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store",
+          "Referrer-Policy": "no-referrer",
+          "X-Content-Type-Options": "nosniff",
+        });
+        const sessionCookie = await legacyTerminalCookieHeader(request, env);
+        if (sessionCookie) headers.set("Set-Cookie", sessionCookie);
         return new Response(legacyTabletHtml, {
           status: 200,
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-store",
-            "Referrer-Policy": "no-referrer",
-            "X-Content-Type-Options": "nosniff",
-          },
+          headers,
         });
       }
       if (request.method === "GET" && url.pathname === "/legacy-jsqr.js") {
@@ -105,7 +110,7 @@ export default {
         const body = await readJson<CheckinRequest>(request);
         validateCheckin(body);
         const campus = resolveCheckinCampus(body.campus);
-        if (!await terminalAuthorized(request, env, campus)) {
+        if (!await checkinAuthorized(request, env, campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const stub = env.CAMPUS_CHECKIN.getByName(campus);
@@ -140,7 +145,7 @@ export default {
         const body = await readJson<ReceiptStatusRequest>(request);
         validateReceiptStatus(body);
         const campus = resolveCheckinCampus(body.campus);
-        if (!await terminalAuthorized(request, env, campus)) {
+        if (!await checkinAuthorized(request, env, campus)) {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const alternate = alternateCampus(campus);
@@ -334,6 +339,80 @@ export async function terminalAuthorized(
     env.TERMINAL_TOKEN_JINRYO,
     env.TERMINAL_TOKEN_OTEMACHI,
   ]);
+}
+
+export async function checkinAuthorized(
+  request: Request,
+  env: TerminalTokenEnv,
+  campus: string,
+): Promise<boolean> {
+  if (await terminalAuthorized(request, env, campus)) return true;
+  if (campus === "integration-test") return false;
+  if (campus !== "jinryo" && campus !== "otemachi") return false;
+  return legacyTerminalCookieAuthorized(request, env);
+}
+
+export async function legacyTerminalCookieHeader(
+  request: Request,
+  env: TerminalTokenEnv,
+): Promise<string | null> {
+  const value = await legacyTerminalCookieValue(request, env);
+  if (!value) return null;
+  return `${LEGACY_TERMINAL_COOKIE}=${value}; Path=/; Max-Age=${LEGACY_TERMINAL_COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`;
+}
+
+async function legacyTerminalCookieAuthorized(request: Request, env: TerminalTokenEnv): Promise<boolean> {
+  const supplied = cookieValue(request, LEGACY_TERMINAL_COOKIE);
+  if (!supplied) return false;
+  const expected = await legacyTerminalCookieValue(request, env);
+  if (!expected) return false;
+  return secretsEqual(supplied, expected);
+}
+
+async function legacyTerminalCookieValue(request: Request, env: TerminalTokenEnv): Promise<string | null> {
+  const secret = env.TERMINAL_TOKEN || env.TERMINAL_TOKEN_JINRYO || env.TERMINAL_TOKEN_OTEMACHI;
+  if (!secret) return null;
+  const userAgent = request.headers.get("User-Agent") ?? "";
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`legacy-terminal-v1\n${userAgent}`));
+  return bytesToBase64Url(new Uint8Array(signature));
+}
+
+function cookieValue(request: Request, name: string): string {
+  const cookies = request.headers.get("Cookie") ?? "";
+  for (const part of cookies.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    if (part.slice(0, separator).trim() === name) return part.slice(separator + 1).trim();
+  }
+  return "";
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function secretsEqual(leftValue: string, rightValue: string): Promise<boolean> {
+  if (leftValue.length !== rightValue.length) return false;
+  const encoder = new TextEncoder();
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(leftValue)),
+    crypto.subtle.digest("SHA-256", encoder.encode(rightValue)),
+  ]);
+  const left = new Uint8Array(leftDigest);
+  const right = new Uint8Array(rightDigest);
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
 }
 
 function checkinClientResponse(result: AcceptResponse): Record<string, unknown> {
