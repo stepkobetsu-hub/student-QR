@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
-import { postLegacyCheckin } from "../src/checkin-do";
+import { appsScriptReceiptId, postLegacyCheckin } from "../src/checkin-do";
+
+describe("appsScriptReceiptId", () => {
+  it("keeps receipt IDs already accepted by Apps Script", async () => {
+    await expect(appsScriptReceiptId("qr-existing-receipt-001")).resolves.toBe("qr-existing-receipt-001");
+    await expect(appsScriptReceiptId("edc65b3f-c573-4bd2-9afd-d8f6bcdc1c70")).resolves.toBe("edc65b3f-c573-4bd2-9afd-d8f6bcdc1c70");
+  });
+
+  it("deterministically converts a legacy tablet receipt to the Apps Script format", async () => {
+    const receiptId = "legacy-mskbtzh1-2u7eof9qxj";
+    const first = await appsScriptReceiptId(receiptId);
+    const second = await appsScriptReceiptId(receiptId);
+
+    expect(first).toBe(second);
+    expect(first).toMatch(/^qr-edge-[a-f0-9]{40}$/);
+  });
+});
 
 describe("postLegacyCheckin", () => {
-  it("sends the existing Apps Script action with the same receipt", async () => {
+  it("sends a legacy tablet receipt in the format accepted by Apps Script", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(init?.headers).toEqual({ "Content-Type": "text/plain;charset=utf-8" });
@@ -10,7 +26,7 @@ describe("postLegacyCheckin", () => {
         action: "edgeCheckInProbe",
         qrData: "dummy-qr-write",
         photoBase64: "data:image/jpeg;base64,dGVzdA==",
-        receiptId: "legacy-write-receipt",
+        receiptId: expect.stringMatching(/^qr-edge-[a-f0-9]{40}$/),
         acceptedAt: 1_786_091_200_000,
         edgeToken: "test-edge-token",
         clientTimings: { scanMs: 20 },
