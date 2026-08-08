@@ -239,7 +239,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
       } else if (data.code === 'UNAUTHORIZED') {
         displayResult(false, '', '', 'この端末の校舎設定を確認してください');
       } else if (data.code === 'SUBJECT_NOT_FOUND') {
-        displayResult(false, '', '', 'この校舎の名簿にQRがありません');
+        displayResult(false, '', '', '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください');
       } else {
         displayResult(false, '', '', '通信に失敗しました。もう一度かざしてください');
       }

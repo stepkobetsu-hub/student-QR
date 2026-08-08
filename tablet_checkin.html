@@ -570,7 +570,7 @@ async function handleQrDetected(qrData) {
       const code = err && (err.code || err.message) || 'NETWORK_ERROR';
       const message = code === 'UNAUTHORIZED'
         ? 'この端末の校舎設定を確認してください'
-        : (code === 'SUBJECT_NOT_FOUND' ? 'この校舎の同期名簿にQRがありません' : '通信に失敗しました');
+        : (code === 'SUBJECT_NOT_FOUND' ? '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください' : '通信に失敗しました');
       showResult(false, null, null, null, 'NOT_STARTED', null, message, false, code);
     }
   } finally {
@@ -938,7 +938,7 @@ function errorTitle(code) {
     TIMEOUT: '通信がタイムアウトしました',
     NETWORK_ERROR: '通信がタイムアウトしました',
     UNAUTHORIZED: 'この端末の校舎設定を確認してください',
-    SUBJECT_NOT_FOUND: 'この校舎の同期名簿にQRがありません',
+    SUBJECT_NOT_FOUND: '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください',
     ALREADY_PROCESSED: 'すでに同じ受付を処理済みです'
   };
   return titles[code] || '処理を完了できませんでした';
