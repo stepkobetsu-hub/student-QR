@@ -110,12 +110,25 @@ interface RosterRefreshRow {
 }
 
 const LEGACY_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000];
+const APPS_SCRIPT_RECEIPT_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|qr-[a-z0-9-]{10,80})$/i;
+
+export async function appsScriptReceiptId(receiptId: string): Promise<string> {
+  const value = String(receiptId || "").trim();
+  if (APPS_SCRIPT_RECEIPT_PATTERN.test(value)) return value;
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `qr-edge-${hex.slice(0, 40)}`;
+}
 
 export async function postLegacyCheckin(
   writeUrl: string,
   item: LegacyWriteItem,
   fetcher: typeof fetch = fetch,
 ): Promise<Record<string, unknown>> {
+  const receiptId = item.action === "edgeRosterExport"
+    ? item.receiptId
+    : await appsScriptReceiptId(item.receiptId);
   const response = await fetcher(writeUrl, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -124,7 +137,7 @@ export async function postLegacyCheckin(
       token: item.action === "edgeRosterExport" ? item.edgeToken : undefined,
       qrData: item.qrKey,
       photoBase64: item.photoBase64,
-      receiptId: item.receiptId,
+      receiptId,
       acceptedAt: item.acceptedAt,
       edgeToken: item.edgeToken,
       clientTimings: JSON.parse(item.clientTimingsJson) as Record<string, unknown>,
