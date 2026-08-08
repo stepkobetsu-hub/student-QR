@@ -25,6 +25,12 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("teacher-duplicate.png");
     expect(html).toContain("welcome.png");
     expect(html).toContain("goodbye.png");
+    expect(html).toContain("goodbye-director-night-fast.webp?v=20260807");
+    expect(html).toContain("PHOTO_EXIT_PROBABILITY = 0.2");
+    expect(html).toContain("!duplicate && !isTeacher && type === '退室'");
+    expect(html).toContain("usePhotoExitVariant ? PHOTO_EXIT_ASSET : 'goodbye.png'");
+    expect(html).toContain("resultCharacter.onerror = function ()");
+    expect(html).toContain("exitPhotoPreload.src = ASSET_BASE + PHOTO_EXIT_ASSET");
     expect(html).toContain("duplicate.png");
     expect(html).toContain("resultCharacter.removeAttribute('src')");
     expect(html).toContain("return { campus: 'jinryo'");
