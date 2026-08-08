@@ -569,7 +569,7 @@ async function handleQrDetected(qrData) {
     } else {
       const code = err && (err.code || err.message) || 'NETWORK_ERROR';
       const message = code === 'UNAUTHORIZED'
-        ? 'この端末の校舎設定を確認してください'
+        ? 'この端末の受付設定を確認してください'
         : (code === 'SUBJECT_NOT_FOUND' ? '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください' : '通信に失敗しました');
       showResult(false, null, null, null, 'NOT_STARTED', null, message, false, code);
     }
@@ -770,15 +770,17 @@ function createEdgeDeviceId() {
 }
 
 function showProcessing(qrData, receiptId) {
-  resultOverlay.className = 'show';
-  resultIcon.textContent = '⏳';
+  resultOverlay.className = '';
+  resultIcon.textContent = '';
   resultCharacter.style.display = 'none';
-  resultName.textContent = 'QRを確認しました';
+  resultName.textContent = '';
   resultType.textContent = '';
-  resultTime.textContent = '受付処理を開始しています';
-  resultSub.textContent = '受付ID: ' + receiptId.slice(-8);
+  resultTime.textContent = '';
+  resultSub.textContent = '';
   resultPoints.textContent = '';
   resultPoints.style.display = 'none';
+  scanHint.textContent = '確認しています。少しお待ちください';
+  scanHint.classList.add('show');
 }
 
 function renderServerResult(data) {
@@ -937,7 +939,7 @@ function errorTitle(code) {
     SAVE_FAILED: '入退室記録の保存に失敗しました',
     TIMEOUT: '通信がタイムアウトしました',
     NETWORK_ERROR: '通信がタイムアウトしました',
-    UNAUTHORIZED: 'この端末の校舎設定を確認してください',
+    UNAUTHORIZED: 'この端末の受付設定を確認してください',
     SUBJECT_NOT_FOUND: '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください',
     ALREADY_PROCESSED: 'すでに同じ受付を処理済みです'
   };

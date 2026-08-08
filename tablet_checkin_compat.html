@@ -235,9 +235,9 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
       if (xhr.readyState !== 4) return;
       try { data = JSON.parse(xhr.responseText || '{}'); } catch (ignore) { data = {}; }
       if (xhr.status >= 200 && xhr.status < 300 && data.attendanceSaved) {
-        displayResult(true, data.name || '', data.type || '', data.duplicate ? '60秒以内の同じ受付です' : (data.label || '受付しました'));
+        displayResult(true, data.name || '', data.type || '', data.duplicate ? '60秒以内の同じ受付です' : (data.label || ''));
       } else if (data.code === 'UNAUTHORIZED') {
-        displayResult(false, '', '', 'この端末の校舎設定を確認してください');
+        displayResult(false, '', '', 'この端末の受付設定を確認してください');
       } else if (data.code === 'SUBJECT_NOT_FOUND') {
         displayResult(false, '', '', '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください');
       } else {
