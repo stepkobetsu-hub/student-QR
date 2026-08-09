@@ -90,9 +90,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       if (!audioContext) audioContext = new AudioContextClass();
       if (audioContext.state === 'suspended' && audioContext.resume) audioContext.resume().catch(function () {});
       return audioContext;
-    } catch (ignore) {
-      return null;
-    }
+    } catch (ignore) { return null; }
   }
 
   function unlockAudio() {
@@ -102,46 +100,35 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       var oscillator = context.createOscillator();
       var gain = context.createGain();
       gain.gain.value = 0.00001;
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(0);
-      oscillator.stop(context.currentTime + 0.01);
+      oscillator.connect(gain); gain.connect(context.destination);
+      oscillator.start(0); oscillator.stop(context.currentTime + 0.01);
     } catch (ignore) {}
   }
 
   function playTone(frequency, duration, volume, delay) {
     var context = getAudioContext();
-    var oscillator;
-    var gain;
-    var start;
+    var oscillator; var gain; var start;
     if (!context) return;
     try {
       start = context.currentTime + (delay || 0);
-      oscillator = context.createOscillator();
-      gain = context.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.value = frequency;
+      oscillator = context.createOscillator(); gain = context.createGain();
+      oscillator.type = 'sine'; oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(start);
-      oscillator.stop(start + duration + 0.02);
+      oscillator.connect(gain); gain.connect(context.destination);
+      oscillator.start(start); oscillator.stop(start + duration + 0.02);
     } catch (ignore) {}
   }
 
   function playResultSound(kind) {
-    if (kind === 'success') {
-      playTone(660, 0.13, 0.07, 0);
-      return;
-    }
+    if (kind === 'success') { playTone(660, 0.13, 0.14, 0); return; }
     if (kind === 'duplicate') {
-      playTone(520, 0.09, 0.06, 0);
-      playTone(620, 0.09, 0.06, 0.12);
+      playTone(520, 0.09, 0.12, 0);
+      playTone(620, 0.09, 0.12, 0.12);
       return;
     }
-    playTone(260, 0.18, 0.07, 0);
+    playTone(260, 0.18, 0.14, 0);
   }
 
   if (document.addEventListener) {
@@ -151,276 +138,35 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   }
 
   function parseParams(raw) {
-    var values = {};
-    var items = String(raw || '').replace(/^[?#]/, '').split('&');
-    var i;
-    var pair;
-    var key;
-    var value;
+    var values = {}; var items = String(raw || '').replace(/^[?#]/, '').split('&'); var i; var pair; var key; var value;
     for (i = 0; i < items.length; i += 1) {
-      if (!items[i]) continue;
-      pair = items[i].split('=');
-      try {
-        key = decodeURIComponent(pair.shift().replace(/\+/g, ' '));
-        value = decodeURIComponent(pair.join('=').replace(/\+/g, ' '));
-        values[key] = value;
-      } catch (ignore) {}
+      if (!items[i]) continue; pair = items[i].split('=');
+      try { key = decodeURIComponent(pair.shift().replace(/\+/g, ' ')); value = decodeURIComponent(pair.join('=').replace(/\+/g, ' ')); values[key] = value; } catch (ignore) {}
     }
     return values;
   }
-
   function bootstrapConfig() {
-    var params = parseParams(location.hash);
-    var token = params.token;
-    var apiUrl = params.api || API_DEFAULT;
-    if (token && /^https:\/\//.test(apiUrl)) {
-      try {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token: token, apiUrl: apiUrl }));
-        if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
-      } catch (ignore) {}
-    }
+    var params = parseParams(location.hash); var token = params.token; var apiUrl = params.api || API_DEFAULT;
+    if (token && /^https:\/\//.test(apiUrl)) { try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token: token, apiUrl: apiUrl })); if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search); } catch (ignore) {} }
   }
-
   function loadConfig() {
-    try {
-      var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
-      if (value && value.token && /^https:\/\//.test(value.apiUrl)) {
-        return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
-      }
-    } catch (ignore) {
-    }
+    try { var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null'); if (value && value.token && /^https:\/\//.test(value.apiUrl)) return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) }; } catch (ignore) {}
     return { campus: 'jinryo', token: '', apiUrl: API_DEFAULT };
   }
-
-  function makeDeviceId() {
-    return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
-  }
-
-  function updateClock() {
-    var now = new Date();
-    var hours = String(now.getHours());
-    var minutes = String(now.getMinutes());
-    if (hours.length < 2) hours = '0' + hours;
-    if (minutes.length < 2) minutes = '0' + minutes;
-    document.getElementById('clock').innerHTML = hours + ':' + minutes;
-  }
-
-  function showError(text) {
-    status.style.background = '#e34b4b';
-    message.innerHTML = text;
-  }
-
+  function makeDeviceId() { return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+  function updateClock() { var now = new Date(); var hours = String(now.getHours()); var minutes = String(now.getMinutes()); if (hours.length < 2) hours = '0' + hours; if (minutes.length < 2) minutes = '0' + minutes; document.getElementById('clock').innerHTML = hours + ':' + minutes; }
+  function showError(text) { status.style.background = '#e34b4b'; message.innerHTML = text; }
   function requestCamera(success, failure) {
-    var modern = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
-    var legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
-    var constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
-    if (modern) {
-      navigator.mediaDevices.getUserMedia(constraints).then(success, function () {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(success, failure);
-      });
-      return;
-    }
-    if (legacy) {
-      legacy.call(navigator, { video: true, audio: false }, success, failure);
-      return;
-    }
+    var modern = navigator.mediaDevices && navigator.mediaDevices.getUserMedia; var legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia; var constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
+    if (modern) { navigator.mediaDevices.getUserMedia(constraints).then(success, function () { navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(success, failure); }); return; }
+    if (legacy) { legacy.call(navigator, { video: true, audio: false }, success, failure); return; }
     failure({ message: 'このブラウザーはカメラに対応していません' });
   }
-
   function attachStream(stream) {
-    try {
-      if ('srcObject' in video) video.srcObject = stream;
-      else video.src = (window.URL || window.webkitURL).createObjectURL(stream);
-      var played = video.play();
-      if (played && played.catch) played.catch(function () {});
-      status.style.background = '#45c879';
-      message.innerHTML = 'QRコードを右下の枠にかざしてください';
-      raf(scanLoop);
-    } catch (error) {
-      showError('カメラ映像を表示できませんでした');
-    }
+    try { if ('srcObject' in video) video.srcObject = stream; else video.src = (window.URL || window.webkitURL).createObjectURL(stream); var played = video.play(); if (played && played.catch) played.catch(function () {}); status.style.background = '#45c879'; message.innerHTML = 'QRコードを右下の枠にかざしてください'; raf(scanLoop); } catch (error) { showError('カメラ映像を表示できませんでした'); }
   }
-
   function scanLoop(frameTime) {
-    var width;
-    var height;
-    var scale;
-    var image;
-    var code;
-    var now;
+    var width; var height; var scale; var image; var code; var now;
     if (!busy && frameTime - lastFrameAt >= FRAME_INTERVAL && video.readyState >= 2) {
-      lastFrameAt = frameTime;
-      width = video.videoWidth || 640;
-      height = video.videoHeight || 480;
-      scale = Math.min(1, 480 / width, 360 / height);
-      scanCanvas.width = Math.max(1, Math.round(width * scale));
-      scanCanvas.height = Math.max(1, Math.round(height * scale));
-      try {
-        scanContext.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
-        image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-        code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null;
-        if (code && code.data) {
-          now = Date.now();
-          if (code.data !== lastCode || now - lastCodeAt >= 5000) {
-            lastCode = code.data;
-            lastCodeAt = now;
-            submitCode(code.data);
-          }
-        }
-      } catch (ignore) {}
-    }
-    raf(scanLoop);
-  }
-
-  function validQr(value) {
-    return /^(?:STEP-[A-Za-z0-9_-]{1,40}|[0-9]{12,64})$/.test(String(value || '').replace(/^\s+|\s+$/g, ''));
-  }
-
-  function receiptId() {
-    return 'legacy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
-  }
-
-  function takePhoto() {
-    var width = video.videoWidth || 640;
-    var height = video.videoHeight || 480;
-    var scale = Math.min(1, 280 / width);
-    try {
-      photoCanvas.width = Math.max(1, Math.round(width * scale));
-      photoCanvas.height = Math.max(1, Math.round(height * scale));
-      photoContext.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
-      return photoCanvas.toDataURL('image/jpeg', 0.28);
-    } catch (ignore) {
-      return '';
-    }
-  }
-
-  function submitCode(qrData) {
-    var xhr;
-    var id;
-    var payload;
-    if (busy) return;
-    if (!validQr(qrData)) {
-      displayResult(false, '', '', 'QRの形式が正しくありません');
-      return;
-    }
-    busy = true;
-    displayProcessing();
-    message.innerHTML = '確認しています。初回の名簿更新には20秒ほどかかる場合があります';
-    id = receiptId();
-    payload = {
-      campus: config.campus,
-      qrKey: String(qrData).replace(/^\s+|\s+$/g, ''),
-      receiptId: id,
-      deviceId: deviceId,
-      photoBase64: takePhoto(),
-      clientTimings: { compatibilityMode: true }
-    };
-    xhr = new XMLHttpRequest();
-    xhr.open('POST', String(config.apiUrl).replace(/\/$/, '') + '/v1/checkins', true);
-    xhr.timeout = REQUEST_TIMEOUT;
-    if (config.token) xhr.setRequestHeader('Authorization', 'Bearer ' + config.token);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onreadystatechange = function () {
-      var data;
-      if (xhr.readyState !== 4) return;
-      try { data = JSON.parse(xhr.responseText || '{}'); } catch (ignore) { data = {}; }
-      if (xhr.status >= 200 && xhr.status < 300 && data.attendanceSaved) {
-        displayResult(true, data.name || '', data.type || '', data.label || '', !!data.duplicate, !!data.isTeacher);
-      } else if (data.code === 'UNAUTHORIZED') {
-        displayResult(false, '', '', 'この端末の受付設定を確認してください');
-      } else if (data.code === 'SUBJECT_NOT_FOUND') {
-        displayResult(false, '', '', '同期名簿にQRがありません。生徒マスタのQRと在籍状態を確認してください');
-      } else {
-        displayResult(false, '', '', '通信に失敗しました。もう一度かざしてください');
-      }
-    };
-    xhr.ontimeout = function () { displayResult(false, '', '', '確認に時間がかかりました。もう一度かざしてください'); };
-    xhr.onerror = function () { displayResult(false, '', '', '通信できませんでした。接続を確認してください'); };
-    try { xhr.send(JSON.stringify(payload)); } catch (error) { displayResult(false, '', '', '通信を開始できませんでした'); }
-  }
-
-  function clearCharacter() {
-    resultCharacter.style.display = 'none';
-    resultCharacter.onerror = null;
-    resultCharacter.removeAttribute('src');
-  }
-
-  function displayProcessing() {
-    if (resultTimer) clearTimeout(resultTimer);
-    clearCharacter();
-    result.className = '';
-    message.innerHTML = '確認しています。少しお待ちください';
-  }
-
-  function displayResult(ok, name, type, detail, duplicate, isTeacher) {
-    var entry = type === '入室' || type === '出勤';
-    var character = '';
-    var suffix = isTeacher ? ' 先生' : ' さん';
-    var actionText = '';
-    var usePhotoExitVariant = !duplicate && !isTeacher && type === '退室' && Math.random() < PHOTO_EXIT_PROBABILITY;
-    if (resultTimer) clearTimeout(resultTimer);
-    clearCharacter();
-    if (ok) {
-      playResultSound(duplicate ? 'duplicate' : 'success');
-      result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '');
-      if (duplicate) {
-        character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
-        actionText = '受付済みです';
-      } else if (isTeacher) {
-        character = entry ? 'teacher-arrival.png' : 'teacher-goodbye.png';
-        actionText = entry ? '出勤しました' : '退勤しました';
-      } else {
-        character = entry ? 'welcome.png' : (usePhotoExitVariant ? PHOTO_EXIT_ASSET : 'goodbye.png');
-        actionText = entry ? '入室しました' : '退室しました';
-      }
-      if (usePhotoExitVariant) {
-        resultCharacter.onerror = function () {
-          resultCharacter.onerror = null;
-          resultCharacter.src = ASSET_BASE + 'goodbye.png';
-        };
-      }
-      resultCharacter.src = ASSET_BASE + character;
-      resultCharacter.style.display = 'block';
-      nameEl.innerHTML = escapeText(name) + suffix;
-      typeEl.innerHTML = actionText;
-      detailEl.innerHTML = duplicate ? '60秒以内の重複読取のため、記録とメール送信は追加していません' : escapeText(detail || '受付が完了しました');
-    } else {
-      playResultSound('error');
-      result.className = 'show error';
-      nameEl.innerHTML = '受付できませんでした';
-      typeEl.innerHTML = '';
-      detailEl.innerHTML = escapeText(detail || 'もう一度お試しください');
-    }
-    resultTimer = setTimeout(function () {
-      result.className = '';
-      clearCharacter();
-      message.innerHTML = 'QRコードを右下の枠にかざしてください';
-      busy = false;
-    }, ok ? 2500 : 4000);
-  }
-
-  function escapeText(value) {
-    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
-  }
-
-  bootstrapConfig();
-  config = loadConfig();
-  try {
-    deviceId = localStorage.getItem(DEVICE_KEY) || makeDeviceId();
-    localStorage.setItem(DEVICE_KEY, deviceId);
-  } catch (ignore) {
-    deviceId = makeDeviceId();
-  }
-  updateClock();
-  setInterval(updateClock, 1000);
-  if (!window.jsQR) {
-    showError('QR読取機能を読み込めませんでした');
-  } else {
-    requestCamera(attachStream, function (error) {
-      showError('カメラを起動できませんでした。カメラ権限を確認してください');
-    });
-  }
-})();
-</script>
-</body>
-</html>
+      lastFrameAt = frameTime; width = video.videoWidth || 640; height = video.videoHeight || 480; scale = Math.min(1, 480 / width, 360 / height); scanCanvas.width = Math.max(1, Math.round(width * scale)); scanCanvas.height = Math.max(1, Math.round(height * scale));
+      try { scanContext.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height); image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height); code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null; if (code && code.data) { now = Date.now(); if (code.data !== lastCode || now - lastCodeAt >= 5000) { lastCode = code.data; lastCodeAt = now; submitCode(code.data); } } }
