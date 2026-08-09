@@ -78,9 +78,77 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   var lastCode = '';
   var lastCodeAt = 0;
   var resultTimer = 0;
+  var audioContext = null;
   var raf = window.requestAnimationFrame || function (callback) { return setTimeout(function () { callback(Date.now()); }, 40); };
   var exitPhotoPreload = new Image();
   exitPhotoPreload.src = ASSET_BASE + PHOTO_EXIT_ASSET;
+
+  function getAudioContext() {
+    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    try {
+      if (!audioContext) audioContext = new AudioContextClass();
+      if (audioContext.state === 'suspended' && audioContext.resume) audioContext.resume().catch(function () {});
+      return audioContext;
+    } catch (ignore) {
+      return null;
+    }
+  }
+
+  function unlockAudio() {
+    var context = getAudioContext();
+    if (!context) return;
+    try {
+      var oscillator = context.createOscillator();
+      var gain = context.createGain();
+      gain.gain.value = 0.00001;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(0);
+      oscillator.stop(context.currentTime + 0.01);
+    } catch (ignore) {}
+  }
+
+  function playTone(frequency, duration, volume, delay) {
+    var context = getAudioContext();
+    var oscillator;
+    var gain;
+    var start;
+    if (!context) return;
+    try {
+      start = context.currentTime + (delay || 0);
+      oscillator = context.createOscillator();
+      gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.02);
+    } catch (ignore) {}
+  }
+
+  function playResultSound(kind) {
+    if (kind === 'success') {
+      playTone(660, 0.13, 0.035, 0);
+      return;
+    }
+    if (kind === 'duplicate') {
+      playTone(520, 0.09, 0.03, 0);
+      playTone(620, 0.09, 0.03, 0.12);
+      return;
+    }
+    playTone(260, 0.18, 0.035, 0);
+  }
+
+  if (document.addEventListener) {
+    document.addEventListener('touchstart', unlockAudio, false);
+    document.addEventListener('mousedown', unlockAudio, false);
+    document.addEventListener('keydown', unlockAudio, false);
+  }
 
   function parseParams(raw) {
     var values = {};
@@ -293,6 +361,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     if (resultTimer) clearTimeout(resultTimer);
     clearCharacter();
     if (ok) {
+      playResultSound(duplicate ? 'duplicate' : 'success');
       result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '');
       if (duplicate) {
         character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
@@ -316,6 +385,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       typeEl.innerHTML = actionText;
       detailEl.innerHTML = duplicate ? '60秒以内の重複読取のため、記録とメール送信は追加していません' : escapeText(detail || '受付が完了しました');
     } else {
+      playResultSound('error');
       result.className = 'show error';
       nameEl.innerHTML = '受付できませんでした';
       typeEl.innerHTML = '';
@@ -330,7 +400,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   }
 
   function escapeText(value) {
-    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
   }
 
   bootstrapConfig();
