@@ -90,7 +90,9 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       if (!audioContext) audioContext = new AudioContextClass();
       if (audioContext.state === 'suspended' && audioContext.resume) audioContext.resume().catch(function () {});
       return audioContext;
-    } catch (ignore) { return null; }
+    } catch (ignore) {
+      return null;
+    }
   }
 
   function unlockAudio() {
@@ -100,29 +102,40 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       var oscillator = context.createOscillator();
       var gain = context.createGain();
       gain.gain.value = 0.00001;
-      oscillator.connect(gain); gain.connect(context.destination);
-      oscillator.start(0); oscillator.stop(context.currentTime + 0.01);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(0);
+      oscillator.stop(context.currentTime + 0.01);
     } catch (ignore) {}
   }
 
   function playTone(frequency, duration, volume, delay) {
     var context = getAudioContext();
-    var oscillator; var gain; var start;
+    var oscillator;
+    var gain;
+    var start;
     if (!context) return;
     try {
       start = context.currentTime + (delay || 0);
-      oscillator = context.createOscillator(); gain = context.createGain();
-      oscillator.type = 'sine'; oscillator.frequency.value = frequency;
+      oscillator = context.createOscillator();
+      gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-      oscillator.connect(gain); gain.connect(context.destination);
-      oscillator.start(start); oscillator.stop(start + duration + 0.02);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.02);
     } catch (ignore) {}
   }
 
   function playResultSound(kind) {
-    if (kind === 'success') { playTone(660, 0.13, 0.14, 0); return; }
+    if (kind === 'success') {
+      playTone(660, 0.13, 0.14, 0);
+      return;
+    }
     if (kind === 'duplicate') {
       playTone(520, 0.09, 0.12, 0);
       playTone(620, 0.09, 0.12, 0.12);
@@ -138,35 +151,123 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   }
 
   function parseParams(raw) {
-    var values = {}; var items = String(raw || '').replace(/^[?#]/, '').split('&'); var i; var pair; var key; var value;
+    var values = {};
+    var items = String(raw || '').replace(/^[?#]/, '').split('&');
+    var i;
+    var pair;
+    var key;
+    var value;
     for (i = 0; i < items.length; i += 1) {
-      if (!items[i]) continue; pair = items[i].split('=');
-      try { key = decodeURIComponent(pair.shift().replace(/\+/g, ' ')); value = decodeURIComponent(pair.join('=').replace(/\+/g, ' ')); values[key] = value; } catch (ignore) {}
+      if (!items[i]) continue;
+      pair = items[i].split('=');
+      try {
+        key = decodeURIComponent(pair.shift().replace(/\+/g, ' '));
+        value = decodeURIComponent(pair.join('=').replace(/\+/g, ' '));
+        values[key] = value;
+      } catch (ignore) {}
     }
     return values;
   }
+
   function bootstrapConfig() {
-    var params = parseParams(location.hash); var token = params.token; var apiUrl = params.api || API_DEFAULT;
-    if (token && /^https:\/\//.test(apiUrl)) { try { localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token: token, apiUrl: apiUrl })); if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search); } catch (ignore) {} }
+    var params = parseParams(location.hash);
+    var token = params.token;
+    var apiUrl = params.api || API_DEFAULT;
+    if (token && /^https:\/\//.test(apiUrl)) {
+      try {
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ campus: 'jinryo', token: token, apiUrl: apiUrl }));
+        if (history && history.replaceState) history.replaceState(null, '', location.pathname + location.search);
+      } catch (ignore) {}
+    }
   }
+
   function loadConfig() {
-    try { var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null'); if (value && value.token && /^https:\/\//.test(value.apiUrl)) return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) }; } catch (ignore) {}
+    try {
+      var value = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+      if (value && value.token && /^https:\/\//.test(value.apiUrl)) {
+        return { campus: 'jinryo', token: String(value.token), apiUrl: String(value.apiUrl) };
+      }
+    } catch (ignore) {
+    }
     return { campus: 'jinryo', token: '', apiUrl: API_DEFAULT };
   }
-  function makeDeviceId() { return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
-  function updateClock() { var now = new Date(); var hours = String(now.getHours()); var minutes = String(now.getMinutes()); if (hours.length < 2) hours = '0' + hours; if (minutes.length < 2) minutes = '0' + minutes; document.getElementById('clock').innerHTML = hours + ':' + minutes; }
-  function showError(text) { status.style.background = '#e34b4b'; message.innerHTML = text; }
+
+  function makeDeviceId() {
+    return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function updateClock() {
+    var now = new Date();
+    var hours = String(now.getHours());
+    var minutes = String(now.getMinutes());
+    if (hours.length < 2) hours = '0' + hours;
+    if (minutes.length < 2) minutes = '0' + minutes;
+    document.getElementById('clock').innerHTML = hours + ':' + minutes;
+  }
+
+  function showError(text) {
+    status.style.background = '#e34b4b';
+    message.innerHTML = text;
+  }
+
   function requestCamera(success, failure) {
-    var modern = navigator.mediaDevices && navigator.mediaDevices.getUserMedia; var legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia; var constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
-    if (modern) { navigator.mediaDevices.getUserMedia(constraints).then(success, function () { navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(success, failure); }); return; }
-    if (legacy) { legacy.call(navigator, { video: true, audio: false }, success, failure); return; }
+    var modern = navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+    var legacy = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    var constraints = { video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false };
+    if (modern) {
+      navigator.mediaDevices.getUserMedia(constraints).then(success, function () {
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(success, failure);
+      });
+      return;
+    }
+    if (legacy) {
+      legacy.call(navigator, { video: true, audio: false }, success, failure);
+      return;
+    }
     failure({ message: 'このブラウザーはカメラに対応していません' });
   }
+
   function attachStream(stream) {
-    try { if ('srcObject' in video) video.srcObject = stream; else video.src = (window.URL || window.webkitURL).createObjectURL(stream); var played = video.play(); if (played && played.catch) played.catch(function () {}); status.style.background = '#45c879'; message.innerHTML = 'QRコードを右下の枠にかざしてください'; raf(scanLoop); } catch (error) { showError('カメラ映像を表示できませんでした'); }
+    try {
+      if ('srcObject' in video) video.srcObject = stream;
+      else video.src = (window.URL || window.webkitURL).createObjectURL(stream);
+      var played = video.play();
+      if (played && played.catch) played.catch(function () {});
+      status.style.background = '#45c879';
+      message.innerHTML = 'QRコードを右下の枠にかざしてください';
+      raf(scanLoop);
+    } catch (error) {
+      showError('カメラ映像を表示できませんでした');
+    }
   }
+
   function scanLoop(frameTime) {
-    var width; var height; var scale; var image; var code; var now;
+    var width;
+    var height;
+    var scale;
+    var image;
+    var code;
+    var now;
     if (!busy && frameTime - lastFrameAt >= FRAME_INTERVAL && video.readyState >= 2) {
-      lastFrameAt = frameTime; width = video.videoWidth || 640; height = video.videoHeight || 480; scale = Math.min(1, 480 / width, 360 / height); scanCanvas.width = Math.max(1, Math.round(width * scale)); scanCanvas.height = Math.max(1, Math.round(height * scale));
-      try { scanContext.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height); image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height); code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null; if (code && code.data) { now = Date.now(); if (code.data !== lastCode || now - lastCodeAt >= 5000) { lastCode = code.data; lastCodeAt = now; submitCode(code.data); } } }
+      lastFrameAt = frameTime;
+      width = video.videoWidth || 640;
+      height = video.videoHeight || 480;
+      scale = Math.min(1, 480 / width, 360 / height);
+      scanCanvas.width = Math.max(1, Math.round(width * scale));
+      scanCanvas.height = Math.max(1, Math.round(height * scale));
+      try {
+        scanContext.drawImage(video, 0, 0, scanCanvas.width, scanCanvas.height);
+        image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+        code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null;
+        if (code && code.data) {
+          now = Date.now();
+          if (code.data !== lastCode || now - lastCodeAt >= 5000) {
+            lastCode = code.data;
+            lastCodeAt = now;
+            submitCode(code.data);
+          }
+        }
+      } catch (ignore) {}
+    }
+    raf(scanLoop);
+ 
