@@ -18,16 +18,13 @@
     font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
     background: var(--bg-color);
     margin: 0;
-    padding: 20px;
+    padding: 28px;
     color: #333;
   }
   .container {
-    max-width: 480px;
+    max-width: 1280px;
     margin: 0 auto;
-    background: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 0;
   }
   .hidden { display: none !important; }
   .auth-card {
@@ -49,14 +46,14 @@
     margin-bottom: 18px;
   }
   h1 {
-    font-size: 18px;
+    font-size: 24px;
     color: var(--main-color);
     margin: 0 0 4px;
   }
   .subtitle {
-    font-size: 13px;
+    font-size: 14px;
     color: #888;
-    margin-bottom: 20px;
+    margin-bottom: 0;
   }
   label {
     display: block;
@@ -66,7 +63,8 @@
     color: #555;
   }
   input[type="text"],
-  input[type="password"] {
+  input[type="password"],
+  input[type="date"] {
     width: 100%;
     padding: 12px;
     font-size: 16px;
@@ -75,7 +73,8 @@
     background: #fafcfb;
   }
   input[type="text"]:focus,
-  input[type="password"]:focus {
+  input[type="password"]:focus,
+  input[type="date"]:focus {
     outline: none;
     border-color: var(--main-color);
   }
@@ -99,8 +98,9 @@
     margin-top: 4px;
   }
   button {
-    width: 100%;
-    padding: 14px;
+    width: auto;
+    min-width: 180px;
+    padding: 12px 18px;
     margin-top: 20px;
     font-size: 16px;
     font-weight: bold;
@@ -155,15 +155,27 @@
   }
   .tabs {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    margin-bottom: 20px;
+    margin: 0;
+    padding: 12px;
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(31, 65, 49, 0.06);
   }
   .tab-btn {
-    flex: 1;
-    padding: 10px;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    padding: 13px 14px;
     margin: 0;
     font-size: 14px;
     font-weight: bold;
+    text-align: left;
     color: var(--main-color);
     background: #eef6f1;
     border: 1px solid var(--border-color);
@@ -175,7 +187,46 @@
     background: var(--main-color);
   }
   .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
+  .tab-panel.active {
+    display: block;
+    min-width: 0;
+    padding: 28px 32px 32px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(31, 65, 49, 0.06);
+  }
+  .tab-panel::before {
+    content: attr(data-title);
+    display: block;
+    margin: 0 0 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e7ece9;
+    color: #234b3b;
+    font-size: 22px;
+    font-weight: 800;
+  }
+  .workspace-shell {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+  .panel-form-width { max-width: 760px; }
+  .panel-split {
+    display: grid;
+    grid-template-columns: minmax(430px, 1.2fr) minmax(320px, .8fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .panel-secondary {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid #dfe7e3;
+    border-radius: 12px;
+    background: #f8faf9;
+  }
+  .panel-secondary > :first-child { margin-top: 0; }
 
   .qr-card {
     display: none;
@@ -222,6 +273,7 @@
   .check-search-toolbar button,
   .check-list-toolbar button {
     width: auto;
+    min-width: 0;
     margin: 0;
     padding: 8px 12px;
     font-size: 13px;
@@ -260,7 +312,7 @@
   }
   .batch-qr-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
     gap: 12px;
     margin-top: 16px;
   }
@@ -280,13 +332,20 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
+    gap: 24px;
+    margin-bottom: 22px;
+    padding: 22px 26px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 18px rgba(31, 65, 49, 0.06);
   }
   .header-actions {
     display: flex;
     gap: 8px;
     align-items: center;
   }
+  .header-actions button { min-width: 0; }
   .staff-badge {
     font-size: 12px;
     color: #666;
@@ -300,6 +359,44 @@
     font-size: 13px;
     background: #777;
   }
+  #settingsPanel.settings-panel {
+    margin: 0 0 22px !important;
+    padding: 24px !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 5px 18px rgba(31, 65, 49, 0.06);
+  }
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .settings-card {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: #f8faf9;
+  }
+  .email-grid,
+  .csv-date-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+  }
+  .email-field label { margin-top: 0; }
+  .csv-date-grid label { margin-top: 0; }
+  #panelCsv .panel-form-width > div button { min-width: 0; }
+  #teacherCheckList {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0 18px;
+    max-height: 420px !important;
+  }
+  #panelEmail .panel-form-width,
+  #panelPoints .panel-form-width,
+  #panelCsv .panel-form-width { max-width: 900px; }
+  .auth-card button { width: 100%; }
 
   #notifyEmail1:not(:placeholder-shown),
   #notifyEmail2:not(:placeholder-shown),
@@ -341,9 +438,10 @@
     }
     body.batch-print .batch-qr-card img { width: 52mm; height: 52mm; }
   }
-  @media (max-width: 560px) {
+  @media (max-width: 900px) {
     body { padding: 14px; }
-    .container, .auth-card { padding: 18px; }
+    .container { padding: 0; }
+    .auth-card { padding: 18px; }
     .app-header {
       display: block;
     }
@@ -353,11 +451,21 @@
       margin-bottom: 12px;
     }
     .tabs {
+      position: static;
+      flex-direction: row;
       flex-wrap: wrap;
+      margin-bottom: 14px;
     }
     .tab-btn {
       min-width: calc(50% - 4px);
+      width: auto;
+      flex: 1;
+      text-align: center;
     }
+    .workspace-shell { display: block; }
+    .tab-panel.active { padding: 20px 18px 24px; }
+    .panel-split, .settings-grid, .email-grid, .csv-date-grid { grid-template-columns: 1fr; }
+    #teacherCheckList { grid-template-columns: 1fr; }
     .batch-qr-grid { grid-template-columns: 1fr; }
   }
 </style>
@@ -390,16 +498,20 @@
     </div>
   </div>
 
-  <div id="settingsPanel" style="display:none; margin:14px 0; padding:16px; background:#f5f7f6; border-radius:10px; border:1px solid var(--border-color);">
-    <h2 style="font-size:14px; margin:0 0 10px;">①生徒・講師QR登録アプリ（このページ）</h2>
-    <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsRegisterUrl"></div>
-    <img id="settingsRegisterQr" src="" width="140" height="140">
-
-    <h2 style="font-size:14px; margin:18px 0 10px;">②QR読み取りアプリ（タブレット用）</h2>
-    <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsTabletUrl"></div>
-    <img id="settingsTabletQr" src="" width="140" height="140">
-
-    <div style="margin-top:18px;">
+  <div id="settingsPanel" class="settings-panel" style="display:none;">
+    <div class="settings-grid">
+      <div class="settings-card">
+        <h2 style="font-size:15px; margin:0 0 10px;">① 生徒・講師QR登録アプリ（このページ）</h2>
+        <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsRegisterUrl"></div>
+        <img id="settingsRegisterQr" src="" width="140" height="140">
+      </div>
+      <div class="settings-card">
+        <h2 style="font-size:15px; margin:0 0 10px;">② QR読み取りアプリ（タブレット用）</h2>
+        <div style="font-size:12px; word-break:break-all; margin-bottom:8px;" id="settingsTabletUrl"></div>
+        <img id="settingsTabletQr" src="" width="140" height="140">
+      </div>
+    </div>
+    <div class="panel-form-width" style="margin-top:18px;">
       <label for="settingsEmail">この情報をメールで送る</label>
       <input type="text" id="settingsEmail" placeholder="送信先メールアドレス" autocomplete="off">
       <button id="settingsSendBtn" onclick="sendAppLinksEmail()" style="background:#2a8f7a;">📧 メールで送信</button>
@@ -407,17 +519,19 @@
     </div>
   </div>
 
-  <div class="tabs">
+  <div class="workspace-shell">
+  <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
     <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
     <button type="button" class="tab-btn" id="tabCsvBtn" onclick="switchTab('csv')">勤怠CSV出力</button>
-  </div>
+  </nav>
 
   <!-- ① 既存の入退くんQRを登録するパネル -->
-  <div class="tab-panel active" id="panelExisting">
+  <div class="tab-panel active" id="panelExisting" data-title="既存QR登録">
+    <div class="panel-form-width">
     <label for="studentCode">① 生徒・講師番号</label>
     <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="studentInfo" class="student-info">
@@ -443,10 +557,13 @@
       <h2>今回のセッションで登録した生徒</h2>
       <div id="historyList"></div>
     </div>
+    </div>
   </div>
 
   <!-- ② 現在登録されているQRを確認するパネル -->
-  <div class="tab-panel" id="panelCheck">
+  <div class="tab-panel" id="panelCheck" data-title="QR確認・まとめ印刷">
+    <div class="panel-split">
+    <div class="panel-primary">
     <label for="checkStudentSearch">生徒検索</label>
     <input type="text" id="checkStudentSearch" placeholder="コード番号・氏名・読み仮名・ローマ字で検索（例：tanaka）" autocomplete="off">
     <div class="hint">カタカナ・ひらがな・ローマ字は、一部だけでも検索できます。複数の生徒を選択できます。</div>
@@ -461,7 +578,9 @@
     </div>
     <div id="checkStudentList" class="check-student-list"><div class="hint" style="padding:14px;">読み込み中...</div></div>
     <div id="checkSelectedSummary" class="check-selected-summary">まだ選択されていません。</div>
+    </div>
 
+    <div class="panel-secondary">
     <button id="checkLoadQrBtn" onclick="loadSelectedQrCards()" disabled>選択したQRを表示する</button>
     <div id="checkBatchMsg" class="msg"></div>
     <div id="checkBatchPrintArea" class="batch-qr-grid"></div>
@@ -473,10 +592,13 @@
       <button id="checkSendPdfBtn" onclick="sendCheckQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
       <div id="checkPdfMsg" class="msg"></div>
     </div>
+    </div>
+    </div>
   </div>
 
   <!-- ② 新規生徒のQRを発行するパネル -->
-  <div class="tab-panel" id="panelNew">
+  <div class="tab-panel" id="panelNew" data-title="新規QR発行">
+    <div class="panel-form-width">
     <label for="newStudentCode">生徒・講師番号</label>
     <input type="text" id="newStudentCode" placeholder="例: 1250" inputmode="numeric" autocomplete="off">
     <div id="newStudentInfo" class="student-info">
@@ -503,10 +625,12 @@
       <button id="sendPdfBtn" onclick="sendQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
       <div id="pdfMsg" class="msg"></div>
     </div>
+    </div>
   </div>
 
   <!-- ③ 通知先メールを登録するパネル -->
-  <div class="tab-panel" id="panelEmail">
+  <div class="tab-panel" id="panelEmail" data-title="通知先メール">
+    <div class="panel-form-width">
     <label for="emailStudentCode">生徒・講師番号</label>
     <input type="text" id="emailStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="emailStudentInfo" class="student-info">
@@ -517,37 +641,46 @@
       チェックが入っているメールにだけ配信されます。①は保護者メール（X列）と共通です。
     </div>
 
-    <label for="notifyEmail1">通知先メール ①（保護者メール／X列）</label>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <input type="checkbox" id="notifyEnabled1" checked style="width:20px; height:20px; flex-shrink:0;">
-      <input type="text" id="notifyEmail1" placeholder="通知先メールを入力" autocomplete="off" style="flex:1;">
+    <div class="email-grid" style="margin-top:18px;">
+    <div class="email-field">
+      <label for="notifyEmail1">通知先メール ①（保護者メール／X列）</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="notifyEnabled1" checked style="width:20px; height:20px; flex-shrink:0;">
+        <input type="text" id="notifyEmail1" placeholder="通知先メールを入力" autocomplete="off" style="flex:1;">
+      </div>
     </div>
-
-    <label for="notifyEmail2">通知先メール ②（BA列）</label>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <input type="checkbox" id="notifyEnabled2" checked style="width:20px; height:20px; flex-shrink:0;">
-      <input type="text" id="notifyEmail2" placeholder="任意" autocomplete="off" style="flex:1;">
+    <div class="email-field">
+      <label for="notifyEmail2">通知先メール ②（BA列）</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="notifyEnabled2" checked style="width:20px; height:20px; flex-shrink:0;">
+        <input type="text" id="notifyEmail2" placeholder="任意" autocomplete="off" style="flex:1;">
+      </div>
     </div>
-
-    <label for="notifyEmail3">通知先メール ③（BB列）</label>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <input type="checkbox" id="notifyEnabled3" checked style="width:20px; height:20px; flex-shrink:0;">
-      <input type="text" id="notifyEmail3" placeholder="任意" autocomplete="off" style="flex:1;">
+    <div class="email-field">
+      <label for="notifyEmail3">通知先メール ③（BB列）</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="notifyEnabled3" checked style="width:20px; height:20px; flex-shrink:0;">
+        <input type="text" id="notifyEmail3" placeholder="任意" autocomplete="off" style="flex:1;">
+      </div>
     </div>
-
-    <label for="notifyEmail4">通知先メール ④（BC列）</label>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <input type="checkbox" id="notifyEnabled4" checked style="width:20px; height:20px; flex-shrink:0;">
-      <input type="text" id="notifyEmail4" placeholder="任意" autocomplete="off" style="flex:1;">
+    <div class="email-field">
+      <label for="notifyEmail4">通知先メール ④（BC列）</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="notifyEnabled4" checked style="width:20px; height:20px; flex-shrink:0;">
+        <input type="text" id="notifyEmail4" placeholder="任意" autocomplete="off" style="flex:1;">
+      </div>
+    </div>
     </div>
 
     <button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;">通知先メールを保存する</button>
 
     <div id="emailMsg" class="msg"></div>
+    </div>
   </div>
 
   <!-- ④ ポイントを手動付与するパネル -->
-  <div class="tab-panel" id="panelPoints">
+  <div class="tab-panel" id="panelPoints" data-title="ポイント付与">
+    <div class="panel-form-width">
     <label for="pointsStudentCode">生徒・講師番号</label>
     <input type="text" id="pointsStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="pointsStudentInfo" class="student-info">
@@ -569,14 +702,22 @@
       <h2>ポイント履歴（新しい順・最大20件）</h2>
       <div id="pointsHistoryList"></div>
     </div>
+    </div>
   </div>
 
   <!-- ⑥ 講師勤怠CSV出力パネル -->
-  <div class="tab-panel" id="panelCsv">
-    <label for="csvStartDate">開始日</label>
-    <input type="date" id="csvStartDate">
-    <label for="csvEndDate">終了日</label>
-    <input type="date" id="csvEndDate">
+  <div class="tab-panel" id="panelCsv" data-title="勤怠CSV出力">
+    <div class="panel-form-width">
+    <div class="csv-date-grid">
+      <div>
+        <label for="csvStartDate">開始日</label>
+        <input type="date" id="csvStartDate">
+      </div>
+      <div>
+        <label for="csvEndDate">終了日</label>
+        <input type="date" id="csvEndDate">
+      </div>
+    </div>
 
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
       <label style="margin:0;">対象講師（未選択の場合は全員）</label>
@@ -592,6 +733,8 @@
     <button id="csvExportBtn" onclick="exportAttendanceCsv()" style="background:#3b6ea5; margin-top:16px;">📄 CSVを出力する</button>
 
     <div id="csvMsg" class="msg"></div>
+    </div>
+  </div>
   </div>
 </div>
 
