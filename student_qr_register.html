@@ -687,6 +687,7 @@
     }
     body.batch-print .print-sheet {
       display: grid;
+      box-sizing: border-box;
       grid-template-columns: repeat(3, 54mm);
       grid-template-rows: repeat(3, 74mm);
       gap: 6mm;
@@ -699,6 +700,7 @@
     }
     body.batch-print .print-sheet:last-child { page-break-after: auto; break-after: auto; }
     body.batch-print .batch-qr-card {
+      box-sizing: border-box;
       width: 54mm;
       height: 74mm;
       border: 1px solid #999;
