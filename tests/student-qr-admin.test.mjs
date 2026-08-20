@@ -49,3 +49,14 @@ test('QR selection mirrors the message-center filtering controls', () => {
   assert.match(page, /function invertVisibleQrStudents\(\)/);
   assert.match(page, /現在選択中の生徒/);
 });
+
+test('new QR issue clearly separates current QR confirmation from replacement', () => {
+  assert.match(page, /id="viewCurrentQrBtn"[^>]*>現行QRの確認</);
+  assert.match(page, /id="issueBtn"[^>]*>🆕 新規QR発行</);
+  assert.match(page, /現行QRが登録されています/);
+  assert.match(page, /現行QRはありません/);
+  assert.match(page, /登録済みの連絡先/);
+  assert.match(page, /function showCurrentQr\(\)/);
+  assert.match(page, /現行QRを新しいQRに変更します/);
+  assert.match(page, /新規発行したQR（現在有効）/);
+});
