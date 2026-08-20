@@ -322,6 +322,23 @@
     flex-wrap: wrap;
   }
   #viewCurrentQrBtn { background: #1769aa; }
+  .name-badge-link {
+    display: inline-flex;
+    min-width: 180px;
+    min-height: 48px;
+    margin-top: 20px;
+    padding: 12px 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: #fff;
+    background: #20357f;
+    box-shadow: 0 3px 10px rgba(32, 53, 127, .18);
+    font-size: 16px;
+    font-weight: bold;
+    text-decoration: none;
+  }
+  .name-badge-link:hover { background: #172861; }
   .email-student-search-card {
     margin-bottom: 22px;
     padding: 18px;
@@ -813,7 +830,7 @@
   <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
     <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認・印刷</button>
-    <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
+    <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行・名札印刷</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
     <button type="button" class="tab-btn" id="tabCsvBtn" onclick="switchTab('csv')">勤怠CSV出力</button>
@@ -912,7 +929,7 @@
   </div>
 
   <!-- ② 新規生徒のQRを発行するパネル -->
-  <div class="tab-panel" id="panelNew" data-title="新規QR発行">
+  <div class="tab-panel" id="panelNew" data-title="新規QR発行・名札印刷">
     <div class="panel-form-width">
     <label for="newStudentCode">生徒・講師番号</label>
     <input type="text" id="newStudentCode" placeholder="例: 1250" inputmode="numeric" autocomplete="off">
@@ -930,6 +947,7 @@
     <div class="new-qr-action-row">
       <button id="viewCurrentQrBtn" onclick="showCurrentQr()" disabled>現行QRの確認</button>
       <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;" disabled>🆕 新規QR発行</button>
+      <a class="name-badge-link" href="https://step-name-badge.mintcocoajasmine.chatgpt.site" target="_blank" rel="noopener">🏷️ 名札発行</a>
     </div>
 
     <div id="newMsg" class="msg"></div>
