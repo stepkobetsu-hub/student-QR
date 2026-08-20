@@ -563,6 +563,7 @@
     display: block;
     margin-top: 16px;
   }
+  #batchPrintHost { display: none; }
   .print-sheet {
     display: grid;
     grid-template-columns: repeat(auto-fill, 54mm);
@@ -683,17 +684,14 @@
       padding: 0 !important;
       overflow: visible !important;
     }
-    body.batch-print > .auth-card,
-    body.batch-print #appContainer > :not(.workspace-shell),
-    body.batch-print .workspace-shell > :not(#panelCheck),
-    body.batch-print #panelCheck > :not(.panel-secondary),
-    body.batch-print #panelCheck .panel-secondary > :not(#checkBatchPrintArea) {
+    body.batch-print > :not(#batchPrintHost) {
       display: none !important;
     }
-    body.batch-print #appContainer,
-    body.batch-print .workspace-shell,
-    body.batch-print #panelCheck,
-    body.batch-print #panelCheck .panel-secondary {
+    body.batch-print #batchPrintHost,
+    body.batch-print #batchPrintHost * {
+      visibility: visible !important;
+    }
+    body.batch-print #batchPrintHost {
       display: block !important;
       position: static !important;
       width: 210mm !important;
@@ -702,14 +700,6 @@
       padding: 0 !important;
       border: 0 !important;
       box-shadow: none !important;
-    }
-    body.batch-print #checkBatchPrintArea,
-    body.batch-print #checkBatchPrintArea * { visibility: visible; }
-    body.batch-print #checkBatchPrintArea {
-      display: block !important;
-      position: static !important;
-      width: 210mm;
-      margin: 0;
     }
     body.batch-print .print-sheet {
       display: grid;
@@ -1105,6 +1095,8 @@
   </div>
   </div>
 </div>
+
+<div id="batchPrintHost" aria-hidden="true"></div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2043,11 +2035,16 @@ async function printSelectedQrCards() {
     image.addEventListener('load', resolve, { once: true });
     image.addEventListener('error', resolve, { once: true });
   })));
+  const batchPrintHostEl = document.getElementById('batchPrintHost');
+  batchPrintHostEl.innerHTML = checkBatchPrintAreaEl.innerHTML;
   document.body.classList.add('batch-print');
   window.print();
 }
 
-window.addEventListener('afterprint', () => document.body.classList.remove('batch-print'));
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('batch-print');
+  document.getElementById('batchPrintHost').innerHTML = '';
+});
 checkStudentSearchEl.addEventListener('input', renderQrStudentList);
 checkSchoolFilterEl.addEventListener('change', renderQrStudentList);
 renderQrGradeButtons();
