@@ -212,6 +212,70 @@
   #printBtn {
     background: #6a4fa0;
   }
+  .check-search-toolbar,
+  .check-list-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .check-search-toolbar button,
+  .check-list-toolbar button {
+    width: auto;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .check-student-list {
+    max-height: 330px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    margin-top: 10px;
+    background: #fafcfb;
+  }
+  .check-student-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 11px 12px;
+    border-bottom: 1px solid #e7ece9;
+    cursor: pointer;
+  }
+  .check-student-row:last-child { border-bottom: 0; }
+  .check-student-row.selected { background: #e6f4ec; }
+  .check-student-row input { width: 18px; height: 18px; margin: 0; }
+  .check-student-main { min-width: 0; }
+  .check-student-main b { color: var(--main-color); }
+  .check-student-kana { display: block; font-size: 12px; color: #777; margin-top: 2px; }
+  .check-student-meta { font-size: 12px; color: #777; white-space: nowrap; }
+  .check-selected-summary {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #eef6f1;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .batch-qr-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .batch-qr-card {
+    border: 1px solid #cbd5d0;
+    border-radius: 10px;
+    padding: 14px 10px;
+    text-align: center;
+    background: #fff;
+    break-inside: avoid;
+  }
+  .batch-qr-card .school-name { color: #2a5da0; font-size: 13px; font-weight: bold; }
+  .batch-qr-card .card-code { color: #b5651d; font-size: 18px; font-weight: bold; margin-top: 5px; }
+  .batch-qr-card .card-name { color: var(--main-color); font-size: 15px; font-weight: bold; }
+  .batch-qr-card img { width: 140px; height: 140px; margin-top: 6px; }
   .app-header {
     display: flex;
     justify-content: space-between;
@@ -257,6 +321,25 @@
       transform: translateX(-50%);
       border: 1px solid #999;
     }
+    body.batch-print .qr-card { display: none !important; }
+    body.batch-print #checkBatchPrintArea,
+    body.batch-print #checkBatchPrintArea * { visibility: visible; }
+    body.batch-print #checkBatchPrintArea {
+      display: grid !important;
+      position: absolute;
+      inset: 0;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8mm;
+      width: 100%;
+      margin: 0;
+    }
+    body.batch-print .batch-qr-card {
+      min-height: 122mm;
+      border: 1px solid #999;
+      padding: 8mm 5mm;
+      page-break-inside: avoid;
+    }
+    body.batch-print .batch-qr-card img { width: 52mm; height: 52mm; }
   }
   @media (max-width: 560px) {
     body { padding: 14px; }
@@ -275,6 +358,7 @@
     .tab-btn {
       min-width: calc(50% - 4px);
     }
+    .batch-qr-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -363,24 +447,28 @@
 
   <!-- ② 現在登録されているQRを確認するパネル -->
   <div class="tab-panel" id="panelCheck">
-    <label for="checkStudentCode">生徒・講師番号</label>
-    <input type="text" id="checkStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
-    <div id="checkStudentInfo" class="student-info">
-      <div class="name" id="checkStudentName"></div>
-      <div id="checkStudentSchool"></div>
-    </div>
+    <label for="checkStudentSearch">生徒検索</label>
+    <input type="text" id="checkStudentSearch" placeholder="コード番号・氏名・読み仮名・ローマ字で検索（例：tanaka）" autocomplete="off">
+    <div class="hint">カタカナ・ひらがな・ローマ字は、一部だけでも検索できます。複数の生徒を選択できます。</div>
 
-    <div class="qr-card" id="checkQrCard">
-      <div class="school-name">個別指導ステップ</div>
-      <div class="card-code" id="checkCardCode"></div>
-      <div class="card-name" id="checkCardName"></div>
-      <img id="checkCardQrImg" src="" alt="QRコード">
+    <div class="check-list-toolbar" style="justify-content:space-between; margin-top:12px;">
+      <span id="checkStudentCount" class="hint" style="margin:0;">生徒情報を読み込み中...</span>
+      <span class="check-search-toolbar">
+        <button type="button" onclick="selectAllVisibleQrStudents()" style="background:#607d70;">表示中を全選択</button>
+        <button type="button" onclick="clearQrStudentSelection()" style="background:#888;">全解除</button>
+        <button type="button" onclick="loadQrStudentRoster(true)" style="background:#3b6ea5;">生徒情報を更新</button>
+      </span>
     </div>
+    <div id="checkStudentList" class="check-student-list"><div class="hint" style="padding:14px;">読み込み中...</div></div>
+    <div id="checkSelectedSummary" class="check-selected-summary">まだ選択されていません。</div>
 
-    <button id="checkPrintBtn" style="display:none;" onclick="window.print()">🖨 このカードを印刷する</button>
+    <button id="checkLoadQrBtn" onclick="loadSelectedQrCards()" disabled>選択したQRを表示する</button>
+    <div id="checkBatchMsg" class="msg"></div>
+    <div id="checkBatchPrintArea" class="batch-qr-grid"></div>
+    <button id="checkPrintBtn" style="display:none; background:#6a4fa0;" onclick="printSelectedQrCards()">🖨 選択したQRをまとめて印刷する</button>
 
     <div id="checkPdfEmailWrap" style="display:none; margin-top:16px;">
-      <label for="checkPdfEmail">このQRをPDFでメール送信</label>
+      <label for="checkPdfEmail">1人だけ選択した場合、このQRをPDFでメール送信</label>
       <input type="text" id="checkPdfEmail" placeholder="送信先メールアドレス" autocomplete="off">
       <button id="checkSendPdfBtn" onclick="sendCheckQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
       <div id="checkPdfMsg" class="msg"></div>
@@ -513,12 +601,15 @@
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
 const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
 const AUTH_API_URL = "https://script.google.com/macros/s/AKfycbypkUc0MqZ07E7pZRglNPeRM56WbCcuWaLpRzi9bVFcPklHDxaaLC7GfzG6ozTGCbEX/exec";
+const STUDENT_ROSTER_API_URL = "https://script.google.com/macros/s/AKfycbxIH2VtgwRi50xduXgrkYrjD0yrzNfQ5vCWt1XgOzil6LZSgXNj6MJo9jPYvOkjNHdu/exec";
 const LOGIN_ID_KEY = 'studentQrLoginId';
 const LOGIN_NAME_KEY = 'studentQrLoginName';
 const PERMISSION_KEY = 'studentQrPermissionLevel';
 const SESSION_TOKEN_KEY = 'studentQrSessionToken';
 const SESSION_EXPIRES_KEY = 'studentQrSessionExpiresAt';
 const EXPLICIT_LOGOUT_KEY = 'studentQrExplicitlyLoggedOut';
+const DEVICE_CREDENTIAL_KEY = 'studentQrDeviceCredentialV1';
+const DEVICE_SECRET_KEY = 'studentQrDeviceSecretV1';
 const QR_ALLOWED_PERMISSION_LEVELS = ['2', '3', '4'];
 
 let studentQrAuth = null;
@@ -568,7 +659,9 @@ function clearStudentQrSession(keepLoginId = true) {
 }
 
 async function saveStudentQrCredential(loginId, password, name) {
-  if (!loginId || !password || !window.PasswordCredential || !navigator.credentials?.store) return;
+  if (!loginId || !password) return;
+  await saveEncryptedStudentQrCredential(loginId, password);
+  if (!window.PasswordCredential || !navigator.credentials?.store) return;
   try {
     await navigator.credentials.store(new PasswordCredential({
       id: loginId,
@@ -580,10 +673,64 @@ async function saveStudentQrCredential(loginId, password, name) {
   }
 }
 
-async function getStudentQrCredential() {
-  if (!navigator.credentials?.get || localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') return null;
+function bytesToBase64_(bytes) {
+  let binary = '';
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes_(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+async function getDeviceCredentialCryptoKey_() {
+  if (!window.crypto?.subtle) return null;
+  let encoded = localStorage.getItem(DEVICE_SECRET_KEY);
+  if (!encoded) {
+    encoded = bytesToBase64_(crypto.getRandomValues(new Uint8Array(32)));
+    localStorage.setItem(DEVICE_SECRET_KEY, encoded);
+  }
+  return crypto.subtle.importKey('raw', base64ToBytes_(encoded), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function saveEncryptedStudentQrCredential(loginId, password) {
   try {
-    const credential = await navigator.credentials.get({
+    const key = await getDeviceCredentialCryptoKey_();
+    if (!key) return;
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const data = new TextEncoder().encode(JSON.stringify({ loginId, password }));
+    const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+    localStorage.setItem(DEVICE_CREDENTIAL_KEY, JSON.stringify({
+      iv: bytesToBase64_(iv),
+      data: bytesToBase64_(new Uint8Array(encrypted))
+    }));
+  } catch (e) {
+    // 保存できない端末ではブラウザー標準のパスワード保存だけを利用する
+  }
+}
+
+async function getEncryptedStudentQrCredential() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEVICE_CREDENTIAL_KEY) || 'null');
+    const key = await getDeviceCredentialCryptoKey_();
+    if (!saved?.iv || !saved?.data || !key) return null;
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes_(saved.iv) },
+      key,
+      base64ToBytes_(saved.data)
+    );
+    const credential = JSON.parse(new TextDecoder().decode(decrypted));
+    return credential?.loginId && credential?.password ? credential : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getStudentQrCredential() {
+  if (localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') return null;
+  try {
+    const credential = await navigator.credentials?.get?.({
       password: true,
       mediation: 'silent'
     });
@@ -593,7 +740,7 @@ async function getStudentQrCredential() {
   } catch (e) {
     // 対応していないブラウザーでは通常のログイン画面へ進む
   }
-  return null;
+  return getEncryptedStudentQrCredential();
 }
 
 function showLoginPanel(message) {
@@ -1040,65 +1187,251 @@ function switchTab(tab) {
   if (isCsv && !teacherListLoaded) {
     loadTeacherList();
   }
+  if (isCheck && !qrStudentRosterLoaded) {
+    loadQrStudentRoster(false);
+  }
 }
 
 // ===================================================================
 // QR確認（現在登録されているQRを表示・印刷・PDF送信）
 // ===================================================================
-const checkStudentCodeEl = document.getElementById('checkStudentCode');
-const checkStudentInfoEl = document.getElementById('checkStudentInfo');
-const checkStudentNameEl = document.getElementById('checkStudentName');
-const checkStudentSchoolEl = document.getElementById('checkStudentSchool');
-const checkQrCardEl = document.getElementById('checkQrCard');
-const checkCardCodeEl = document.getElementById('checkCardCode');
-const checkCardNameEl = document.getElementById('checkCardName');
-const checkCardQrImgEl = document.getElementById('checkCardQrImg');
+const QR_ROSTER_CACHE_KEY = 'studentQrRosterV1';
+const QR_ROSTER_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const checkStudentSearchEl = document.getElementById('checkStudentSearch');
+const checkStudentListEl = document.getElementById('checkStudentList');
+const checkStudentCountEl = document.getElementById('checkStudentCount');
+const checkSelectedSummaryEl = document.getElementById('checkSelectedSummary');
+const checkLoadQrBtnEl = document.getElementById('checkLoadQrBtn');
+const checkBatchPrintAreaEl = document.getElementById('checkBatchPrintArea');
+const checkBatchMsgEl = document.getElementById('checkBatchMsg');
 const checkPrintBtnEl = document.getElementById('checkPrintBtn');
+let qrStudentRoster = [];
+let qrStudentRosterLoaded = false;
+let selectedQrStudents = new Map();
+let loadedQrCards = [];
 let currentCheckedCode = null;
+let currentCheckedQr = null;
 
-let checkLookupTimer = null;
-let checkLookupSeq = 0;
-checkStudentCodeEl.addEventListener('input', () => {
-  clearTimeout(checkLookupTimer);
-  const code = checkStudentCodeEl.value.trim();
-  checkStudentInfoEl.classList.remove('show');
-  checkQrCardEl.classList.remove('show');
+const QR_ROMAJI_PAIRS = {
+  'きゃ':'kya','きゅ':'kyu','きょ':'kyo','ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo','しゃ':'sha','しゅ':'shu','しょ':'sho',
+  'じゃ':'ja','じゅ':'ju','じょ':'jo','ちゃ':'cha','ちゅ':'chu','ちょ':'cho','にゃ':'nya','にゅ':'nyu','にょ':'nyo',
+  'ひゃ':'hya','ひゅ':'hyu','ひょ':'hyo','びゃ':'bya','びゅ':'byu','びょ':'byo','ぴゃ':'pya','ぴゅ':'pyu','ぴょ':'pyo',
+  'みゃ':'mya','みゅ':'myu','みょ':'myo','りゃ':'rya','りゅ':'ryu','りょ':'ryo','ふぁ':'fa','ふぃ':'fi','ふぇ':'fe','ふぉ':'fo'
+};
+const QR_ROMAJI_CHARS = {
+  'あ':'a','い':'i','う':'u','え':'e','お':'o','か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko','が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+  'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so','ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo','た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+  'だ':'da','ぢ':'ji','づ':'zu','で':'de','ど':'do','な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no','は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+  'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo','ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po','ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+  'や':'ya','ゆ':'yu','よ':'yo','ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro','わ':'wa','を':'o','ん':'n','ゔ':'vu'
+};
+
+function normalizeQrStudentSearch(value) {
+  return String(value || '').normalize('NFKC').toLowerCase()
+    .replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60))
+    .replace(/[\s　]+/g, '');
+}
+
+function qrKanaToRomaji(value) {
+  const kana = normalizeQrStudentSearch(value);
+  let output = '';
+  let smallTsu = false;
+  for (let i = 0; i < kana.length; i++) {
+    const char = kana[i];
+    if (char === 'っ') { smallTsu = true; continue; }
+    if (char === 'ー') {
+      const vowel = (output.match(/[aeiou]$/) || [])[0];
+      if (vowel) output += vowel;
+      continue;
+    }
+    const pair = QR_ROMAJI_PAIRS[kana.slice(i, i + 2)];
+    const romaji = pair || QR_ROMAJI_CHARS[char] || char;
+    if (pair) i++;
+    if (smallTsu) {
+      if (romaji.startsWith('ch')) output += 't';
+      else if (/^[bcdfghjklmpqrstvwxyz]/.test(romaji)) output += romaji[0];
+      smallTsu = false;
+    }
+    output += romaji;
+  }
+  return output;
+}
+
+function escapeQrHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+}
+
+function rosterJsonp() {
+  return new Promise((resolve, reject) => {
+    const callback = 'qrRosterCb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('生徒情報の読み込みがタイムアウトしました。')); }, 45000);
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[callback]; } catch (e) {}
+      script.remove();
+    }
+    window[callback] = data => { cleanup(); resolve(Array.isArray(data) ? data : []); };
+    script.onerror = () => { cleanup(); reject(new Error('生徒情報を読み込めませんでした。')); };
+    script.src = STUDENT_ROSTER_API_URL + '?' + new URLSearchParams({ action: 'getStudents', callback, _: Date.now() });
+    document.body.appendChild(script);
+  });
+}
+
+async function loadQrStudentRoster(forceRefresh) {
+  checkStudentCountEl.textContent = '生徒情報を読み込み中...';
+  if (!forceRefresh) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(QR_ROSTER_CACHE_KEY) || 'null');
+      if (cached?.items?.length && Date.now() - cached.savedAt < QR_ROSTER_CACHE_MAX_AGE_MS) {
+        qrStudentRoster = cached.items;
+        qrStudentRosterLoaded = true;
+        renderQrStudentList();
+      }
+    } catch (e) {}
+  }
+  try {
+    const items = await rosterJsonp();
+    if (items.length) {
+      qrStudentRoster = items.map(item => ({
+        id: String(item.id || ''), name: String(item.name || ''), kana: String(item.kana || item.furigana || ''),
+        school: String(item.school || ''), grade: String(item.grade || '')
+      }));
+      qrStudentRosterLoaded = true;
+      localStorage.setItem(QR_ROSTER_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), items: qrStudentRoster }));
+      renderQrStudentList();
+    }
+  } catch (e) {
+    if (!qrStudentRosterLoaded) {
+      checkStudentListEl.innerHTML = '<div class="hint" style="padding:14px; color:#c0392b;">' + escapeQrHtml(e.message) + '</div>';
+      checkStudentCountEl.textContent = '読み込み失敗';
+    }
+  }
+}
+
+function filteredQrStudents() {
+  const query = normalizeQrStudentSearch(checkStudentSearchEl.value);
+  return qrStudentRoster.filter(student => {
+    if (!query) return true;
+    const kana = student.kana || '';
+    return [student.id, student.name, kana].map(normalizeQrStudentSearch).concat(qrKanaToRomaji(kana))
+      .some(value => value.includes(query));
+  });
+}
+
+function renderQrStudentList() {
+  const visible = filteredQrStudents();
+  checkStudentCountEl.textContent = `${visible.length}人表示 / ${qrStudentRoster.length}人取得`;
+  checkStudentListEl.innerHTML = visible.map(student => `
+    <div class="check-student-row ${selectedQrStudents.has(student.id) ? 'selected' : ''}" data-code="${escapeQrHtml(student.id)}">
+      <input type="checkbox" ${selectedQrStudents.has(student.id) ? 'checked' : ''} aria-label="${escapeQrHtml(student.name)}を選択">
+      <span class="check-student-main"><b>${escapeQrHtml(student.id)}　${escapeQrHtml(student.name)}</b><span class="check-student-kana">${escapeQrHtml(student.kana)}</span></span>
+      <span class="check-student-meta">${escapeQrHtml(student.grade)}<br>${escapeQrHtml(student.school)}</span>
+    </div>`).join('') || '<div class="hint" style="padding:14px;">該当する生徒がいません。</div>';
+  checkStudentListEl.querySelectorAll('.check-student-row').forEach(row => {
+    row.addEventListener('click', () => toggleQrStudent(row.dataset.code));
+  });
+  renderQrSelectedSummary();
+}
+
+function toggleQrStudent(code) {
+  const student = qrStudentRoster.find(item => item.id === code);
+  if (!student) return;
+  selectedQrStudents.has(code) ? selectedQrStudents.delete(code) : selectedQrStudents.set(code, student);
+  resetLoadedQrCards();
+  renderQrStudentList();
+}
+
+function selectAllVisibleQrStudents() {
+  filteredQrStudents().forEach(student => selectedQrStudents.set(student.id, student));
+  resetLoadedQrCards();
+  renderQrStudentList();
+}
+
+function clearQrStudentSelection() {
+  selectedQrStudents.clear();
+  resetLoadedQrCards();
+  renderQrStudentList();
+}
+
+function renderQrSelectedSummary() {
+  const selected = [...selectedQrStudents.values()];
+  checkSelectedSummaryEl.innerHTML = selected.length
+    ? `<b>${selected.length}人選択中</b><br>${selected.map(student => escapeQrHtml(student.name)).join('、')}`
+    : 'まだ選択されていません。';
+  checkLoadQrBtnEl.disabled = selected.length === 0;
+}
+
+function resetLoadedQrCards() {
+  loadedQrCards = [];
+  currentCheckedCode = null;
+  currentCheckedQr = null;
+  checkBatchPrintAreaEl.innerHTML = '';
   checkPrintBtnEl.style.display = 'none';
   document.getElementById('checkPdfEmailWrap').style.display = 'none';
-  currentCheckedCode = null;
-  if (!code) return;
+  checkBatchMsgEl.className = 'msg';
+}
 
-  const seq = ++checkLookupSeq;
-  checkLookupTimer = setTimeout(async () => {
-    try {
-      const res = await authorizedJsonp({ action: 'getStudent', code });
-      if (seq !== checkLookupSeq) return; // 古いリクエストの結果は無視
-      if (res.ok) {
-        checkStudentNameEl.textContent = res.name || '(氏名なし)';
-        checkStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
-        checkStudentInfoEl.classList.add('show');
+async function loadSelectedQrCards() {
+  const selected = [...selectedQrStudents.values()];
+  if (!selected.length) return;
+  checkLoadQrBtnEl.disabled = true;
+  checkLoadQrBtnEl.textContent = 'QRを読み込み中...';
+  checkBatchMsgEl.textContent = `${selected.length}人分のQRを確認しています...`;
+  checkBatchMsgEl.className = 'msg success';
+  const cards = [];
+  const missing = [];
+  for (let index = 0; index < selected.length; index += 5) {
+    const group = selected.slice(index, index + 5);
+    const results = await Promise.all(group.map(async student => {
+      try { return { student, result: await authorizedJsonp({ action: 'getStudent', code: student.id }) }; }
+      catch (error) { return { student, result: { ok: false, message: error.message } }; }
+    }));
+    results.forEach(({ student, result }) => {
+      if (result.ok && result.qrData) cards.push({
+        code: student.id,
+        name: result.name || student.name,
+        qrData: result.qrData,
+        qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(result.qrData)
+      });
+      else missing.push(student.name);
+    });
+  }
+  loadedQrCards = cards;
+  checkBatchPrintAreaEl.innerHTML = cards.map(card => `
+    <div class="batch-qr-card">
+      <div class="school-name">個別指導ステップ</div>
+      <div class="card-code">${escapeQrHtml(card.code)}</div>
+      <div class="card-name">${escapeQrHtml(card.name)}</div>
+      <img src="${escapeQrHtml(card.qrImageUrl)}" alt="${escapeQrHtml(card.name)}のQRコード">
+    </div>`).join('');
+  currentCheckedQr = cards.length === 1 ? cards[0] : null;
+  currentCheckedCode = currentCheckedQr?.code || null;
+  checkPrintBtnEl.style.display = cards.length ? 'block' : 'none';
+  document.getElementById('checkPdfEmailWrap').style.display = cards.length === 1 ? 'block' : 'none';
+  checkBatchMsgEl.textContent = cards.length
+    ? `${cards.length}人分のQRを表示しました。${missing.length ? ` QR未登録：${missing.join('、')}` : ''}`
+    : `印刷できるQRがありません。QR未登録：${missing.join('、')}`;
+  checkBatchMsgEl.className = 'msg ' + (cards.length ? 'success' : 'error');
+  checkLoadQrBtnEl.disabled = false;
+  checkLoadQrBtnEl.textContent = '選択したQRを表示する';
+}
 
-        if (res.qrData) {
-          currentCheckedCode = code;
-          checkCardCodeEl.textContent = code;
-          checkCardNameEl.textContent = res.name;
-          checkCardQrImgEl.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(res.qrData);
-          checkQrCardEl.classList.add('show');
-          checkPrintBtnEl.style.display = 'block';
-          document.getElementById('checkPdfEmailWrap').style.display = 'block';
-        } else {
-          checkStudentSchoolEl.textContent += '（QR未登録です。「既存QR登録」または「新規QR発行」タブから登録してください）';
-        }
-      } else {
-        checkStudentNameEl.textContent = res.message;
-        checkStudentSchoolEl.textContent = '';
-        checkStudentInfoEl.classList.add('show');
-      }
-    } catch (e) {
-      // 通信中は何もしない
-    }
-  }, 400);
-});
+async function printSelectedQrCards() {
+  if (!loadedQrCards.length) return;
+  const images = [...checkBatchPrintAreaEl.querySelectorAll('img')];
+  await Promise.all(images.map(image => image.complete ? Promise.resolve() : new Promise(resolve => {
+    image.addEventListener('load', resolve, { once: true });
+    image.addEventListener('error', resolve, { once: true });
+  })));
+  document.body.classList.add('batch-print');
+  window.print();
+}
+
+window.addEventListener('afterprint', () => document.body.classList.remove('batch-print'));
+checkStudentSearchEl.addEventListener('input', renderQrStudentList);
 
 async function sendCheckQrPdf() {
   const email = document.getElementById('checkPdfEmail').value.trim();
@@ -1121,16 +1454,16 @@ async function sendCheckQrPdf() {
 
   try {
     const auth = await requireStudentQrAuth();
-    const qrDataUrl = await loadImageAsDataUrl(checkCardQrImgEl.src);
+    const qrDataUrl = await loadImageAsDataUrl(currentCheckedQr.qrImageUrl);
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a6' });
     doc.setFontSize(14);
     doc.text('個別指導ステップ', 10, 15);
     doc.setFontSize(20);
-    doc.text(checkCardCodeEl.textContent, 10, 28);
+    doc.text(currentCheckedQr.code, 10, 28);
     doc.setFontSize(16);
-    doc.text(checkCardNameEl.textContent, 10, 38);
+    doc.text(currentCheckedQr.name, 10, 38);
     doc.addImage(qrDataUrl, 'PNG', 25, 45, 55, 55);
 
     const pdfBase64 = doc.output('datauristring');
