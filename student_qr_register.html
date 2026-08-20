@@ -270,6 +270,66 @@
     align-items: center;
     flex-wrap: wrap;
   }
+  .check-panel-header,
+  .selected-summary-header,
+  .check-list-count-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .check-panel-header h2 { margin: 0; color: #163d66; font-size: 18px; }
+  .check-panel-header button,
+  .selected-summary-header button,
+  .check-list-count-row button {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 15px;
+    font-size: 13px;
+  }
+  .check-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(460px, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+  }
+  .check-filter-grid label { margin-top: 0; }
+  #checkSchoolFilter {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid #b9d2ef;
+    border-radius: 9px;
+    background: #fff;
+    font-size: 15px;
+  }
+  .check-grade-buttons { display: flex; gap: 7px; flex-wrap: wrap; }
+  .check-grade-btn {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 13px;
+    border: 1px solid #9bc6f7;
+    border-radius: 999px;
+    background: #fff;
+    color: #075da7;
+    font-size: 13px;
+  }
+  .check-grade-btn.active { color: #fff; background: #0873c9; border-color: #0873c9; }
+  .check-filter-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+  .check-filter-actions button {
+    width: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 7px 13px;
+    border: 1px solid #9bc6f7;
+    border-radius: 999px;
+    background: #fff;
+    color: #075da7;
+    font-size: 12px;
+  }
+  .check-filter-actions .danger { color: #d8233a; border-color: #ff9eab; }
   .check-search-toolbar button,
   .check-list-toolbar button {
     width: auto;
@@ -279,7 +339,7 @@
     font-size: 13px;
   }
   .check-student-list {
-    max-height: 330px;
+    max-height: 520px;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     border-radius: 10px;
@@ -288,7 +348,7 @@
   }
   .check-student-row {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto auto;
     gap: 10px;
     align-items: center;
     padding: 11px 12px;
@@ -300,34 +360,62 @@
   .check-student-row input { width: 18px; height: 18px; margin: 0; }
   .check-student-main { min-width: 0; }
   .check-student-main b { color: var(--main-color); }
+  .check-student-code { color: #607080; font-size: 12px; margin-right: 10px; }
   .check-student-kana { display: block; font-size: 12px; color: #777; margin-top: 2px; }
   .check-student-meta { font-size: 12px; color: #777; white-space: nowrap; }
+  .check-grade-badge {
+    min-width: 38px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #dcedff;
+    color: #075da7;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+  }
   .check-selected-summary {
     margin-top: 12px;
     padding: 10px 12px;
     border-radius: 8px;
-    background: #eef6f1;
+    border: 2px solid #0873c9;
+    background: #eef7ff;
     font-size: 13px;
     line-height: 1.7;
   }
+  .selected-summary-header b { color: #163d66; font-size: 15px; }
+  .selected-actions { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .selected-count {
+    padding: 4px 10px;
+    border-radius: 999px;
+    color: #fff;
+    background: #0873c9;
+    font-weight: bold;
+  }
+  .selected-names { margin-top: 8px; color: #43586b; }
   .batch-qr-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 12px;
+    display: block;
     margin-top: 16px;
   }
+  .print-sheet {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 54mm);
+    gap: 10px;
+    margin-bottom: 12px;
+  }
   .batch-qr-card {
+    width: 54mm;
+    height: 74mm;
     border: 1px solid #cbd5d0;
-    border-radius: 10px;
-    padding: 14px 10px;
+    border-radius: 8px;
+    padding: 4mm 3mm;
     text-align: center;
     background: #fff;
     break-inside: avoid;
   }
   .batch-qr-card .school-name { color: #2a5da0; font-size: 13px; font-weight: bold; }
-  .batch-qr-card .card-code { color: #b5651d; font-size: 18px; font-weight: bold; margin-top: 5px; }
+  .batch-qr-card .card-code { color: #b5651d; font-size: 17px; font-weight: bold; margin-top: 2mm; }
   .batch-qr-card .card-name { color: var(--main-color); font-size: 15px; font-weight: bold; }
-  .batch-qr-card img { width: 140px; height: 140px; margin-top: 6px; }
+  .batch-qr-card img { width: 42mm; height: 42mm; margin-top: 2mm; }
   .app-header {
     display: flex;
     justify-content: space-between;
@@ -409,6 +497,7 @@
     border-color: var(--main-color);
   }
 
+  @page { size: A4 portrait; margin: 0; }
   @media print {
     body * { visibility: hidden; }
     .qr-card, .qr-card * { visibility: visible; }
@@ -422,21 +511,33 @@
     body.batch-print #checkBatchPrintArea,
     body.batch-print #checkBatchPrintArea * { visibility: visible; }
     body.batch-print #checkBatchPrintArea {
-      display: grid !important;
+      display: block !important;
       position: absolute;
       inset: 0;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8mm;
-      width: 100%;
+      width: 210mm;
       margin: 0;
     }
+    body.batch-print .print-sheet {
+      display: grid;
+      grid-template-columns: repeat(3, 54mm);
+      grid-template-rows: repeat(3, 74mm);
+      gap: 6mm;
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      padding: 22mm 15mm;
+      page-break-after: always;
+      break-after: page;
+    }
+    body.batch-print .print-sheet:last-child { page-break-after: auto; break-after: auto; }
     body.batch-print .batch-qr-card {
-      min-height: 122mm;
+      width: 54mm;
+      height: 74mm;
       border: 1px solid #999;
-      padding: 8mm 5mm;
+      padding: 4mm 3mm;
       page-break-inside: avoid;
     }
-    body.batch-print .batch-qr-card img { width: 52mm; height: 52mm; }
+    body.batch-print .batch-qr-card img { width: 42mm; height: 42mm; }
   }
   @media (max-width: 900px) {
     body { padding: 14px; }
@@ -464,7 +565,7 @@
     }
     .workspace-shell { display: block; }
     .tab-panel.active { padding: 20px 18px 24px; }
-    .panel-split, .settings-grid, .email-grid, .csv-date-grid { grid-template-columns: 1fr; }
+    .panel-split, .settings-grid, .email-grid, .csv-date-grid, .check-filter-grid { grid-template-columns: 1fr; }
     #teacherCheckList { grid-template-columns: 1fr; }
     .batch-qr-grid { grid-template-columns: 1fr; }
   }
@@ -562,25 +663,51 @@
 
   <!-- ② 現在登録されているQRを確認するパネル -->
   <div class="tab-panel" id="panelCheck" data-title="QR確認・まとめ印刷">
-    <div class="panel-split">
     <div class="panel-primary">
-    <label for="checkStudentSearch">生徒検索</label>
-    <input type="text" id="checkStudentSearch" placeholder="コード番号・氏名・読み仮名・ローマ字で検索（例：tanaka）" autocomplete="off">
-    <div class="hint">カタカナ・ひらがな・ローマ字は、一部だけでも検索できます。複数の生徒を選択できます。</div>
+    <div class="check-panel-header">
+      <h2>QR確認対象生徒</h2>
+      <button type="button" onclick="loadQrStudentRoster(true)" style="background:#0873c9;">生徒情報を更新</button>
+    </div>
 
-    <div class="check-list-toolbar" style="justify-content:space-between; margin-top:12px;">
-      <span id="checkStudentCount" class="hint" style="margin:0;">生徒情報を読み込み中...</span>
+    <div class="check-filter-grid">
+      <div>
+        <label for="checkSchoolFilter">校舎</label>
+        <select id="checkSchoolFilter">
+          <option value="全校舎">全校舎</option>
+          <option value="神領校">神領校</option>
+          <option value="大手町校">大手町校</option>
+        </select>
+      </div>
+      <div>
+        <label>学年</label>
+        <div id="checkGradeButtons" class="check-grade-buttons"></div>
+        <div class="check-filter-actions">
+          <button type="button" class="danger" onclick="clearQrGradeFilters()">全クリア</button>
+          <button type="button" onclick="setQrSortMode('asc')">学年（昇順）</button>
+          <button type="button" onclick="setQrSortMode('desc')">学年（降順）</button>
+        </div>
+        <div class="hint">複数選択できます。もう一度押すと解除します。</div>
+      </div>
+    </div>
+
+    <label for="checkStudentSearch">生徒検索</label>
+    <input type="text" id="checkStudentSearch" placeholder="生徒コード・氏名・フリガナ・ローマ字で検索" autocomplete="off">
+
+    <div id="checkSelectedSummary" class="check-selected-summary"></div>
+
+    <div class="check-list-count-row" style="margin-top:14px;">
+      <span id="checkStudentCount">生徒情報を読み込み中...</span>
       <span class="check-search-toolbar">
-        <button type="button" onclick="selectAllVisibleQrStudents()" style="background:#607d70;">表示中を全選択</button>
-        <button type="button" onclick="clearQrStudentSelection()" style="background:#888;">全解除</button>
-        <button type="button" onclick="loadQrStudentRoster(true)" style="background:#3b6ea5;">生徒情報を更新</button>
+        <button type="button" onclick="loadQrStudentRoster(true)" style="color:#075da7; background:#fff; border:1px solid #9bc6f7;">生徒情報を更新</button>
+        <button type="button" onclick="selectAllVisibleQrStudents()" style="color:#075da7; background:#fff; border:1px solid #9bc6f7;">全選択</button>
+        <button type="button" onclick="clearVisibleQrStudents()" style="color:#d8233a; background:#fff; border:1px solid #ff9eab;">全解除</button>
+        <button type="button" onclick="invertVisibleQrStudents()" style="color:#075da7; background:#fff; border:1px solid #9bc6f7;">反転</button>
       </span>
     </div>
     <div id="checkStudentList" class="check-student-list"><div class="hint" style="padding:14px;">読み込み中...</div></div>
-    <div id="checkSelectedSummary" class="check-selected-summary">まだ選択されていません。</div>
     </div>
 
-    <div class="panel-secondary">
+    <div class="panel-secondary" style="margin-top:24px;">
     <button id="checkLoadQrBtn" onclick="loadSelectedQrCards()" disabled>選択したQRを表示する</button>
     <div id="checkBatchMsg" class="msg"></div>
     <div id="checkBatchPrintArea" class="batch-qr-grid"></div>
@@ -591,7 +718,6 @@
       <input type="text" id="checkPdfEmail" placeholder="送信先メールアドレス" autocomplete="off">
       <button id="checkSendPdfBtn" onclick="sendCheckQrPdf()" style="background:#2a8f7a;">📧 PDFをメールで送る</button>
       <div id="checkPdfMsg" class="msg"></div>
-    </div>
     </div>
     </div>
   </div>
@@ -1341,6 +1467,8 @@ function switchTab(tab) {
 const QR_ROSTER_CACHE_KEY = 'studentQrRosterV1';
 const QR_ROSTER_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const checkStudentSearchEl = document.getElementById('checkStudentSearch');
+const checkSchoolFilterEl = document.getElementById('checkSchoolFilter');
+const checkGradeButtonsEl = document.getElementById('checkGradeButtons');
 const checkStudentListEl = document.getElementById('checkStudentList');
 const checkStudentCountEl = document.getElementById('checkStudentCount');
 const checkSelectedSummaryEl = document.getElementById('checkSelectedSummary');
@@ -1352,6 +1480,8 @@ let qrStudentRoster = [];
 let qrStudentRosterLoaded = false;
 let selectedQrStudents = new Map();
 let loadedQrCards = [];
+let activeQrGrades = new Set(['全生徒']);
+let qrStudentSortMode = 'asc';
 let currentCheckedCode = null;
 let currentCheckedQr = null;
 
@@ -1373,6 +1503,58 @@ function normalizeQrStudentSearch(value) {
   return String(value || '').normalize('NFKC').toLowerCase()
     .replace(/[ァ-ヶ]/g, char => String.fromCharCode(char.charCodeAt(0) - 0x60))
     .replace(/[\s　]+/g, '');
+}
+
+const QR_GRADE_OPTIONS = ['全生徒','全小学生','全中学生','全高校生','小1','小2','小3','小4','小5','小6','中1','中2','中3','高1','高2','高3'];
+const QR_GRADE_ORDER = ['小1','小2','小3','小4','小5','小6','中1','中2','中3','高1','高2','高3'];
+
+function canonicalQrGrade(value) {
+  return String(value || '').normalize('NFKC').replace(/[\s　]+/g, '');
+}
+
+function qrGradeMatchesOne(grade, filter) {
+  if (filter === '全生徒') return true;
+  if (filter === '全小学生') return grade.startsWith('小');
+  if (filter === '全中学生') return grade.startsWith('中');
+  if (filter === '全高校生') return grade.startsWith('高');
+  return grade === filter;
+}
+
+function qrGradeMatches(grade) {
+  if (!activeQrGrades.size) return false;
+  if (activeQrGrades.has('全生徒')) return true;
+  return [...activeQrGrades].some(filter => qrGradeMatchesOne(grade, filter));
+}
+
+function renderQrGradeButtons() {
+  checkGradeButtonsEl.innerHTML = QR_GRADE_OPTIONS.map(grade => `
+    <button type="button" class="check-grade-btn ${activeQrGrades.has(grade) ? 'active' : ''}" data-grade="${grade}">${grade}</button>
+  `).join('');
+  checkGradeButtonsEl.querySelectorAll('.check-grade-btn').forEach(button => {
+    button.addEventListener('click', () => toggleQrGradeFilter(button.dataset.grade));
+  });
+}
+
+function toggleQrGradeFilter(grade) {
+  if (grade === '全生徒') {
+    activeQrGrades = activeQrGrades.has('全生徒') ? new Set() : new Set(['全生徒']);
+  } else {
+    activeQrGrades.delete('全生徒');
+    activeQrGrades.has(grade) ? activeQrGrades.delete(grade) : activeQrGrades.add(grade);
+  }
+  renderQrGradeButtons();
+  renderQrStudentList();
+}
+
+function clearQrGradeFilters() {
+  activeQrGrades.clear();
+  renderQrGradeButtons();
+  renderQrStudentList();
+}
+
+function setQrSortMode(mode) {
+  qrStudentSortMode = mode === 'desc' ? 'desc' : 'asc';
+  renderQrStudentList();
 }
 
 function qrKanaToRomaji(value) {
@@ -1456,11 +1638,20 @@ async function loadQrStudentRoster(forceRefresh) {
 
 function filteredQrStudents() {
   const query = normalizeQrStudentSearch(checkStudentSearchEl.value);
+  const school = checkSchoolFilterEl.value;
   return qrStudentRoster.filter(student => {
+    const studentSchool = String(student.school || '');
+    const grade = canonicalQrGrade(student.grade);
+    if (school !== '全校舎' && studentSchool !== school) return false;
+    if (!qrGradeMatches(grade)) return false;
     if (!query) return true;
     const kana = student.kana || '';
     return [student.id, student.name, kana].map(normalizeQrStudentSearch).concat(qrKanaToRomaji(kana))
       .some(value => value.includes(query));
+  }).sort((a, b) => {
+    const gradeDiff = QR_GRADE_ORDER.indexOf(canonicalQrGrade(a.grade)) - QR_GRADE_ORDER.indexOf(canonicalQrGrade(b.grade));
+    const normalizedDiff = gradeDiff || String(a.name).localeCompare(String(b.name), 'ja');
+    return qrStudentSortMode === 'desc' ? -normalizedDiff : normalizedDiff;
   });
 }
 
@@ -1470,8 +1661,9 @@ function renderQrStudentList() {
   checkStudentListEl.innerHTML = visible.map(student => `
     <div class="check-student-row ${selectedQrStudents.has(student.id) ? 'selected' : ''}" data-code="${escapeQrHtml(student.id)}">
       <input type="checkbox" ${selectedQrStudents.has(student.id) ? 'checked' : ''} aria-label="${escapeQrHtml(student.name)}を選択">
-      <span class="check-student-main"><b>${escapeQrHtml(student.id)}　${escapeQrHtml(student.name)}</b><span class="check-student-kana">${escapeQrHtml(student.kana)}</span></span>
-      <span class="check-student-meta">${escapeQrHtml(student.grade)}<br>${escapeQrHtml(student.school)}</span>
+      <span class="check-student-main"><span class="check-student-code">${escapeQrHtml(student.id)}</span><b>${escapeQrHtml(student.name)}</b><span class="check-student-kana">${escapeQrHtml(student.kana)}</span></span>
+      <span class="check-grade-badge">${escapeQrHtml(canonicalQrGrade(student.grade))}</span>
+      <span class="check-student-meta">${escapeQrHtml(student.school)}</span>
     </div>`).join('') || '<div class="hint" style="padding:14px;">該当する生徒がいません。</div>';
   checkStudentListEl.querySelectorAll('.check-student-row').forEach(row => {
     row.addEventListener('click', () => toggleQrStudent(row.dataset.code));
@@ -1499,11 +1691,39 @@ function clearQrStudentSelection() {
   renderQrStudentList();
 }
 
+function clearVisibleQrStudents() {
+  filteredQrStudents().forEach(student => selectedQrStudents.delete(student.id));
+  resetLoadedQrCards();
+  renderQrStudentList();
+}
+
+function invertVisibleQrStudents() {
+  filteredQrStudents().forEach(student => {
+    selectedQrStudents.has(student.id) ? selectedQrStudents.delete(student.id) : selectedQrStudents.set(student.id, student);
+  });
+  resetLoadedQrCards();
+  renderQrStudentList();
+}
+
+function confirmQrSelection() {
+  if (!selectedQrStudents.size) return;
+  loadSelectedQrCards().then(() => {
+    document.querySelector('#panelCheck .panel-secondary')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
 function renderQrSelectedSummary() {
   const selected = [...selectedQrStudents.values()];
-  checkSelectedSummaryEl.innerHTML = selected.length
-    ? `<b>${selected.length}人選択中</b><br>${selected.map(student => escapeQrHtml(student.name)).join('、')}`
-    : 'まだ選択されていません。';
+  checkSelectedSummaryEl.innerHTML = `
+    <div class="selected-summary-header">
+      <b>現在選択中の生徒</b>
+      <span class="selected-actions">
+        <button type="button" onclick="clearQrStudentSelection()" style="color:#d8233a; background:#fff; border:1px solid #ff9eab;">全選択解除</button>
+        <button type="button" onclick="confirmQrSelection()" ${selected.length ? '' : 'disabled'} style="background:#0873c9;">決定</button>
+        <span class="selected-count">${selected.length}人</span>
+      </span>
+    </div>
+    <div class="selected-names">${selected.length ? selected.map(student => escapeQrHtml(student.name)).join('、') : 'まだ選択されていません。'}</div>`;
   checkLoadQrBtnEl.disabled = selected.length === 0;
 }
 
@@ -1543,19 +1763,24 @@ async function loadSelectedQrCards() {
     });
   }
   loadedQrCards = cards;
-  checkBatchPrintAreaEl.innerHTML = cards.map(card => `
-    <div class="batch-qr-card">
-      <div class="school-name">個別指導ステップ</div>
-      <div class="card-code">${escapeQrHtml(card.code)}</div>
-      <div class="card-name">${escapeQrHtml(card.name)}</div>
-      <img src="${escapeQrHtml(card.qrImageUrl)}" alt="${escapeQrHtml(card.name)}のQRコード">
+  const printSheets = [];
+  for (let index = 0; index < cards.length; index += 9) printSheets.push(cards.slice(index, index + 9));
+  checkBatchPrintAreaEl.innerHTML = printSheets.map((sheet, pageIndex) => `
+    <div class="print-sheet" data-page="${pageIndex + 1}">
+      ${sheet.map(card => `
+        <div class="batch-qr-card">
+          <div class="school-name">個別指導ステップ</div>
+          <div class="card-code">${escapeQrHtml(card.code)}</div>
+          <div class="card-name">${escapeQrHtml(card.name)}</div>
+          <img src="${escapeQrHtml(card.qrImageUrl)}" alt="${escapeQrHtml(card.name)}のQRコード">
+        </div>`).join('')}
     </div>`).join('');
   currentCheckedQr = cards.length === 1 ? cards[0] : null;
   currentCheckedCode = currentCheckedQr?.code || null;
   checkPrintBtnEl.style.display = cards.length ? 'block' : 'none';
   document.getElementById('checkPdfEmailWrap').style.display = cards.length === 1 ? 'block' : 'none';
   checkBatchMsgEl.textContent = cards.length
-    ? `${cards.length}人分のQRを表示しました。${missing.length ? ` QR未登録：${missing.join('、')}` : ''}`
+    ? `${cards.length}人分のQRを表示しました。A4 ${printSheets.length}ページで印刷します。${missing.length ? ` QR未登録：${missing.join('、')}` : ''}`
     : `印刷できるQRがありません。QR未登録：${missing.join('、')}`;
   checkBatchMsgEl.className = 'msg ' + (cards.length ? 'success' : 'error');
   checkLoadQrBtnEl.disabled = false;
@@ -1575,6 +1800,9 @@ async function printSelectedQrCards() {
 
 window.addEventListener('afterprint', () => document.body.classList.remove('batch-print'));
 checkStudentSearchEl.addEventListener('input', renderQrStudentList);
+checkSchoolFilterEl.addEventListener('change', renderQrStudentList);
+renderQrGradeButtons();
+renderQrSelectedSummary();
 
 async function sendCheckQrPdf() {
   const email = document.getElementById('checkPdfEmail').value.trim();
