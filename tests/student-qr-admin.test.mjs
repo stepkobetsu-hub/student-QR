@@ -26,6 +26,9 @@ test('selected QR cards can be printed together', () => {
   assert.match(page, /index \+= 9/);
   assert.match(page, /grid-template-columns: repeat\(3, 54mm\)/);
   assert.match(page, /grid-template-rows: repeat\(3, 74mm\)/);
+  assert.match(page, /body\.batch-print \.print-sheet \{[\s\S]*?box-sizing: border-box/);
+  assert.match(page, /body\.batch-print \.print-sheet:last-child \{ page-break-after: auto; break-after: auto; \}/);
+  assert.match(page, /body\.batch-print \.batch-qr-card \{[\s\S]*?box-sizing: border-box/);
   assert.match(page, /width: 54mm/);
   assert.match(page, /height: 74mm/);
 });
