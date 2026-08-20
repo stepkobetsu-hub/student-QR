@@ -71,3 +71,15 @@ test('current QR is shown automatically and notification email has single-studen
   assert.match(page, /function selectEmailStudent\(code\)/);
   assert.match(page, /対象生徒を1人選んでください/);
 });
+
+test('email empty results stay hidden and attendance CSV defaults to a selected month', () => {
+  assert.match(page, /id="emailStudentSearchList" class="email-student-list hidden"/);
+  assert.match(page, /emailStudentSearchListEl\.classList\.add\('hidden'\)/);
+  assert.match(page, /id="csvYear"/);
+  assert.match(page, /id="csvMonth"/);
+  assert.match(page, /function fillCsvDatesFromMonth\(\)/);
+  assert.match(page, /new Date\(year, month, 0\)\.getDate\(\)/);
+  assert.match(page, /function markCsvCustomRange\(\)/);
+  assert.match(page, /classList\.add\('custom-range'\)/);
+  assert.match(page, /日付を個別指定中/);
+});
