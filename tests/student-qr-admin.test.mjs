@@ -82,4 +82,9 @@ test('email empty results stay hidden and attendance CSV defaults to a selected 
   assert.match(page, /function markCsvCustomRange\(\)/);
   assert.match(page, /classList\.add\('custom-range'\)/);
   assert.match(page, /日付を個別指定中/);
+  assert.match(page, /id="csvResetMonthBtn"/);
+  assert.match(page, /function resetCsvMonthMode\(\)/);
+  assert.match(page, /csvYearEl\.disabled = true/);
+  assert.match(page, /csvYearEl\.disabled = false/);
+  assert.match(page, /月単位に戻す（年・月を選び直す）/);
 });

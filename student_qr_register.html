@@ -392,6 +392,17 @@
     font-weight: bold;
   }
   .csv-month-block.custom-range .csv-range-mode-badge { background: #777; }
+  .csv-month-block.custom-range select {
+    background: #e3e5e4;
+    cursor: not-allowed;
+  }
+  .csv-reset-month-btn {
+    width: 100%;
+    margin: -6px 0 20px;
+    padding: 13px 18px;
+    background: #0873c9;
+    box-shadow: 0 3px 10px rgba(8, 115, 201, .18);
+  }
   .csv-month-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1024,6 +1035,7 @@
       <div id="csvMonthHint" class="hint">年・月を選ぶと、開始日と終了日が自動入力されます。</div>
       <button type="button" id="csvApplyMonthBtn" onclick="fillCsvDatesFromMonth()" style="min-width:0; margin-top:10px; padding:8px 14px; font-size:13px;">この月の日付を自動入力</button>
     </div>
+    <button type="button" id="csvResetMonthBtn" class="csv-reset-month-btn hidden" onclick="resetCsvMonthMode()">↩ 月単位に戻す（年・月を選び直す）</button>
 
     <div class="csv-date-heading">日付を個別に絞る場合は、下の日付を変更してください</div>
     <div class="csv-date-grid">
@@ -2600,6 +2612,8 @@ const csvEndDateEl = document.getElementById('csvEndDate');
 const csvMonthBlockEl = document.getElementById('csvMonthBlock');
 const csvRangeModeBadgeEl = document.getElementById('csvRangeModeBadge');
 const csvMonthHintEl = document.getElementById('csvMonthHint');
+const csvApplyMonthBtnEl = document.getElementById('csvApplyMonthBtn');
+const csvResetMonthBtnEl = document.getElementById('csvResetMonthBtn');
 let csvDateSelectorsInitialized = false;
 
 function csvIsoDate(year, month, day) {
@@ -2612,16 +2626,29 @@ function fillCsvDatesFromMonth() {
   if (!year || !month) return;
   csvStartDateEl.value = csvIsoDate(year, month, 1);
   csvEndDateEl.value = csvIsoDate(year, month, new Date(year, month, 0).getDate());
+  csvYearEl.disabled = false;
+  csvMonthEl.disabled = false;
   csvMonthBlockEl.classList.remove('custom-range');
+  csvResetMonthBtnEl.classList.add('hidden');
   csvRangeModeBadgeEl.textContent = '月単位';
+  csvApplyMonthBtnEl.textContent = 'この月の日付を自動入力';
   csvMonthHintEl.textContent = `${year}年${month}月の月初から月末までを出力します。`;
 }
 
 function markCsvCustomRange() {
   if (!csvDateSelectorsInitialized) return;
+  csvYearEl.disabled = true;
+  csvMonthEl.disabled = true;
   csvMonthBlockEl.classList.add('custom-range');
+  csvResetMonthBtnEl.classList.remove('hidden');
   csvRangeModeBadgeEl.textContent = '日付を個別指定中';
-  csvMonthHintEl.textContent = '開始日・終了日を個別指定しています。月単位に戻す場合は、年・月を選ぶか「この月の日付を自動入力」を押してください。';
+  csvApplyMonthBtnEl.textContent = '月単位に戻す（リセット）';
+  csvMonthHintEl.textContent = '開始日・終了日を個別指定しています。青い「月単位に戻す」ボタンでリセットできます。';
+}
+
+function resetCsvMonthMode() {
+  fillCsvDatesFromMonth();
+  csvYearEl.focus();
 }
 
 function initializeCsvDateSelectors() {
