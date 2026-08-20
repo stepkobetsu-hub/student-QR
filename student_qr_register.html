@@ -322,6 +322,46 @@
     flex-wrap: wrap;
   }
   #viewCurrentQrBtn { background: #1769aa; }
+  .email-student-search-card {
+    margin-bottom: 22px;
+    padding: 18px;
+    border: 1px solid #cddfd7;
+    border-radius: 12px;
+    background: #f7faf8;
+  }
+  .email-student-search-card label { margin-top: 0; }
+  .email-student-search-count {
+    margin: 10px 0 7px;
+    color: #52665d;
+    font-size: 13px;
+  }
+  .email-student-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #d5e2dc;
+    border-radius: 10px;
+    background: #fff;
+  }
+  .email-student-row {
+    display: grid;
+    grid-template-columns: 76px minmax(180px, 1fr) 100px 90px;
+    gap: 12px;
+    align-items: center;
+    padding: 11px 13px;
+    border-bottom: 1px solid #edf2ef;
+    cursor: pointer;
+  }
+  .email-student-row:last-child { border-bottom: none; }
+  .email-student-row:hover { background: #eef7f2; }
+  .email-student-row.selected {
+    background: #dff1e7;
+    box-shadow: inset 4px 0 0 var(--main-color);
+  }
+  .email-student-row-code { color: #607080; font-size: 13px; }
+  .email-student-row-name { min-width: 0; color: var(--main-color); font-weight: bold; }
+  .email-student-row-kana { display: block; margin-top: 2px; color: #777; font-size: 12px; }
+  .email-student-row-grade,
+  .email-student-row-school { color: #637168; font-size: 12px; }
   .check-search-toolbar,
   .check-list-toolbar {
     display: flex;
@@ -626,6 +666,8 @@
     .workspace-shell { display: block; }
     .tab-panel.active { padding: 20px 18px 24px; }
     .panel-split, .settings-grid, .email-grid, .csv-date-grid, .check-filter-grid { grid-template-columns: 1fr; }
+    .email-student-row { grid-template-columns: 64px minmax(0, 1fr); }
+    .email-student-row-grade, .email-student-row-school { display: none; }
     #teacherCheckList { grid-template-columns: 1fr; }
     .batch-qr-grid { grid-template-columns: 1fr; }
   }
@@ -827,7 +869,17 @@
   <!-- ③ 通知先メールを登録するパネル -->
   <div class="tab-panel" id="panelEmail" data-title="通知先メール">
     <div class="panel-form-width">
-    <label for="emailStudentCode">生徒・講師番号</label>
+    <div class="email-student-search-card">
+      <label for="emailStudentSearch">生徒検索</label>
+      <input type="text" id="emailStudentSearch" placeholder="生徒コード・氏名・フリガナ・ローマ字で検索" autocomplete="off">
+      <div class="hint">ひらがな・カタカナ・ローマ字は、一部だけでも検索できます。対象生徒を1人選んでください。</div>
+      <div id="emailStudentSearchCount" class="email-student-search-count">検索語を入力してください。</div>
+      <div id="emailStudentSearchList" class="email-student-list">
+        <div class="hint" style="padding:14px;">検索語を入力すると候補が表示されます。</div>
+      </div>
+    </div>
+
+    <label for="emailStudentCode">選択中の生徒・講師番号</label>
     <input type="text" id="emailStudentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
     <div id="emailStudentInfo" class="student-info">
       <div class="name" id="emailStudentName"></div>
@@ -1529,6 +1581,10 @@ function switchTab(tab) {
   if (isCheck && !qrStudentRosterLoaded) {
     loadQrStudentRoster(false);
   }
+  if (isEmail) {
+    if (!qrStudentRosterLoaded) loadQrStudentRoster(false);
+    else renderEmailStudentSearch();
+  }
 }
 
 // ===================================================================
@@ -1684,6 +1740,7 @@ async function loadQrStudentRoster(forceRefresh) {
         qrStudentRoster = cached.items;
         qrStudentRosterLoaded = true;
         renderQrStudentList();
+        renderEmailStudentSearch();
       }
     } catch (e) {}
   }
@@ -1697,6 +1754,7 @@ async function loadQrStudentRoster(forceRefresh) {
       qrStudentRosterLoaded = true;
       localStorage.setItem(QR_ROSTER_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), items: qrStudentRoster }));
       renderQrStudentList();
+      renderEmailStudentSearch();
     }
   } catch (e) {
     if (!qrStudentRosterLoaded) {
@@ -1997,7 +2055,7 @@ function renderNewQrStatus(hasCurrentQr, contacts) {
   newQrStatusEl.className = 'new-qr-status show ' + (hasCurrentQr ? 'has-current' : 'no-current');
   newQrStatusTitleEl.textContent = hasCurrentQr ? '現行QRが登録されています' : '現行QRはありません';
   newQrStatusDetailEl.textContent = hasCurrentQr
-    ? '「現行QRの確認」を押すと、現在有効なQRを表示できます。新規発行すると現行QRは使えなくなります。'
+    ? '現在有効な現行QRを下に表示しています。そのまま印刷できます。新規発行すると現行QRは使えなくなります。'
     : 'この生徒には現在有効なQRが登録されていません。必要な場合は「新規QR発行」を押してください。';
   newQrContactInfoEl.textContent = contacts === null
     ? '登録済みの連絡先：確認中...'
@@ -2028,6 +2086,7 @@ newStudentCodeEl.addEventListener('input', () => {
           viewCurrentQrBtnEl.disabled = false;
         }
         renderNewQrStatus(newTabHasExistingQr, null);
+        if (newTabHasExistingQr) showCurrentQr(false);
         try {
           const contactResult = await authorizedJsonp({ action: 'getNotifyEmails', code });
           if (seq !== newLookupSeq) return;
@@ -2054,7 +2113,7 @@ function showNewMsg(text, type) {
   newMsgEl.className = 'msg ' + type;
 }
 
-function showCurrentQr() {
+function showCurrentQr(showNotice = true) {
   if (!newTabHasExistingQr || !newTabExistingQrData || !newTabStudent) {
     showNewMsg('この生徒には現行QRがありません。', 'error');
     return;
@@ -2067,9 +2126,10 @@ function showCurrentQr() {
   cardQrImgEl.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(newTabExistingQrData);
   qrCardEl.classList.add('show');
   printBtnEl.style.display = 'block';
+  printBtnEl.textContent = '🖨 現行QRを印刷する';
   document.getElementById('pdfEmailWrap').style.display = 'block';
   currentIssuedCode = newTabStudent.code;
-  showNewMsg('現在有効な「現行QR」を表示しています。', 'success');
+  if (showNotice) showNewMsg('現在有効な「現行QR」を表示しています。', 'success');
 }
 
 async function issueQr() {
@@ -2104,6 +2164,7 @@ async function issueQr() {
       qrCardStatusLabelEl.className = 'qr-card-status-label newly-issued';
       qrCardEl.classList.add('show');
       printBtnEl.style.display = 'block';
+      printBtnEl.textContent = '🖨 新規発行したQRを印刷する';
       document.getElementById('pdfEmailWrap').style.display = 'block';
       currentIssuedCode = code;
       newTabHasExistingQr = true;
@@ -2215,11 +2276,66 @@ async function sendQrPdf() {
 // 通知先メール登録
 // ===================================================================
 const emailStudentCodeEl = document.getElementById('emailStudentCode');
+const emailStudentSearchEl = document.getElementById('emailStudentSearch');
+const emailStudentSearchCountEl = document.getElementById('emailStudentSearchCount');
+const emailStudentSearchListEl = document.getElementById('emailStudentSearchList');
 const emailStudentInfoEl = document.getElementById('emailStudentInfo');
 const emailStudentNameEl = document.getElementById('emailStudentName');
 const emailMsgEl = document.getElementById('emailMsg');
 const notifyEmailEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEmail' + n));
 const notifyEnabledEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEnabled' + n));
+
+function filteredEmailStudents() {
+  const query = normalizeQrStudentSearch(emailStudentSearchEl.value);
+  if (!query) return [];
+  return qrStudentRoster.filter(student => {
+    const kana = student.kana || '';
+    return [student.id, student.name, kana].map(normalizeQrStudentSearch).concat(qrKanaToRomaji(kana))
+      .some(value => value.includes(query));
+  }).sort((a, b) => {
+    const gradeDiff = QR_GRADE_ORDER.indexOf(canonicalQrGrade(a.grade)) - QR_GRADE_ORDER.indexOf(canonicalQrGrade(b.grade));
+    return gradeDiff || String(a.name).localeCompare(String(b.name), 'ja');
+  });
+}
+
+function renderEmailStudentSearch() {
+  if (!emailStudentSearchEl || !emailStudentSearchListEl) return;
+  const query = normalizeQrStudentSearch(emailStudentSearchEl.value);
+  if (!query) {
+    emailStudentSearchCountEl.textContent = qrStudentRosterLoaded
+      ? `${qrStudentRoster.length}人取得済み・検索語を入力してください。`
+      : '生徒情報を読み込み中...';
+    emailStudentSearchListEl.innerHTML = '<div class="hint" style="padding:14px;">検索語を入力すると候補が表示されます。</div>';
+    return;
+  }
+  if (!qrStudentRosterLoaded) {
+    emailStudentSearchCountEl.textContent = '生徒情報を読み込み中...';
+    emailStudentSearchListEl.innerHTML = '<div class="hint" style="padding:14px;">読み込み中...</div>';
+    return;
+  }
+
+  const matches = filteredEmailStudents();
+  const visible = matches.slice(0, 100);
+  emailStudentSearchCountEl.textContent = `${matches.length}人見つかりました${matches.length > 100 ? '（先頭100人を表示）' : ''}`;
+  emailStudentSearchListEl.innerHTML = visible.map(student => `
+    <div class="email-student-row ${emailStudentCodeEl.value.trim() === student.id ? 'selected' : ''}" data-code="${escapeQrHtml(student.id)}">
+      <span class="email-student-row-code">${escapeQrHtml(student.id)}</span>
+      <span class="email-student-row-name">${escapeQrHtml(student.name)}<span class="email-student-row-kana">${escapeQrHtml(student.kana)}</span></span>
+      <span class="email-student-row-grade">${escapeQrHtml(canonicalQrGrade(student.grade))}</span>
+      <span class="email-student-row-school">${escapeQrHtml(student.school)}</span>
+    </div>`).join('') || '<div class="hint" style="padding:14px;">該当する生徒がいません。</div>';
+  emailStudentSearchListEl.querySelectorAll('.email-student-row').forEach(row => {
+    row.addEventListener('click', () => selectEmailStudent(row.dataset.code));
+  });
+}
+
+function selectEmailStudent(code) {
+  emailStudentCodeEl.value = code;
+  renderEmailStudentSearch();
+  emailStudentCodeEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+emailStudentSearchEl.addEventListener('input', renderEmailStudentSearch);
 
 let emailLookupTimer = null;
 let emailLookupSeq = 0;
@@ -2227,6 +2343,7 @@ emailStudentCodeEl.addEventListener('input', () => {
   clearTimeout(emailLookupTimer);
   const code = emailStudentCodeEl.value.trim();
   emailStudentInfoEl.classList.remove('show');
+  renderEmailStudentSearch();
   notifyEmailEls.forEach(el => el.value = '');
   notifyEnabledEls.forEach(el => el.checked = true);
   if (!code) return;
@@ -2238,10 +2355,10 @@ emailStudentCodeEl.addEventListener('input', () => {
       if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
       if (res.ok) {
         emailStudentNameEl.textContent = res.name || '(氏名なし)';
-        res.emails.forEach((v, i) => {
+        (Array.isArray(res.emails) ? res.emails : []).forEach((v, i) => {
           if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
         });
-        res.enabled.forEach((v, i) => {
+        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
           if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
         });
       } else {
