@@ -238,6 +238,17 @@
     background: #fff;
   }
   .qr-card.show { display: block; }
+  .qr-card-status-label {
+    display: inline-block;
+    margin-bottom: 14px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: #1769aa;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .qr-card-status-label.newly-issued { background: #b5651d; }
   .qr-card .school-name {
     font-size: 15px;
     color: #2a5da0;
@@ -263,6 +274,54 @@
   #printBtn {
     background: #6a4fa0;
   }
+  .new-qr-status {
+    display: none;
+    margin-top: 16px;
+    padding: 20px 22px;
+    border: 2px solid #b9c8c1;
+    border-radius: 12px;
+    background: #f5f8f6;
+  }
+  .new-qr-status.show { display: block; }
+  .new-qr-status.has-current {
+    border-color: #1769aa;
+    background: #edf6ff;
+  }
+  .new-qr-status.no-current {
+    border-color: #8da49a;
+    background: #f2f7f4;
+  }
+  .new-qr-status.updated {
+    border-color: #2e7d5b;
+    background: #e8f5ec;
+  }
+  .new-qr-status-title {
+    color: #193d58;
+    font-size: 23px;
+    font-weight: 800;
+    line-height: 1.4;
+  }
+  .new-qr-status-detail {
+    margin-top: 7px;
+    color: #3b5261;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .new-qr-contact-info {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(23, 105, 170, .22);
+    color: #30483e;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .new-qr-action-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #viewCurrentQrBtn { background: #1769aa; }
   .check-search-toolbar,
   .check-list-toolbar {
     display: flex;
@@ -501,6 +560,7 @@
   @media print {
     body * { visibility: hidden; }
     .qr-card, .qr-card * { visibility: visible; }
+    .qr-card-status-label { display: none !important; }
     .qr-card {
       position: absolute;
       top: 40px; left: 50%;
@@ -732,11 +792,21 @@
       <div id="newStudentSchool"></div>
     </div>
 
-    <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;">🆕 QRを発行する</button>
+    <div id="newQrStatus" class="new-qr-status" aria-live="polite">
+      <div id="newQrStatusTitle" class="new-qr-status-title"></div>
+      <div id="newQrStatusDetail" class="new-qr-status-detail"></div>
+      <div id="newQrContactInfo" class="new-qr-contact-info"></div>
+    </div>
+
+    <div class="new-qr-action-row">
+      <button id="viewCurrentQrBtn" onclick="showCurrentQr()" disabled>現行QRの確認</button>
+      <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;" disabled>🆕 新規QR発行</button>
+    </div>
 
     <div id="newMsg" class="msg"></div>
 
     <div class="qr-card" id="qrCard">
+      <div class="qr-card-status-label" id="qrCardStatusLabel"></div>
       <div class="school-name">個別指導ステップ</div>
       <div class="card-code" id="cardCode"></div>
       <div class="card-name" id="cardName"></div>
@@ -1878,8 +1948,15 @@ const newStudentCodeEl = document.getElementById('newStudentCode');
 const newStudentInfoEl = document.getElementById('newStudentInfo');
 const newStudentNameEl = document.getElementById('newStudentName');
 const newStudentSchoolEl = document.getElementById('newStudentSchool');
+const newQrStatusEl = document.getElementById('newQrStatus');
+const newQrStatusTitleEl = document.getElementById('newQrStatusTitle');
+const newQrStatusDetailEl = document.getElementById('newQrStatusDetail');
+const newQrContactInfoEl = document.getElementById('newQrContactInfo');
+const viewCurrentQrBtnEl = document.getElementById('viewCurrentQrBtn');
+const issueBtnEl = document.getElementById('issueBtn');
 const newMsgEl = document.getElementById('newMsg');
 const qrCardEl = document.getElementById('qrCard');
+const qrCardStatusLabelEl = document.getElementById('qrCardStatusLabel');
 const cardCodeEl = document.getElementById('cardCode');
 const cardNameEl = document.getElementById('cardName');
 const cardQrImgEl = document.getElementById('cardQrImg');
@@ -1887,20 +1964,55 @@ const printBtnEl = document.getElementById('printBtn');
 let currentIssuedCode = null;
 let newTabHasExistingQr = false;
 let newTabExistingQrData = '';
+let newTabStudent = null;
+
+function resetNewQrDisplay() {
+  newStudentInfoEl.classList.remove('show');
+  newQrStatusEl.className = 'new-qr-status';
+  newQrStatusTitleEl.textContent = '';
+  newQrStatusDetailEl.textContent = '';
+  newQrContactInfoEl.textContent = '';
+  qrCardEl.classList.remove('show');
+  printBtnEl.style.display = 'none';
+  document.getElementById('pdfEmailWrap').style.display = 'none';
+  newMsgEl.className = 'msg';
+  newMsgEl.textContent = '';
+  viewCurrentQrBtnEl.disabled = true;
+  issueBtnEl.disabled = true;
+  currentIssuedCode = null;
+  newTabHasExistingQr = false;
+  newTabExistingQrData = '';
+  newTabStudent = null;
+}
+
+function uniqueQrContacts(result) {
+  if (!result || !result.ok) return [];
+  const contacts = [];
+  if (result.guardianEmail) contacts.push(result.guardianEmail);
+  if (Array.isArray(result.emails)) contacts.push(...result.emails);
+  return [...new Set(contacts.map(value => String(value || '').trim()).filter(Boolean))];
+}
+
+function renderNewQrStatus(hasCurrentQr, contacts) {
+  newQrStatusEl.className = 'new-qr-status show ' + (hasCurrentQr ? 'has-current' : 'no-current');
+  newQrStatusTitleEl.textContent = hasCurrentQr ? '現行QRが登録されています' : '現行QRはありません';
+  newQrStatusDetailEl.textContent = hasCurrentQr
+    ? '「現行QRの確認」を押すと、現在有効なQRを表示できます。新規発行すると現行QRは使えなくなります。'
+    : 'この生徒には現在有効なQRが登録されていません。必要な場合は「新規QR発行」を押してください。';
+  newQrContactInfoEl.textContent = contacts === null
+    ? '登録済みの連絡先：確認中...'
+    : (contacts.length ? '登録済みの連絡先：' + contacts.join(' ／ ') : '登録済みの連絡先：なし');
+}
 
 let newLookupTimer = null;
 let newLookupSeq = 0;
 newStudentCodeEl.addEventListener('input', () => {
   clearTimeout(newLookupTimer);
   const code = newStudentCodeEl.value.trim();
-  newStudentInfoEl.classList.remove('show');
-  qrCardEl.classList.remove('show');
-  printBtnEl.style.display = 'none';
-  newTabHasExistingQr = false;
-  newTabExistingQrData = '';
+  resetNewQrDisplay();
+  const seq = ++newLookupSeq;
   if (!code) return;
 
-  const seq = ++newLookupSeq;
   newLookupTimer = setTimeout(async () => {
     try {
       const res = await authorizedJsonp({ action: 'getStudent', code });
@@ -1908,18 +2020,27 @@ newStudentCodeEl.addEventListener('input', () => {
       if (res.ok) {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
         newStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
+        newTabStudent = { code, name: res.name || '(氏名なし)' };
+        issueBtnEl.disabled = false;
         if (res.qrData) {
           newTabHasExistingQr = true;
           newTabExistingQrData = res.qrData;
-          newStudentInfoEl.style.background = '#fdecea';
-          newStudentSchoolEl.innerHTML = '<strong style="color:#c0392b;">⚠️ すでにQRが登録済みです。発行すると古いQRは使えなくなります。</strong>';
-        } else {
-          newStudentInfoEl.style.background = '';
+          viewCurrentQrBtnEl.disabled = false;
+        }
+        renderNewQrStatus(newTabHasExistingQr, null);
+        try {
+          const contactResult = await authorizedJsonp({ action: 'getNotifyEmails', code });
+          if (seq !== newLookupSeq) return;
+          const contacts = uniqueQrContacts(contactResult);
+          newQrContactInfoEl.textContent = contacts.length
+            ? '登録済みの連絡先：' + contacts.join(' ／ ')
+            : '登録済みの連絡先：なし';
+        } catch (ignore) {
+          if (seq === newLookupSeq) newQrContactInfoEl.textContent = '登録済みの連絡先：取得できませんでした';
         }
       } else {
         newStudentNameEl.textContent = res.message;
         newStudentSchoolEl.textContent = '';
-        newStudentInfoEl.style.background = '';
       }
       newStudentInfoEl.classList.add('show');
     } catch (e) {
@@ -1933,6 +2054,24 @@ function showNewMsg(text, type) {
   newMsgEl.className = 'msg ' + type;
 }
 
+function showCurrentQr() {
+  if (!newTabHasExistingQr || !newTabExistingQrData || !newTabStudent) {
+    showNewMsg('この生徒には現行QRがありません。', 'error');
+    return;
+  }
+
+  qrCardStatusLabelEl.textContent = '現行QR（現在有効）';
+  qrCardStatusLabelEl.className = 'qr-card-status-label';
+  cardCodeEl.textContent = newTabStudent.code;
+  cardNameEl.textContent = newTabStudent.name;
+  cardQrImgEl.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(newTabExistingQrData);
+  qrCardEl.classList.add('show');
+  printBtnEl.style.display = 'block';
+  document.getElementById('pdfEmailWrap').style.display = 'block';
+  currentIssuedCode = newTabStudent.code;
+  showNewMsg('現在有効な「現行QR」を表示しています。', 'success');
+}
+
 async function issueQr() {
   const code = newStudentCodeEl.value.trim();
   if (!code) {
@@ -1942,16 +2081,15 @@ async function issueQr() {
 
   if (newTabHasExistingQr) {
     const confirmed = confirm(
-      '⚠️ この生徒には、すでにQRが登録されています。\n\n' +
-      '現在のQR: ' + newTabExistingQrData + '\n\n' +
-      '新しく発行すると、古いQRカードは今後使えなくなります。\n' +
-      '（すでに配布済みのカードがある場合は、そちらが無効になります）\n\n' +
-      '本当に新しく発行しますか？'
+      '⚠️ 現行QRを新しいQRに変更します。\n\n' +
+      '新規QRを発行すると、現在のQRカードは使えなくなります。\n' +
+      'すでに配布済みのカードも無効になります。\n\n' +
+      '本当に新規QRを発行してよろしいですか？'
     );
     if (!confirmed) return;
   }
 
-  const btn = document.getElementById('issueBtn');
+  const btn = issueBtnEl;
   btn.disabled = true;
   btn.textContent = '発行中...';
 
@@ -1962,10 +2100,18 @@ async function issueQr() {
       cardCodeEl.textContent = code;
       cardNameEl.textContent = res.name;
       cardQrImgEl.src = res.qrImageUrl;
+      qrCardStatusLabelEl.textContent = '新規発行したQR（現在有効）';
+      qrCardStatusLabelEl.className = 'qr-card-status-label newly-issued';
       qrCardEl.classList.add('show');
       printBtnEl.style.display = 'block';
       document.getElementById('pdfEmailWrap').style.display = 'block';
       currentIssuedCode = code;
+      newTabHasExistingQr = true;
+      newTabExistingQrData = res.qrData || '';
+      newQrStatusEl.className = 'new-qr-status show updated';
+      newQrStatusTitleEl.textContent = '新規QRへ更新しました';
+      newQrStatusDetailEl.textContent = '下に表示しているQRが、現在有効な新しいQRです。以前のQRは使用できません。';
+      viewCurrentQrBtnEl.disabled = !newTabExistingQrData;
     } else {
       showNewMsg(res.message || '発行に失敗しました。', 'error');
       qrCardEl.classList.remove('show');
@@ -1976,7 +2122,7 @@ async function issueQr() {
     showNewMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🆕 QRを発行する';
+    btn.textContent = '🆕 新規QR発行';
   }
 }
 
