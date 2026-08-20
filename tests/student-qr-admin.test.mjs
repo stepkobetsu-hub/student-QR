@@ -29,8 +29,19 @@ test('selected QR cards can be printed together', () => {
   assert.match(page, /body\.batch-print \.print-sheet \{[\s\S]*?box-sizing: border-box/);
   assert.match(page, /body\.batch-print \.print-sheet:last-child \{ page-break-after: auto; break-after: auto; \}/);
   assert.match(page, /body\.batch-print \.batch-qr-card \{[\s\S]*?box-sizing: border-box/);
+  assert.match(page, /body\.batch-print #appContainer > :not\(\.workspace-shell\)/);
+  assert.match(page, /body\.batch-print \.workspace-shell > :not\(#panelCheck\)/);
+  assert.match(page, /body\.batch-print #panelCheck \.panel-secondary > :not\(#checkBatchPrintArea\)/);
+  assert.match(page, /body\.batch-print #checkBatchPrintArea \{[\s\S]*?position: static !important/);
+  assert.match(page, /height: 296mm/);
+  assert.match(page, /padding: 22mm 15mm;[\s\S]*?overflow: hidden/);
   assert.match(page, /width: 54mm/);
   assert.match(page, /height: 74mm/);
+});
+
+test('QR confirmation menu clearly includes printing', () => {
+  assert.match(page, /id="tabCheckBtn"[^>]*>QR確認・印刷<\/button>/);
+  assert.match(page, /id="panelCheck" data-title="QR確認・印刷"/);
 });
 
 test('admin functions use a desktop-first workspace with responsive fallback', () => {

@@ -676,12 +676,38 @@
       border: 1px solid #999;
     }
     body.batch-print .qr-card { display: none !important; }
+    body.batch-print {
+      width: 210mm !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+    body.batch-print > .auth-card,
+    body.batch-print #appContainer > :not(.workspace-shell),
+    body.batch-print .workspace-shell > :not(#panelCheck),
+    body.batch-print #panelCheck > :not(.panel-secondary),
+    body.batch-print #panelCheck .panel-secondary > :not(#checkBatchPrintArea) {
+      display: none !important;
+    }
+    body.batch-print #appContainer,
+    body.batch-print .workspace-shell,
+    body.batch-print #panelCheck,
+    body.batch-print #panelCheck .panel-secondary {
+      display: block !important;
+      position: static !important;
+      width: 210mm !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
     body.batch-print #checkBatchPrintArea,
     body.batch-print #checkBatchPrintArea * { visibility: visible; }
     body.batch-print #checkBatchPrintArea {
       display: block !important;
-      position: absolute;
-      inset: 0;
+      position: static !important;
       width: 210mm;
       margin: 0;
     }
@@ -692,9 +718,10 @@
       grid-template-rows: repeat(3, 74mm);
       gap: 6mm;
       width: 210mm;
-      height: 297mm;
+      height: 296mm;
       margin: 0;
       padding: 22mm 15mm;
+      overflow: hidden;
       page-break-after: always;
       break-after: page;
     }
@@ -795,7 +822,7 @@
   <div class="workspace-shell">
   <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
-    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認</button>
+    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認・印刷</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
@@ -834,7 +861,7 @@
   </div>
 
   <!-- ② 現在登録されているQRを確認するパネル -->
-  <div class="tab-panel" id="panelCheck" data-title="QR確認・まとめ印刷">
+  <div class="tab-panel" id="panelCheck" data-title="QR確認・印刷">
     <div class="panel-primary">
     <div class="check-panel-header">
       <h2>QR確認対象生徒</h2>
