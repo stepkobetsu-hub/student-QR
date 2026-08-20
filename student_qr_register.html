@@ -423,6 +423,13 @@
     font-size: 13px;
     font-weight: bold;
   }
+  .csv-weekday-display {
+    min-height: 22px;
+    margin-top: 6px;
+    color: #1769aa;
+    font-size: 14px;
+    font-weight: bold;
+  }
   .check-search-toolbar,
   .check-list-toolbar {
     display: flex;
@@ -1042,10 +1049,12 @@
       <div>
         <label for="csvStartDate">開始日</label>
         <input type="date" id="csvStartDate">
+        <div id="csvStartWeekday" class="csv-weekday-display" aria-live="polite"></div>
       </div>
       <div>
         <label for="csvEndDate">終了日</label>
         <input type="date" id="csvEndDate">
+        <div id="csvEndWeekday" class="csv-weekday-display" aria-live="polite"></div>
       </div>
     </div>
 
@@ -2609,6 +2618,8 @@ const csvYearEl = document.getElementById('csvYear');
 const csvMonthEl = document.getElementById('csvMonth');
 const csvStartDateEl = document.getElementById('csvStartDate');
 const csvEndDateEl = document.getElementById('csvEndDate');
+const csvStartWeekdayEl = document.getElementById('csvStartWeekday');
+const csvEndWeekdayEl = document.getElementById('csvEndWeekday');
 const csvMonthBlockEl = document.getElementById('csvMonthBlock');
 const csvRangeModeBadgeEl = document.getElementById('csvRangeModeBadge');
 const csvMonthHintEl = document.getElementById('csvMonthHint');
@@ -2620,12 +2631,25 @@ function csvIsoDate(year, month, day) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+function csvDateWithWeekday(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  const weekday = ['日', '月', '火', '水', '木', '金', '土'][new Date(year, month - 1, day).getDay()];
+  return `${year}年${month}月${day}日（${weekday}）`;
+}
+
+function updateCsvWeekdayDisplays() {
+  csvStartWeekdayEl.textContent = csvDateWithWeekday(csvStartDateEl.value);
+  csvEndWeekdayEl.textContent = csvDateWithWeekday(csvEndDateEl.value);
+}
+
 function fillCsvDatesFromMonth() {
   const year = Number(csvYearEl.value);
   const month = Number(csvMonthEl.value);
   if (!year || !month) return;
   csvStartDateEl.value = csvIsoDate(year, month, 1);
   csvEndDateEl.value = csvIsoDate(year, month, new Date(year, month, 0).getDate());
+  updateCsvWeekdayDisplays();
   csvYearEl.disabled = false;
   csvMonthEl.disabled = false;
   csvMonthBlockEl.classList.remove('custom-range');
@@ -2637,6 +2661,7 @@ function fillCsvDatesFromMonth() {
 
 function markCsvCustomRange() {
   if (!csvDateSelectorsInitialized) return;
+  updateCsvWeekdayDisplays();
   csvYearEl.disabled = true;
   csvMonthEl.disabled = true;
   csvMonthBlockEl.classList.add('custom-range');

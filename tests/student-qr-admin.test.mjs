@@ -88,3 +88,12 @@ test('email empty results stay hidden and attendance CSV defaults to a selected 
   assert.match(page, /csvYearEl\.disabled = false/);
   assert.match(page, /月単位に戻す（年・月を選び直す）/);
 });
+
+test('attendance CSV dates show reliable Japanese weekdays', () => {
+  assert.match(page, /id="csvStartWeekday"/);
+  assert.match(page, /id="csvEndWeekday"/);
+  assert.match(page, /function csvDateWithWeekday\(value\)/);
+  assert.match(page, /\['日', '月', '火', '水', '木', '金', '土'\]/);
+  assert.match(page, /function updateCsvWeekdayDisplays\(\)/);
+  assert.match(page, /updateCsvWeekdayDisplays\(\)/);
+});
