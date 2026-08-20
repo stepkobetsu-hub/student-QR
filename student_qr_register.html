@@ -362,6 +362,56 @@
   .email-student-row-kana { display: block; margin-top: 2px; color: #777; font-size: 12px; }
   .email-student-row-grade,
   .email-student-row-school { color: #637168; font-size: 12px; }
+  .csv-month-block {
+    margin-bottom: 18px;
+    padding: 18px;
+    border: 2px solid #2e7d5b;
+    border-radius: 12px;
+    background: #eef7f2;
+    transition: opacity .2s, background .2s, border-color .2s;
+  }
+  .csv-month-block.custom-range {
+    opacity: .58;
+    border-color: #a9b1ad;
+    background: #ecefed;
+  }
+  .csv-month-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .csv-month-header strong { color: #234b3b; font-size: 16px; }
+  .csv-range-mode-badge {
+    padding: 5px 11px;
+    border-radius: 999px;
+    color: #fff;
+    background: #2e7d5b;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  .csv-month-block.custom-range .csv-range-mode-badge { background: #777; }
+  .csv-month-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .csv-month-grid label { margin-top: 0; }
+  .csv-month-grid select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #b8cbc1;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 16px;
+  }
+  .csv-date-heading {
+    margin: 0 0 8px;
+    color: #53635b;
+    font-size: 13px;
+    font-weight: bold;
+  }
   .check-search-toolbar,
   .check-list-toolbar {
     display: flex;
@@ -665,7 +715,7 @@
     }
     .workspace-shell { display: block; }
     .tab-panel.active { padding: 20px 18px 24px; }
-    .panel-split, .settings-grid, .email-grid, .csv-date-grid, .check-filter-grid { grid-template-columns: 1fr; }
+    .panel-split, .settings-grid, .email-grid, .csv-date-grid, .csv-month-grid, .check-filter-grid { grid-template-columns: 1fr; }
     .email-student-row { grid-template-columns: 64px minmax(0, 1fr); }
     .email-student-row-grade, .email-student-row-school { display: none; }
     #teacherCheckList { grid-template-columns: 1fr; }
@@ -874,7 +924,7 @@
       <input type="text" id="emailStudentSearch" placeholder="生徒コード・氏名・フリガナ・ローマ字で検索" autocomplete="off">
       <div class="hint">ひらがな・カタカナ・ローマ字は、一部だけでも検索できます。対象生徒を1人選んでください。</div>
       <div id="emailStudentSearchCount" class="email-student-search-count">検索語を入力してください。</div>
-      <div id="emailStudentSearchList" class="email-student-list">
+      <div id="emailStudentSearchList" class="email-student-list hidden">
         <div class="hint" style="padding:14px;">検索語を入力すると候補が表示されます。</div>
       </div>
     </div>
@@ -956,6 +1006,26 @@
   <!-- ⑥ 講師勤怠CSV出力パネル -->
   <div class="tab-panel" id="panelCsv" data-title="勤怠CSV出力">
     <div class="panel-form-width">
+    <div id="csvMonthBlock" class="csv-month-block">
+      <div class="csv-month-header">
+        <strong>月単位で指定（通常はこちら）</strong>
+        <span id="csvRangeModeBadge" class="csv-range-mode-badge">月単位</span>
+      </div>
+      <div class="csv-month-grid">
+        <div>
+          <label for="csvYear">年</label>
+          <select id="csvYear"></select>
+        </div>
+        <div>
+          <label for="csvMonth">月</label>
+          <select id="csvMonth"></select>
+        </div>
+      </div>
+      <div id="csvMonthHint" class="hint">年・月を選ぶと、開始日と終了日が自動入力されます。</div>
+      <button type="button" id="csvApplyMonthBtn" onclick="fillCsvDatesFromMonth()" style="min-width:0; margin-top:10px; padding:8px 14px; font-size:13px;">この月の日付を自動入力</button>
+    </div>
+
+    <div class="csv-date-heading">日付を個別に絞る場合は、下の日付を変更してください</div>
     <div class="csv-date-grid">
       <div>
         <label for="csvStartDate">開始日</label>
@@ -1578,6 +1648,7 @@ function switchTab(tab) {
   if (isCsv && !teacherListLoaded) {
     loadTeacherList();
   }
+  if (isCsv) initializeCsvDateSelectors();
   if (isCheck && !qrStudentRosterLoaded) {
     loadQrStudentRoster(false);
   }
@@ -2302,12 +2373,14 @@ function renderEmailStudentSearch() {
   if (!emailStudentSearchEl || !emailStudentSearchListEl) return;
   const query = normalizeQrStudentSearch(emailStudentSearchEl.value);
   if (!query) {
+    emailStudentSearchListEl.classList.add('hidden');
     emailStudentSearchCountEl.textContent = qrStudentRosterLoaded
       ? `${qrStudentRoster.length}人取得済み・検索語を入力してください。`
       : '生徒情報を読み込み中...';
     emailStudentSearchListEl.innerHTML = '<div class="hint" style="padding:14px;">検索語を入力すると候補が表示されます。</div>';
     return;
   }
+  emailStudentSearchListEl.classList.remove('hidden');
   if (!qrStudentRosterLoaded) {
     emailStudentSearchCountEl.textContent = '生徒情報を読み込み中...';
     emailStudentSearchListEl.innerHTML = '<div class="hint" style="padding:14px;">読み込み中...</div>';
@@ -2520,6 +2593,55 @@ async function addPoints() {
 // ===================================================================
 // 講師勤怠CSV出力
 // ===================================================================
+const csvYearEl = document.getElementById('csvYear');
+const csvMonthEl = document.getElementById('csvMonth');
+const csvStartDateEl = document.getElementById('csvStartDate');
+const csvEndDateEl = document.getElementById('csvEndDate');
+const csvMonthBlockEl = document.getElementById('csvMonthBlock');
+const csvRangeModeBadgeEl = document.getElementById('csvRangeModeBadge');
+const csvMonthHintEl = document.getElementById('csvMonthHint');
+let csvDateSelectorsInitialized = false;
+
+function csvIsoDate(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function fillCsvDatesFromMonth() {
+  const year = Number(csvYearEl.value);
+  const month = Number(csvMonthEl.value);
+  if (!year || !month) return;
+  csvStartDateEl.value = csvIsoDate(year, month, 1);
+  csvEndDateEl.value = csvIsoDate(year, month, new Date(year, month, 0).getDate());
+  csvMonthBlockEl.classList.remove('custom-range');
+  csvRangeModeBadgeEl.textContent = '月単位';
+  csvMonthHintEl.textContent = `${year}年${month}月の月初から月末までを出力します。`;
+}
+
+function markCsvCustomRange() {
+  if (!csvDateSelectorsInitialized) return;
+  csvMonthBlockEl.classList.add('custom-range');
+  csvRangeModeBadgeEl.textContent = '日付を個別指定中';
+  csvMonthHintEl.textContent = '開始日・終了日を個別指定しています。月単位に戻す場合は、年・月を選ぶか「この月の日付を自動入力」を押してください。';
+}
+
+function initializeCsvDateSelectors() {
+  if (csvDateSelectorsInitialized) return;
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  csvYearEl.innerHTML = Array.from({ length: 8 }, (_, index) => currentYear - 5 + index)
+    .map(year => `<option value="${year}">${year}年</option>`).join('');
+  csvMonthEl.innerHTML = Array.from({ length: 12 }, (_, index) => index + 1)
+    .map(month => `<option value="${month}">${month}月</option>`).join('');
+  csvYearEl.value = String(currentYear);
+  csvMonthEl.value = String(today.getMonth() + 1);
+  csvYearEl.addEventListener('change', fillCsvDatesFromMonth);
+  csvMonthEl.addEventListener('change', fillCsvDatesFromMonth);
+  csvStartDateEl.addEventListener('change', markCsvCustomRange);
+  csvEndDateEl.addEventListener('change', markCsvCustomRange);
+  csvDateSelectorsInitialized = true;
+  fillCsvDatesFromMonth();
+}
+
 let teacherListLoaded = false;
 
 async function loadTeacherList() {
@@ -2559,11 +2681,15 @@ function showCsvMsg(text, type) {
 }
 
 async function exportAttendanceCsv() {
-  const startDate = document.getElementById('csvStartDate').value;
-  const endDate = document.getElementById('csvEndDate').value;
+  const startDate = csvStartDateEl.value;
+  const endDate = csvEndDateEl.value;
 
   if (!startDate || !endDate) {
     showCsvMsg('開始日と終了日を指定してください。', 'error');
+    return;
+  }
+  if (startDate > endDate) {
+    showCsvMsg('終了日は開始日以降の日付を指定してください。', 'error');
     return;
   }
 
