@@ -56,7 +56,18 @@ test('new QR issue clearly separates current QR confirmation from replacement', 
   assert.match(page, /現行QRが登録されています/);
   assert.match(page, /現行QRはありません/);
   assert.match(page, /登録済みの連絡先/);
-  assert.match(page, /function showCurrentQr\(\)/);
+  assert.match(page, /function showCurrentQr\(/);
   assert.match(page, /現行QRを新しいQRに変更します/);
   assert.match(page, /新規発行したQR（現在有効）/);
+});
+
+test('current QR is shown automatically and notification email has single-student search', () => {
+  assert.match(page, /if \(newTabHasExistingQr\) showCurrentQr\(false\)/);
+  assert.match(page, /現行QRを印刷する/);
+  assert.match(page, /id="emailStudentSearch"/);
+  assert.match(page, /生徒コード・氏名・フリガナ・ローマ字で検索/);
+  assert.match(page, /function filteredEmailStudents\(\)/);
+  assert.match(page, /qrKanaToRomaji\(kana\)/);
+  assert.match(page, /function selectEmailStudent\(code\)/);
+  assert.match(page, /対象生徒を1人選んでください/);
 });
