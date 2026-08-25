@@ -279,8 +279,16 @@
 .walker-route-fall{-webkit-animation:walkerFall 1s ease-in-out 1 both;animation:walkerFall 1s ease-in-out 1 both}
 .walker-route-fall .walker-character{-webkit-animation:fruitSquash 1s linear 1 both;animation:fruitSquash 1s linear 1 both}
 .walker-route-fall .walker-body{-webkit-animation:fruitDamage 1s linear 1 both;animation:fruitDamage 1s linear 1 both}
+.walker-route-fall .fruit-split-left{-webkit-animation:fruitSplitLeft 1s linear 1 both;animation:fruitSplitLeft 1s linear 1 both}
+.walker-route-fall .fruit-split-right{-webkit-animation:fruitSplitRight 1s linear 1 both;animation:fruitSplitRight 1s linear 1 both}
 .walker-route-fall .impact-shadow{-webkit-animation:impactShadow 1s linear 1 both;animation:impactShadow 1s linear 1 both}
 .walker-body{position:absolute;left:6px;top:5px;width:58px;height:60px;border:2px solid #432d18;border-radius:48% 52% 46% 50%;box-sizing:border-box;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 5px 12px rgba(0,0,0,.3);z-index:2;-webkit-animation:walkerBob .4s ease-in-out infinite alternate;animation:walkerBob .4s ease-in-out infinite alternate}
+.fruit-split-half{position:absolute;top:5px;width:31px;height:60px;box-sizing:border-box;border:2px solid #432d18;opacity:0;z-index:4;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -4px -6px 0 rgba(190,89,10,.14),0 5px 12px rgba(0,0,0,.34);-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
+.fruit-split-left{left:6px;border-radius:58% 12% 18% 52%;border-right:3px solid #fff0a0}.fruit-split-right{left:35px;border-radius:12% 58% 52% 18%;border-left:3px solid #fff0a0}
+.fruit-split-left:after,.fruit-split-right:after{content:'';position:absolute;top:5px;bottom:5px;width:4px;background:repeating-linear-gradient(135deg,#fff0a0 0 3px,#e58b12 3px 6px);opacity:.95}.fruit-split-left:after{right:-4px}.fruit-split-right:after{left:-4px}
+.split-eye{position:absolute;top:20px;width:14px;height:9px;border:2px solid #432d18;border-radius:50%;box-sizing:border-box;background:radial-gradient(circle at 55% 50%,#2d2118 0 2px,#fff 3px 100%)}.fruit-split-left .split-eye{left:10px}.fruit-split-right .split-eye{right:10px}
+.split-cheek{position:absolute;top:34px;width:10px;height:7px;border:1px solid #9a2737;border-radius:50%;background:#f05468;box-shadow:inset 2px 1px 0 rgba(255,255,255,.65)}.fruit-split-left .split-cheek{left:5px}.fruit-split-right .split-cheek{right:5px}
+.split-leaf{position:absolute;top:-9px;width:17px;height:10px;border:2px solid #365b23;box-sizing:border-box;background:#75ad35}.fruit-split-left .split-leaf{left:12px;border-radius:100% 8% 100% 8%;-webkit-transform:rotate(-24deg);transform:rotate(-24deg)}.fruit-split-right .split-leaf{right:12px;border-radius:8% 100% 8% 100%;-webkit-transform:rotate(24deg);transform:rotate(24deg)}
 .fruit-stem{position:absolute;left:27px;top:-7px;width:4px;height:10px;border-radius:4px;background:#385d26;border:1px solid #253c1c;box-sizing:border-box}
 .fruit-leaf{position:absolute;top:-8px;width:17px;height:10px;background:#75ad35;border:2px solid #365b23;box-sizing:border-box;z-index:3}.fruit-leaf-left{left:13px;border-radius:100% 8% 100% 8%;-webkit-transform:rotate(-22deg);transform:rotate(-22deg)}.fruit-leaf-right{right:12px;border-radius:8% 100% 8% 100%;-webkit-transform:rotate(22deg);transform:rotate(22deg)}
 .fruit-brow{position:absolute;top:14px;width:14px;height:5px;border-top:2px solid #432d18;border-radius:50%}.fruit-brow-left{left:9px;-webkit-transform:rotate(7deg);transform:rotate(7deg)}.fruit-brow-right{right:9px;-webkit-transform:rotate(-7deg);transform:rotate(-7deg)}
@@ -295,8 +303,10 @@
 @-webkit-keyframes walkerClimb{0%{-webkit-transform:translate3d(0,0,0)}25%{-webkit-transform:translate3d(37vw,0,0)}45%{-webkit-transform:translate3d(37vw,-32vh,0)}65%{-webkit-transform:translate3d(8vw,-32vh,0)}82%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerClimb{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(37vw,0,0)}45%{transform:translate3d(37vw,-32vh,0)}65%{transform:translate3d(8vw,-32vh,0)}82%,100%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes walkerHigh{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(37vw,0,0)}40%{-webkit-transform:translate3d(37vw,-48vh,0)}62%{-webkit-transform:translate3d(8vw,-48vh,0)}78%{-webkit-transform:translate3d(0,-22vh,0)}86%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerHigh{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(37vw,0,0)}40%{transform:translate3d(37vw,-48vh,0)}62%{transform:translate3d(8vw,-48vh,0)}78%{transform:translate3d(0,-22vh,0)}86%,100%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes walkerFall{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(37vw,0,0)}38%{-webkit-transform:translate3d(37vw,-50vh,0)}60%{-webkit-transform:translate3d(12vw,-50vh,0)}70%{-webkit-transform:translate3d(0,-50vh,0)}72%,87%{-webkit-transform:translate3d(0,0,0)}94%{-webkit-transform:translate3d(18vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerFall{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(37vw,0,0)}38%{transform:translate3d(37vw,-50vh,0)}60%{transform:translate3d(12vw,-50vh,0)}70%{transform:translate3d(0,-50vh,0)}72%,87%{transform:translate3d(0,0,0)}94%{transform:translate3d(18vw,0,0)}100%{transform:translate3d(0,0,0)}}
-@-webkit-keyframes fruitSquash{0%,69%,100%{-webkit-transform:scale(1) rotate(0)}70%{-webkit-transform:scale(1) rotate(-12deg)}72%{-webkit-transform:scaleX(1.65) scaleY(.38) skewX(-9deg) rotate(-3deg)}75%{-webkit-transform:scaleX(1.58) scaleY(.4) skewX(15deg) rotate(3deg)}79%{-webkit-transform:scaleX(1.72) scaleY(.34) skewX(-12deg) rotate(-2deg)}84%{-webkit-transform:scaleX(1.62) scaleY(.38) skewX(8deg)}85%,100%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,69%,100%{transform:scale(1) rotate(0)}70%{transform:scale(1) rotate(-12deg)}72%{transform:scaleX(1.65) scaleY(.38) skewX(-9deg) rotate(-3deg)}75%{transform:scaleX(1.58) scaleY(.4) skewX(15deg) rotate(3deg)}79%{transform:scaleX(1.72) scaleY(.34) skewX(-12deg) rotate(-2deg)}84%{transform:scaleX(1.62) scaleY(.38) skewX(8deg)}85%,100%{transform:scale(1) rotate(0)}}
-@-webkit-keyframes fruitDamage{0%,70%,100%{-webkit-transform:scale(1) rotate(0);border-radius:48% 52% 46% 50%}72%{-webkit-transform:scaleX(1.45) scaleY(.62) skewX(-13deg) rotate(5deg);border-radius:62% 28% 68% 22%}75%{-webkit-transform:scaleX(1.38) scaleY(.68) skewX(16deg) rotate(-5deg);border-radius:24% 70% 30% 66%}79%{-webkit-transform:scaleX(1.5) scaleY(.58) skewX(-10deg) rotate(3deg);border-radius:70% 20% 58% 36%}84%{-webkit-transform:scaleX(1.4) scaleY(.64) skewX(9deg) rotate(-2deg);border-radius:30% 64% 24% 72%}85%,100%{-webkit-transform:scale(1) rotate(0);border-radius:48% 52% 46% 50%}}@keyframes fruitDamage{0%,70%,100%{transform:scale(1) rotate(0);border-radius:48% 52% 46% 50%}72%{transform:scaleX(1.45) scaleY(.62) skewX(-13deg) rotate(5deg);border-radius:62% 28% 68% 22%}75%{transform:scaleX(1.38) scaleY(.68) skewX(16deg) rotate(-5deg);border-radius:24% 70% 30% 66%}79%{transform:scaleX(1.5) scaleY(.58) skewX(-10deg) rotate(3deg);border-radius:70% 20% 58% 36%}84%{transform:scaleX(1.4) scaleY(.64) skewX(9deg) rotate(-2deg);border-radius:30% 64% 24% 72%}85%,100%{transform:scale(1) rotate(0);border-radius:48% 52% 46% 50%}}
+@-webkit-keyframes fruitSquash{0%,69%,100%{-webkit-transform:scale(1) rotate(0)}70%{-webkit-transform:scale(1) rotate(-12deg)}72%{-webkit-transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{-webkit-transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{-webkit-transform:scale(1) rotate(0)}85%,100%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,69%,100%{transform:scale(1) rotate(0)}70%{transform:scale(1) rotate(-12deg)}72%{transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{transform:scale(1) rotate(0)}85%,100%{transform:scale(1) rotate(0)}}
+@-webkit-keyframes fruitDamage{0%,70%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}72%{opacity:.18;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}}@keyframes fruitDamage{0%,70%,100%{opacity:1;transform:scale(1) rotate(0)}72%{opacity:.18;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;transform:scale(1) rotate(0)}}
+@-webkit-keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;-webkit-transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;-webkit-transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;-webkit-transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;-webkit-transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}@keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}
+@-webkit-keyframes fruitSplitRight{0%,71%,85%,100%{opacity:0;-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;-webkit-transform:translate3d(8px,16px,0) rotate(20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;-webkit-transform:translate3d(14px,19px,0) rotate(29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;-webkit-transform:translate3d(16px,20px,0) rotate(25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;-webkit-transform:translate3d(15px,20px,0) rotate(27deg) scaleX(1.36) scaleY(.44)}}@keyframes fruitSplitRight{0%,71%,85%,100%{opacity:0;transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;transform:translate3d(8px,16px,0) rotate(20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;transform:translate3d(14px,19px,0) rotate(29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;transform:translate3d(16px,20px,0) rotate(25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;transform:translate3d(15px,20px,0) rotate(27deg) scaleX(1.36) scaleY(.44)}}
 @-webkit-keyframes impactShadow{0%,70%,86%,100%{opacity:0;-webkit-transform:scaleX(.2)}72%,84%{opacity:.82;-webkit-transform:scaleX(2.7)}85%{opacity:.18;-webkit-transform:scaleX(1)}}@keyframes impactShadow{0%,70%,86%,100%{opacity:0;transform:scaleX(.2)}72%,84%{opacity:.82;transform:scaleX(2.7)}85%{opacity:.18;transform:scaleX(1)}}
 @-webkit-keyframes walkerBob{from{-webkit-transform:translateY(0) rotate(-1deg)}to{-webkit-transform:translateY(3px) rotate(1deg)}}@keyframes walkerBob{from{transform:translateY(0) rotate(-1deg)}to{transform:translateY(3px) rotate(1deg)}}
 @-webkit-keyframes fruitBlink{0%,45%,49%,100%{-webkit-transform:scaleY(1)}47%{-webkit-transform:scaleY(.15)}}@keyframes fruitBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.15)}}
@@ -304,7 +314,7 @@
 @-webkit-keyframes walkerArmRight{from{-webkit-transform:rotate(-32deg)}to{-webkit-transform:rotate(24deg)}}@keyframes walkerArmRight{from{transform:rotate(-32deg)}to{transform:rotate(24deg)}}
 @-webkit-keyframes walkerLegLeft{from{-webkit-transform:rotate(18deg)}to{-webkit-transform:rotate(-18deg)}}@keyframes walkerLegLeft{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
 @-webkit-keyframes walkerLegRight{from{-webkit-transform:rotate(-18deg)}to{-webkit-transform:rotate(18deg)}}@keyframes walkerLegRight{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.impact-shadow,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
+@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.impact-shadow,.walker-body,.fruit-split-half,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
   #statusDot {
     position: absolute;
     bottom: 20px; left: 20px;
@@ -340,6 +350,8 @@
         <span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span>
         <span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span>
       </div>
+      <div class="fruit-split-half fruit-split-left"><span class="split-leaf"></span><span class="split-eye"></span><span class="split-cheek"></span></div>
+      <div class="fruit-split-half fruit-split-right"><span class="split-leaf"></span><span class="split-eye"></span><span class="split-cheek"></span></div>
     </div>
     <span class="impact-shadow"></span>
   </div>
@@ -381,6 +393,8 @@ const resultOverlay = document.getElementById('resultOverlay');
 const qrWalker = document.getElementById('qrWalker');
 const walkerCharacter = document.querySelector('.walker-character');
 const walkerBody = document.querySelector('.walker-body');
+  const splitLeft = document.querySelector('.fruit-split-left');
+  const splitRight = document.querySelector('.fruit-split-right');
 const impactShadow = document.querySelector('.impact-shadow');
 let walkerRouteTimer = 0;
 const resultIcon = document.getElementById('resultIcon');
@@ -844,13 +858,13 @@ function startRandomWalkerRoute() {
   if (!qrWalker) return;
   roll = Math.random();
   if (roll < 0.38) {
-    route = 'ground'; minimum = 9000; maximum = 15000;
+    route = 'ground'; minimum = 11000; maximum = 18000;
   } else if (roll < 0.63) {
-    route = 'climb'; minimum = 13000; maximum = 20000;
+    route = 'climb'; minimum = 16000; maximum = 24000;
   } else if (roll < 0.78) {
-    route = 'high'; minimum = 15000; maximum = 22000;
+    route = 'high'; minimum = 18000; maximum = 27000;
   } else {
-    route = 'fall'; minimum = 16000; maximum = 24000;
+    route = 'fall'; minimum = 20000; maximum = 29000;
   }
   duration = Math.round(minimum + Math.random() * (maximum - minimum));
   if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
@@ -867,6 +881,14 @@ function startRandomWalkerRoute() {
     walkerBody.style.webkitAnimationDuration = route === 'fall' ? duration + 'ms' : '.4s';
     walkerBody.style.animationDuration = route === 'fall' ? duration + 'ms' : '.4s';
   }
+    if (splitLeft) {
+      splitLeft.style.webkitAnimationDuration = duration + 'ms';
+      splitLeft.style.animationDuration = duration + 'ms';
+    }
+    if (splitRight) {
+      splitRight.style.webkitAnimationDuration = duration + 'ms';
+      splitRight.style.animationDuration = duration + 'ms';
+    }
   if (impactShadow) {
     impactShadow.style.webkitAnimationDuration = duration + 'ms';
     impactShadow.style.animationDuration = duration + 'ms';
