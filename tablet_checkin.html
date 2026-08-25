@@ -236,6 +236,25 @@
   #resultOverlay.rare-variant #resultContent { color:#20242b; background:rgba(255,255,255,.96); border:2px solid #b9d8fb; }
   #resultOverlay.rare-variant #resultType { color:#22a957; }
   #resultOverlay.rare-variant #resultCharacter { width:min(48vw,610px); height:80vh; max-height:80vh; bottom:0; object-fit:contain; object-position:center bottom; filter:drop-shadow(0 10px 16px rgba(70,90,110,.18)); }
+  
+#resultOverlay.mascot-variant{color:#183f2d;background:radial-gradient(circle at 12% 18%,#fff59b 0 5px,transparent 6px),radial-gradient(circle at 28% 75%,#ffcf4d 0 7px,transparent 8px),radial-gradient(circle at 78% 17%,#fff4a0 0 6px,transparent 7px),radial-gradient(circle at 89% 67%,#f8b52f 0 5px,transparent 6px),linear-gradient(145deg,#efffdc 0%,#fff9b8 48%,#ffc752 100%)}
+#resultOverlay.exit.mascot-variant:after{display:none}
+#resultOverlay.mascot-variant:before{content:'みかん様 登場！ ★';position:absolute;right:4%;top:7%;z-index:6;padding:11px 16px;border:3px solid #18855b;border-radius:999px;background:rgba(255,255,225,.96);color:#17543c;font-size:19px;font-weight:bold;box-shadow:0 8px 20px rgba(90,90,20,.18)}
+#resultOverlay.mascot-variant #resultContent{color:#183f2d;background:rgba(255,255,255,.93);border:2px solid #68a84d}
+#resultOverlay.mascot-variant #resultType{color:#13764f}
+#resultMascot{display:none;position:absolute;right:20%;bottom:12%;width:70px;height:88px;z-index:5;-webkit-transform:scale(4.0);transform:scale(4.0);-webkit-transform-origin:50% 100%;transform-origin:50% 100%;pointer-events:none}
+#resultOverlay.mascot-variant #resultMascot{display:block}
+.result-mascot-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
+#resultMascot .result-mascot-body{-webkit-animation:resultMascotProud 1.45s ease-in-out infinite alternate;animation:resultMascotProud 1.45s ease-in-out infinite alternate;box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 7px 14px rgba(70,50,10,.34)}
+#resultMascot .fruit-brow-left{-webkit-transform:rotate(-16deg);transform:rotate(-16deg)}#resultMascot .fruit-brow-right{-webkit-transform:rotate(12deg);transform:rotate(12deg)}#resultMascot .fruit-mouth{-webkit-transform:rotate(-5deg);transform:rotate(-5deg);border-radius:3px 3px 12px 7px}
+#resultMascot .result-arm-proud{left:-1px;top:39px;width:20px;-webkit-animation:none;animation:none;-webkit-transform:rotate(-52deg);transform:rotate(-52deg)}
+#resultMascot .result-wave-arm{right:-8px;top:27px;width:27px;-webkit-animation:resultMascotWave .72s ease-in-out infinite;animation:resultMascotWave .72s ease-in-out infinite}
+#resultMascot .result-arm-proud:after,#resultMascot .result-wave-arm:after{content:'';position:absolute;width:6px;height:6px;border:2px solid #432d18;border-radius:50%;background:#ffc42b;box-sizing:border-box}#resultMascot .result-arm-proud:after{left:-3px;top:-2px}#resultMascot .result-wave-arm:after{right:-4px;top:-2px}
+#resultMascot .result-leg-left,#resultMascot .result-leg-right{-webkit-animation:none;animation:none}#resultMascot .result-leg-left{-webkit-transform:rotate(12deg);transform:rotate(12deg)}#resultMascot .result-leg-right{-webkit-transform:rotate(-12deg);transform:rotate(-12deg)}
+#resultMascot .mascot-crown{position:absolute;left:21px;top:-17px;z-index:7;color:#f7b817;font-size:29px;line-height:28px;text-shadow:-1px -1px 0 #6b4515,1px -1px 0 #6b4515,-1px 1px 0 #6b4515,1px 1px 0 #6b4515;-webkit-transform:rotate(-7deg);transform:rotate(-7deg)}
+@-webkit-keyframes resultMascotWave{0%,100%{-webkit-transform:rotate(-58deg)}50%{-webkit-transform:rotate(-112deg)}}@keyframes resultMascotWave{0%,100%{transform:rotate(-58deg)}50%{transform:rotate(-112deg)}}
+@-webkit-keyframes resultMascotProud{from{-webkit-transform:translateY(0) scaleX(1.02) rotate(-1deg)}to{-webkit-transform:translateY(-2px) scaleX(1.08) rotate(1deg)}}@keyframes resultMascotProud{from{transform:translateY(0) scaleX(1.02) rotate(-1deg)}to{transform:translateY(-2px) scaleX(1.08) rotate(1deg)}}
+@media (prefers-reduced-motion:reduce){#resultMascot .result-mascot-body,#resultMascot .result-wave-arm{-webkit-animation:none;animation:none}}
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
   #resultOverlay.teacher #resultCharacter {
     width: min(49vw, 650px);
@@ -407,6 +426,7 @@
       <div id="resultPoints"></div>
     </div>
     <img id="resultCharacter" alt="" aria-hidden="true">
+    <div id="resultMascot" aria-hidden="true"><div class="result-mascot-character"><span class="mascot-crown">♛</span><span class="walker-arm walker-arm-left result-arm-proud"></span><span class="walker-arm walker-arm-right result-wave-arm"></span><span class="walker-leg walker-leg-left result-leg-left"></span><span class="walker-leg walker-leg-right result-leg-right"></span><div class="walker-body result-mascot-body"><span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span><span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span><span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span><span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span><span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span></div></div></div>
   </div>
 
   <div id="statusDot"></div>
@@ -442,6 +462,7 @@ const impactShadow = document.querySelector('.impact-shadow');
 let walkerRouteTimer = 0;
 const resultIcon = document.getElementById('resultIcon');
 const resultCharacter = document.getElementById('resultCharacter');
+const resultMascot = document.getElementById('resultMascot');
 const resultName = document.getElementById('resultName');
 const resultType = document.getElementById('resultType');
 const resultTime = document.getElementById('resultTime');
@@ -473,7 +494,8 @@ const MAIL_FAILURE_RESUME_MS = 3500;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const RARE_EXIT_ASSET = 'assets/checkin/goodbye-rare-woman.webp?v=20260819';
 const PHOTO_EXIT_PROBABILITY = 0.10;
-const RARE_EXIT_PROBABILITY = 0.10;
+const RARE_EXIT_PROBABILITY = 0.40;
+const MASCOT_EXIT_PROBABILITY = 0.40; // 画面確認用。確認後は0.05へ変更
 
 // 結果表示は短いため、軽量な写真版を起動時に読み込んでおく。
 const exitPhotoPreload = new Image();
@@ -964,6 +986,7 @@ function showProcessing(qrData, receiptId) {
   resultOverlay.className = '';
   resultIcon.textContent = '';
   resultCharacter.style.display = 'none';
+  resultMascot.style.display = 'none';
   resultName.textContent = '';
   resultType.textContent = '';
   resultTime.textContent = '';
@@ -1014,6 +1037,7 @@ function showLocalDuplicate(scan) {
 
 function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
   setWalkerVisible(false);
+  resultMascot.style.display = 'none';
   resultOverlay.classList.remove('photo-variant');
   if (ok && isTeacher) {
     const isCooldownDuplicate = duplicate && (errorCode === 'DUPLICATE_WITHIN_COOLDOWN' || errorCode === 'DUPLICATE_WITHIN_WINDOW');
@@ -1039,24 +1063,31 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   } else if (ok) {
     const isCooldownDuplicate = duplicate && (errorCode === 'DUPLICATE_WITHIN_COOLDOWN' || errorCode === 'DUPLICATE_WITHIN_WINDOW');
     const exitVariantRoll = Math.random();
-    const useRareExitVariant = !isCooldownDuplicate && type === '退室' && exitVariantRoll < RARE_EXIT_PROBABILITY;
-    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && !useRareExitVariant && exitVariantRoll < RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
+    const useMascotExitVariant = !isCooldownDuplicate && type === '退室' && exitVariantRoll < MASCOT_EXIT_PROBABILITY;
+    const useRareExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY;
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && !useRareExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
     resultOverlay.className = isCooldownDuplicate
       ? ('show duplicate' + (type === '退室' ? ' duplicate-exit' : ''))
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
     if (usePhotoExitVariant) resultOverlay.classList.add('photo-variant');
     if (useRareExitVariant) resultOverlay.classList.add('rare-variant');
+    if (useMascotExitVariant) resultOverlay.classList.add('mascot-variant');
     resultIcon.textContent = '';
-    resultCharacter.src = isCooldownDuplicate
-      ? 'assets/checkin/duplicate.png?v=429da8e'
-      : (type === '入室'
-        ? 'assets/checkin/welcome.png?v=429da8e'
-        : (useRareExitVariant
-          ? RARE_EXIT_ASSET
-          : (usePhotoExitVariant
-            ? PHOTO_EXIT_ASSET
-            : 'assets/checkin/goodbye.png?v=429da8e')));
-    resultCharacter.style.display = 'block';
+    if (useMascotExitVariant) {
+      resultMascot.style.display = 'block';
+      resultCharacter.style.display = 'none';
+    } else {
+      resultCharacter.src = isCooldownDuplicate
+        ? 'assets/checkin/duplicate.png?v=429da8e'
+        : (type === '入室'
+          ? 'assets/checkin/welcome.png?v=429da8e'
+          : (useRareExitVariant
+            ? RARE_EXIT_ASSET
+            : (usePhotoExitVariant
+              ? PHOTO_EXIT_ASSET
+              : 'assets/checkin/goodbye.png?v=429da8e')));
+      resultCharacter.style.display = 'block';
+    }
     resultName.textContent = name + ' さん';
     resultType.textContent = isCooldownDuplicate
       ? (type === '入室' ? '入室済みです' : '退室済みです')
@@ -1064,7 +1095,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
       ? '40秒以内の重複読取のため、記録とメール送信は追加していません'
-      : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider)));
+      : (useMascotExitVariant ? 'また明日も来るんだぞ！' : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider))));
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
       resultPoints.style.display = 'inline-block';
