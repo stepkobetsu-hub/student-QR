@@ -14,7 +14,7 @@ export interface AttendanceDecision {
   nextCount: number;
 }
 
-export const DUPLICATE_WINDOW_MS = 30_000;
+export const DUPLICATE_WINDOW_MS = 40_000;
 
 export function decideAttendance(
   role: SubjectRole,

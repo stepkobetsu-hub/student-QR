@@ -141,6 +141,17 @@
     color: #171717;
     background: linear-gradient(145deg, #ffe55c 0%, #ffc928 100%);
   }
+  #resultOverlay.duplicate.duplicate-exit {
+    color: #fff;
+    background: #165e83;
+  }
+  #resultOverlay.duplicate.duplicate-exit #resultContent {
+    color: #fff;
+    background: rgba(7,29,51,.82);
+    border: 2px solid rgba(255,255,255,.3);
+  }
+  #resultOverlay.duplicate:not(.teacher) #resultName { font-size: 80px; }
+  #resultOverlay.duplicate:not(.teacher) #resultType { font-size: 60px; }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
   #scanHint {
@@ -449,7 +460,7 @@ let activeReceiptId = '';
 let scanStartedAt = Date.now();
 let lastFrameAt = 0;
 const RESCAN_COOLDOWN_MS = 5000;
-const LOCAL_DUPLICATE_WINDOW_MS = 30 * 1000;
+const LOCAL_DUPLICATE_WINDOW_MS = 40 * 1000;
 const NO_QR_HINT_MS = 4000;
 const NO_QR_ERROR_MS = 10000;
 const FRAME_INTERVAL_MS = 1000 / 12;
@@ -457,7 +468,7 @@ const SLOW_NOTICE_MS = 8000;
 const REQUEST_TIMEOUT_MS = 15000;
 const EDGE_REQUEST_TIMEOUT_MS = 25000;
 const SUCCESS_RESUME_MS = 2500;
-const DUPLICATE_RESUME_MS = 2500;
+const DUPLICATE_RESUME_MS = 3500;
 const MAIL_FAILURE_RESUME_MS = 3500;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const RARE_EXIT_ASSET = 'assets/checkin/goodbye-rare-woman.webp?v=20260819';
@@ -1022,7 +1033,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
       : (type === '出勤' ? '出勤しました' : '退勤しました');
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
-      ? '30秒以内の重複読取のため、記録とメール送信は追加していません'
+      ? '40秒以内の重複読取のため、記録とメール送信は追加していません'
       : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
     resultPoints.style.display = 'none';
   } else if (ok) {
@@ -1031,7 +1042,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     const useRareExitVariant = !isCooldownDuplicate && type === '退室' && exitVariantRoll < RARE_EXIT_PROBABILITY;
     const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && !useRareExitVariant && exitVariantRoll < RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
     resultOverlay.className = isCooldownDuplicate
-      ? 'show duplicate'
+      ? ('show duplicate' + (type === '退室' ? ' duplicate-exit' : ''))
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
     if (usePhotoExitVariant) resultOverlay.classList.add('photo-variant');
     if (useRareExitVariant) resultOverlay.classList.add('rare-variant');
@@ -1052,7 +1063,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
       : (type === '入室' ? '入室しました' : '退室しました');
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
-      ? '30秒以内の重複読取のため、記録とメール送信は追加していません'
+      ? '40秒以内の重複読取のため、記録とメール送信は追加していません'
       : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider)));
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';

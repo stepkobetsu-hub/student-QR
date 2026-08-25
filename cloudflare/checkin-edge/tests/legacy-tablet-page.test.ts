@@ -29,9 +29,13 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("goodbye-rare-woman.webp?v=20260819");
     expect(html).toContain("PHOTO_EXIT_PROBABILITY = 0.10");
     expect(html).toContain("RARE_EXIT_PROBABILITY = 0.10");
-    expect(html).toContain("30秒以内の重複読取");
+    expect(html).toContain("40秒以内の重複読取");
     expect(html).toContain("入室済みです");
     expect(html).toContain("退室済みです");
+    expect(html).toContain("duplicate-exit");
+    expect(html).toContain("font-size:72px");
+    expect(html).toContain("font-size:68px");
+    expect(html).toContain("background:#165e83");
     expect(html).toContain("useRareExitVariant = !duplicate && !isTeacher && type === '退室'");
     expect(html).toContain("usePhotoExitVariant = !duplicate && !isTeacher && type === '退室'");
     expect(html).toContain("useRareExitVariant ? RARE_EXIT_ASSET");

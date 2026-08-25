@@ -53,7 +53,7 @@ const CHECKIN_MAIL_QUEUE_HEADERS = ['受付ID','登録日時','更新日時','�
 const CHECKIN_MAIL_MAX_ATTEMPTS = 3;
 const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
-const CHECKIN_DUPLICATE_WINDOW_MS = 30 * 1000;
+const CHECKIN_DUPLICATE_WINDOW_MS = 40 * 1000;
 const CHECKIN_DUPLICATE_GUARD_PREFIX = 'CHECKIN_DUPLICATE_GUARD_V1:';
 const CHECKIN_BUILD_ID = 'duplicate-log-canonical-v64';
 
@@ -1427,7 +1427,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
     row[2] = new Date();
     row[3] = 'SKIPPED_DUPLICATE';
     row[5] = '';
-    row[12] = 'DUPLICATE_WITHIN_COOLDOWN: 30秒以内の後発受付のためメール送信省略';
+    row[12] = 'DUPLICATE_WITHIN_COOLDOWN: 40秒以内の後発受付のためメール送信省略';
     row[15] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
     updateCheckInLogMailStatus_(receiptId, '重複のため送信省略', [], [], row[12], '');

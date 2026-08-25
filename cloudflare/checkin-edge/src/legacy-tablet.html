@@ -22,6 +22,10 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 #result.exit{color:#fff;background:radial-gradient(circle at 12% 16%,#fff 0 2px,transparent 3px),radial-gradient(circle at 29% 9%,#b8d8ff 0 2px,transparent 3px),radial-gradient(circle at 46% 23%,#fff 0 2px,transparent 3px),radial-gradient(circle at 71% 13%,#d8c7ff 0 2px,transparent 3px),linear-gradient(150deg,#061a45 0%,#102d67 58%,#28134f 100%)}
 #result.exit:after{content:'';position:absolute;top:7%;right:8%;width:70px;height:70px;border-radius:50%;background:#fff2a8;box-shadow:-18px 8px 0 2px #0b2354}
 #result.duplicate{color:#171717;background:linear-gradient(145deg,#ffe86b 0%,#ffc928 100%)}
+#result.duplicate.duplicate-exit{color:#fff;background:#165e83}
+#result.duplicate.duplicate-exit #resultContent{color:#fff;background:rgba(7,29,51,.82);border:2px solid rgba(255,255,255,.3)}
+#result.duplicate:not(.teacher) #name{font-size:72px}
+#result.duplicate:not(.teacher) #type{font-size:68px}
 #result.processing{color:#fff;background:linear-gradient(145deg,#075f73 0%,#188fa2 52%,#47c7b7 100%)}
 #result.error{color:#fff;background:linear-gradient(145deg,#8f2430 0%,#c74444 100%)}
 #resultContent{position:absolute;left:5%;top:18%;width:54%;padding:24px 18px;border-radius:26px;box-sizing:border-box;background:rgba(255,255,255,.88);box-shadow:0 12px 30px rgba(0,0,0,.25);z-index:3}
@@ -525,7 +529,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     clearCharacter();
     if (ok) {
       playResultSound(duplicate ? 'duplicate' : 'success');
-      result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '');
+      result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (duplicate && !isTeacher && type === '退室' ? ' duplicate-exit' : '') + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '');
       if (duplicate) {
         character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
         actionText = isTeacher ? (type === '出勤' ? '出勤済みです' : '退勤済みです') : (type === '入室' ? '入室済みです' : '退室済みです');
@@ -546,7 +550,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       resultCharacter.style.display = 'block';
       nameEl.innerHTML = escapeText(name) + suffix;
       typeEl.innerHTML = actionText;
-      detailEl.innerHTML = duplicate ? '30秒以内の重複読取のため、記録とメール送信は追加していません' : (useRareExitVariant ? 'また明日も頑張ろうね！' : escapeText(detail || '受付が完了しました'));
+      detailEl.innerHTML = duplicate ? '40秒以内の重複読取のため、記録とメール送信は追加していません' : (useRareExitVariant ? 'また明日も頑張ろうね！' : escapeText(detail || '受付が完了しました'));
     } else {
       playResultSound('error');
       result.className = 'show error';
@@ -560,7 +564,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       message.innerHTML = 'QRコードを右下の枠にかざしてください';
       busy = false;
       setWalkerVisible(document.visibilityState !== 'hidden');
-    }, ok ? (useRareExitVariant ? 3500 : 2500) : 4000);
+    }, ok ? (duplicate ? 3500 : (useRareExitVariant ? 3500 : 2500)) : 4000);
   }
 
   function escapeText(value) {
