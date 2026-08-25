@@ -332,6 +332,10 @@
 .walker-route-vanish{-webkit-animation:walkerVanish 1s ease-in-out 1 both;animation:walkerVanish 1s ease-in-out 1 both}
 .walker-route-juice{-webkit-animation:walkerJuiceStance 1s ease-in-out 1 both;animation:walkerJuiceStance 1s ease-in-out 1 both}
 .walker-route-roll{-webkit-animation:walkerRollRoute 1s ease-in-out 1 both;animation:walkerRollRoute 1s ease-in-out 1 both}
+.walker-route-sit{-webkit-animation:walkerSit 1s ease-in-out 1 both;animation:walkerSit 1s ease-in-out 1 both}
+.walker-route-sit .walker-character{-webkit-animation:fruitSit 1s ease-in-out 1 both;animation:fruitSit 1s ease-in-out 1 both}
+.walker-route-sit .walker-leg-left{-webkit-animation:sitLegLeft 1s ease-in-out 1 both;animation:sitLegLeft 1s ease-in-out 1 both}
+.walker-route-sit .walker-leg-right{-webkit-animation:sitLegRight 1s ease-in-out 1 both;animation:sitLegRight 1s ease-in-out 1 both}
 .walker-route-hop .walker-character{-webkit-animation:fruitHopSquash 1s linear 1 both;animation:fruitHopSquash 1s linear 1 both}
 .walker-route-hop .impact-shadow{-webkit-animation:hopShadow 1s linear 1 both;animation:hopShadow 1s linear 1 both}
 .walker-route-roll .walker-character{-webkit-animation:fruitRoll 1s linear 1 both;animation:fruitRoll 1s linear 1 both}
@@ -405,6 +409,10 @@
 @-webkit-keyframes fruitStemPop{0%,27%{-webkit-transform:translate3d(0,0,0) rotate(0);opacity:1}34%{-webkit-transform:translate3d(0,-42px,0) rotate(190deg);opacity:1}60%{-webkit-transform:translate3d(20px,-50px,0) rotate(480deg);opacity:1}72%,86%{-webkit-transform:translate3d(24px,5px,0) rotate(650deg);opacity:0}90%,100%{-webkit-transform:translate3d(0,0,0) rotate(0);opacity:1}}@keyframes fruitStemPop{0%,27%{transform:translate3d(0,0,0) rotate(0);opacity:1}34%{transform:translate3d(0,-42px,0) rotate(190deg);opacity:1}60%{transform:translate3d(20px,-50px,0) rotate(480deg);opacity:1}72%,86%{transform:translate3d(24px,5px,0) rotate(650deg);opacity:0}90%,100%{transform:translate3d(0,0,0) rotate(0);opacity:1}}
 @-webkit-keyframes walkerRollRoute{0%,100%{-webkit-transform:translate3d(0,0,0)}15%{-webkit-transform:translate3d(0,0,0)}50%{-webkit-transform:translate3d(37vw,0,0)}86%{-webkit-transform:translate3d(5vw,0,0)}92%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerRollRoute{0%,100%{transform:translate3d(0,0,0)}15%{transform:translate3d(0,0,0)}50%{transform:translate3d(37vw,0,0)}86%{transform:translate3d(5vw,0,0)}92%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes fruitRoll{0%,15%{-webkit-transform:rotate(0deg)}50%{-webkit-transform:rotate(1080deg)}86%,100%{-webkit-transform:rotate(2160deg)}}@keyframes fruitRoll{0%,15%{transform:rotate(0deg)}50%{transform:rotate(1080deg)}86%,100%{transform:rotate(2160deg)}}
+@-webkit-keyframes walkerSit{0%,100%{-webkit-transform:translate3d(0,0,0)}20%{-webkit-transform:translate3d(66vw,0,0);-webkit-transform:translate3d(var(--sit-x,66vw),0,0)}38%,78%{-webkit-transform:translate3d(66vw,-48vh,0);-webkit-transform:translate3d(var(--sit-x,66vw),var(--sit-y,-48vh),0)}88%{-webkit-transform:translate3d(66vw,0,0);-webkit-transform:translate3d(var(--sit-x,66vw),0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerSit{0%,100%{transform:translate3d(0,0,0)}20%{transform:translate3d(66vw,0,0);transform:translate3d(var(--sit-x,66vw),0,0)}38%,78%{transform:translate3d(66vw,-48vh,0);transform:translate3d(var(--sit-x,66vw),var(--sit-y,-48vh),0)}88%{transform:translate3d(66vw,0,0);transform:translate3d(var(--sit-x,66vw),0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes fruitSit{0%,30%,100%{-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}36%{-webkit-transform:translate3d(0,3px,0) rotate(-3deg) scale(1.06,.92)}42%,78%{-webkit-transform:translate3d(0,5px,0) rotate(-3deg) scale(1)}84%{-webkit-transform:translate3d(0,2px,0) rotate(2deg) scale(.97,1.04)}}@keyframes fruitSit{0%,30%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}36%{transform:translate3d(0,3px,0) rotate(-3deg) scale(1.06,.92)}42%,78%{transform:translate3d(0,5px,0) rotate(-3deg) scale(1)}84%{transform:translate3d(0,2px,0) rotate(2deg) scale(.97,1.04)}}
+@-webkit-keyframes sitLegLeft{0%,32%,100%{-webkit-transform:rotate(0)}38%{-webkit-transform:rotate(12deg)}48%{-webkit-transform:rotate(-7deg)}58%{-webkit-transform:rotate(10deg)}68%{-webkit-transform:rotate(-5deg)}78%{-webkit-transform:rotate(9deg)}86%{-webkit-transform:rotate(0)}}@keyframes sitLegLeft{0%,32%,100%{transform:rotate(0)}38%{transform:rotate(12deg)}48%{transform:rotate(-7deg)}58%{transform:rotate(10deg)}68%{transform:rotate(-5deg)}78%{transform:rotate(9deg)}86%{transform:rotate(0)}}
+@-webkit-keyframes sitLegRight{0%,32%,100%{-webkit-transform:rotate(0)}38%{-webkit-transform:rotate(-10deg)}48%{-webkit-transform:rotate(8deg)}58%{-webkit-transform:rotate(-8deg)}68%{-webkit-transform:rotate(7deg)}78%{-webkit-transform:rotate(-9deg)}86%{-webkit-transform:rotate(0)}}@keyframes sitLegRight{0%,32%,100%{transform:rotate(0)}38%{transform:rotate(-10deg)}48%{transform:rotate(8deg)}58%{transform:rotate(-8deg)}68%{transform:rotate(7deg)}78%{transform:rotate(-9deg)}86%{transform:rotate(0)}}
 @-webkit-keyframes fruitSquash{0%,69%,100%{-webkit-transform:scale(1) rotate(0)}70%{-webkit-transform:scale(1) rotate(-12deg)}72%{-webkit-transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{-webkit-transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{-webkit-transform:scale(1) rotate(0)}85%,100%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,69%,100%{transform:scale(1) rotate(0)}70%{transform:scale(1) rotate(-12deg)}72%{transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{transform:scale(1) rotate(0)}85%,100%{transform:scale(1) rotate(0)}}
 @-webkit-keyframes fruitDamage{0%,70%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}72%{opacity:.18;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}}@keyframes fruitDamage{0%,70%,100%{opacity:1;transform:scale(1) rotate(0)}72%{opacity:.18;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;transform:scale(1) rotate(0)}}
 @-webkit-keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;-webkit-transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;-webkit-transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;-webkit-transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;-webkit-transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}@keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}
@@ -976,33 +984,49 @@ function startRandomWalkerRoute() {
   var restart;
   var effectNodes;
   var effectIndex;
+  var targetFrame;
+  var frameRect;
+  var walkerRect;
+  var sitNodes;
+  var sitIndex;
   if (!qrWalker) return;
   roll = Math.random();
-  if (roll < 0.22) {
+  if (roll < 0.17) {
     route = 'ground'; minimum = 11000; maximum = 18000;
-  } else if (roll < 0.35) {
+  } else if (roll < 0.27) {
     route = 'trip'; minimum = 14000; maximum = 21000;
-  } else if (roll < 0.51) {
+  } else if (roll < 0.39) {
     route = 'climb'; minimum = 16000; maximum = 24000;
-  } else if (roll < 0.62) {
+  } else if (roll < 0.47) {
     route = 'high'; minimum = 18000; maximum = 27000;
-  } else if (roll < 0.72) {
+  } else if (roll < 0.54) {
     route = 'parachute'; minimum = 24000; maximum = 34000;
-  } else if (roll < 0.80) {
+  } else if (roll < 0.60) {
     route = 'fall'; minimum = 20000; maximum = 29000;
-  } else if (roll < 0.85) {
+  } else if (roll < 0.65) {
     route = 'hop'; minimum = 9000; maximum = 14000;
-  } else if (roll < 0.90) {
+  } else if (roll < 0.70) {
     route = 'vanish'; minimum = 18000; maximum = 27000;
-  } else if (roll < 0.95) {
+  } else if (roll < 0.75) {
     route = 'juice'; minimum = 14000; maximum = 20000;
-  } else {
+  } else if (roll < 0.80) {
     route = 'roll'; minimum = 12000; maximum = 18000;
+  } else {
+    route = 'sit'; minimum = 18000; maximum = 26000;
   }
   duration = Math.round(minimum + Math.random() * (maximum - minimum));
   if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
   qrWalker.className = '';
   restart = qrWalker.offsetWidth;
+  if (route === 'sit') {
+    targetFrame = document.getElementById('scanFrame') || document.getElementById('frame');
+    if (targetFrame && qrWalker.style && qrWalker.style.setProperty) {
+      frameRect = targetFrame.getBoundingClientRect();
+      walkerRect = qrWalker.getBoundingClientRect();
+      qrWalker.style.setProperty('--sit-x', Math.round(frameRect.left + frameRect.width * 0.5 - (walkerRect.left + walkerRect.width * 0.5)) + 'px');
+      qrWalker.style.setProperty('--sit-y', Math.round(frameRect.top - (walkerRect.top + 65)) + 'px');
+    }
+  }
   qrWalker.className = 'walker-route-' + route;
   qrWalker.style.webkitAnimationDuration = duration + 'ms';
   qrWalker.style.animationDuration = duration + 'ms';
@@ -1034,6 +1058,13 @@ function startRandomWalkerRoute() {
   for (effectIndex = 0; effectIndex < effectNodes.length; effectIndex++) {
     effectNodes[effectIndex].style.webkitAnimationDuration = duration + 'ms';
     effectNodes[effectIndex].style.animationDuration = duration + 'ms';
+  }
+  if (route === 'sit') {
+    sitNodes = qrWalker.querySelectorAll('.walker-leg');
+    for (sitIndex = 0; sitIndex < sitNodes.length; sitIndex++) {
+      sitNodes[sitIndex].style.webkitAnimationDuration = duration + 'ms';
+      sitNodes[sitIndex].style.animationDuration = duration + 'ms';
+    }
   }
   walkerRouteTimer = setTimeout(startRandomWalkerRoute, duration + 120);
 }
