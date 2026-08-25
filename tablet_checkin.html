@@ -515,6 +515,8 @@ const walkerBody = document.querySelector('.walker-body');
   const parachute = document.querySelector('.fruit-parachute');
 const impactShadow = document.querySelector('.impact-shadow');
 let walkerRouteTimer = 0;
+let walkerRouteCycleIndex = 0;
+let walkerSitSlot = 1;
 const resultIcon = document.getElementById('resultIcon');
 const resultCharacter = document.getElementById('resultCharacter');
 const resultMascot = document.getElementById('resultMascot');
@@ -990,29 +992,36 @@ function startRandomWalkerRoute() {
   var sitNodes;
   var sitIndex;
   if (!qrWalker) return;
-  roll = Math.random();
-  if (roll < 0.17) {
-    route = 'ground'; minimum = 11000; maximum = 18000;
-  } else if (roll < 0.27) {
-    route = 'trip'; minimum = 14000; maximum = 21000;
-  } else if (roll < 0.39) {
-    route = 'climb'; minimum = 16000; maximum = 24000;
-  } else if (roll < 0.47) {
-    route = 'high'; minimum = 18000; maximum = 27000;
-  } else if (roll < 0.54) {
-    route = 'parachute'; minimum = 24000; maximum = 34000;
-  } else if (roll < 0.60) {
-    route = 'fall'; minimum = 20000; maximum = 29000;
-  } else if (roll < 0.65) {
-    route = 'hop'; minimum = 9000; maximum = 14000;
-  } else if (roll < 0.70) {
-    route = 'vanish'; minimum = 18000; maximum = 27000;
-  } else if (roll < 0.75) {
-    route = 'juice'; minimum = 14000; maximum = 20000;
-  } else if (roll < 0.80) {
-    route = 'roll'; minimum = 12000; maximum = 18000;
-  } else {
+  if (walkerRouteCycleIndex === walkerSitSlot) {
     route = 'sit'; minimum = 18000; maximum = 26000;
+  } else {
+    roll = Math.random();
+    if (roll < 0.2125) {
+      route = 'ground'; minimum = 11000; maximum = 18000;
+    } else if (roll < 0.3375) {
+      route = 'trip'; minimum = 14000; maximum = 21000;
+    } else if (roll < 0.4875) {
+      route = 'climb'; minimum = 16000; maximum = 24000;
+    } else if (roll < 0.5875) {
+      route = 'high'; minimum = 18000; maximum = 27000;
+    } else if (roll < 0.675) {
+      route = 'parachute'; minimum = 24000; maximum = 34000;
+    } else if (roll < 0.75) {
+      route = 'fall'; minimum = 20000; maximum = 29000;
+    } else if (roll < 0.8125) {
+      route = 'hop'; minimum = 9000; maximum = 14000;
+    } else if (roll < 0.875) {
+      route = 'vanish'; minimum = 18000; maximum = 27000;
+    } else if (roll < 0.9375) {
+      route = 'juice'; minimum = 14000; maximum = 20000;
+    } else {
+      route = 'roll'; minimum = 12000; maximum = 18000;
+    }
+  }
+  walkerRouteCycleIndex += 1;
+  if (walkerRouteCycleIndex >= 5) {
+    walkerRouteCycleIndex = 0;
+    walkerSitSlot = Math.floor(Math.random() * 5);
   }
   duration = Math.round(minimum + Math.random() * (maximum - minimum));
   if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
