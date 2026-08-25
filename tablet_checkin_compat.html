@@ -25,12 +25,22 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 .walker-route-climb{-webkit-animation:walkerClimb 1s ease-in-out 1 both;animation:walkerClimb 1s ease-in-out 1 both}
 .walker-route-high{-webkit-animation:walkerHigh 1s ease-in-out 1 both;animation:walkerHigh 1s ease-in-out 1 both}
 .walker-route-fall{-webkit-animation:walkerFall 1s ease-in-out 1 both;animation:walkerFall 1s ease-in-out 1 both}
+.walker-route-trip{-webkit-animation:walkerTrip 1s ease-in-out 1 both;animation:walkerTrip 1s ease-in-out 1 both}
+.walker-route-parachute{-webkit-animation:walkerParachute 1s ease-in-out 1 both;animation:walkerParachute 1s ease-in-out 1 both}
+.walker-route-trip .walker-character{-webkit-animation:fruitTrip 1s linear 1 both;animation:fruitTrip 1s linear 1 both}
+.walker-route-trip .impact-shadow{-webkit-animation:tripShadow 1s linear 1 both;animation:tripShadow 1s linear 1 both}
+.walker-route-parachute .walker-character{-webkit-animation:parachuteSway 1s ease-in-out 1 both;animation:parachuteSway 1s ease-in-out 1 both}
+.walker-route-parachute .fruit-parachute{-webkit-animation:parachuteOpen 1s ease-out 1 both;animation:parachuteOpen 1s ease-out 1 both}
 .walker-route-fall .walker-character{-webkit-animation:fruitSquash 1s linear 1 both;animation:fruitSquash 1s linear 1 both}
 .walker-route-fall .walker-body{-webkit-animation:fruitDamage 1s linear 1 both;animation:fruitDamage 1s linear 1 both}
 .walker-route-fall .fruit-split-left{-webkit-animation:fruitSplitLeft 1s linear 1 both;animation:fruitSplitLeft 1s linear 1 both}
 .walker-route-fall .fruit-split-right{-webkit-animation:fruitSplitRight 1s linear 1 both;animation:fruitSplitRight 1s linear 1 both}
 .walker-route-fall .impact-shadow{-webkit-animation:impactShadow 1s linear 1 both;animation:impactShadow 1s linear 1 both}
 .walker-body{position:absolute;left:6px;top:5px;width:58px;height:60px;border:2px solid #432d18;border-radius:48% 52% 46% 50%;box-sizing:border-box;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 5px 12px rgba(0,0,0,.3);z-index:2;-webkit-animation:walkerBob .4s ease-in-out infinite alternate;animation:walkerBob .4s ease-in-out infinite alternate}
+.fruit-parachute{position:absolute;left:0;top:0;width:70px;height:88px;opacity:0;z-index:1;-webkit-transform-origin:50% 38%;transform-origin:50% 38%}
+.parachute-canopy{position:absolute;left:2px;top:-46px;width:66px;height:34px;border:2px solid #432d18;border-radius:52% 52% 12% 12%;box-sizing:border-box;background:linear-gradient(90deg,#ef584e 0 24%,#ffd84d 24% 48%,#f47d35 48% 72%,#ffe66a 72% 100%);box-shadow:0 5px 10px rgba(0,0,0,.25)}
+.parachute-canopy:after{content:'';position:absolute;left:8px;right:8px;bottom:-3px;height:7px;border-bottom:2px solid #432d18;border-radius:50%;background:rgba(255,255,255,.22)}
+.parachute-cord{position:absolute;top:-15px;width:2px;height:45px;background:#563b27;border-radius:2px;-webkit-transform-origin:50% 0;transform-origin:50% 0}.parachute-cord-left{left:12px;-webkit-transform:rotate(-15deg);transform:rotate(-15deg)}.parachute-cord-right{right:12px;-webkit-transform:rotate(15deg);transform:rotate(15deg)}
 .fruit-split-half{position:absolute;top:5px;width:31px;height:60px;box-sizing:border-box;border:2px solid #432d18;opacity:0;z-index:4;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -4px -6px 0 rgba(190,89,10,.14),0 5px 12px rgba(0,0,0,.34);-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
 .fruit-split-left{left:6px;border-radius:58% 12% 18% 52%;border-right:3px solid #fff0a0}.fruit-split-right{left:35px;border-radius:12% 58% 52% 18%;border-left:3px solid #fff0a0}
 .fruit-split-left:after,.fruit-split-right:after{content:'';position:absolute;top:5px;bottom:5px;width:4px;background:repeating-linear-gradient(135deg,#fff0a0 0 3px,#e58b12 3px 6px);opacity:.95}.fruit-split-left:after{right:-4px}.fruit-split-right:after{left:-4px}
@@ -51,10 +61,16 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 @-webkit-keyframes walkerClimb{0%{-webkit-transform:translate3d(0,0,0)}25%{-webkit-transform:translate3d(37vw,0,0)}45%{-webkit-transform:translate3d(37vw,-32vh,0)}65%{-webkit-transform:translate3d(8vw,-32vh,0)}82%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerClimb{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(37vw,0,0)}45%{transform:translate3d(37vw,-32vh,0)}65%{transform:translate3d(8vw,-32vh,0)}82%,100%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes walkerHigh{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(37vw,0,0)}40%{-webkit-transform:translate3d(37vw,-48vh,0)}62%{-webkit-transform:translate3d(8vw,-48vh,0)}78%{-webkit-transform:translate3d(0,-22vh,0)}86%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerHigh{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(37vw,0,0)}40%{transform:translate3d(37vw,-48vh,0)}62%{transform:translate3d(8vw,-48vh,0)}78%{transform:translate3d(0,-22vh,0)}86%,100%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes walkerFall{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(37vw,0,0)}38%{-webkit-transform:translate3d(37vw,-50vh,0)}60%{-webkit-transform:translate3d(12vw,-50vh,0)}70%{-webkit-transform:translate3d(0,-50vh,0)}72%,87%{-webkit-transform:translate3d(0,0,0)}94%{-webkit-transform:translate3d(18vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerFall{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(37vw,0,0)}38%{transform:translate3d(37vw,-50vh,0)}60%{transform:translate3d(12vw,-50vh,0)}70%{transform:translate3d(0,-50vh,0)}72%,87%{transform:translate3d(0,0,0)}94%{transform:translate3d(18vw,0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes walkerTrip{0%{-webkit-transform:translate3d(0,0,0)}28%{-webkit-transform:translate3d(28vw,0,0)}36%,58%{-webkit-transform:translate3d(37vw,0,0)}78%{-webkit-transform:translate3d(13vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerTrip{0%{transform:translate3d(0,0,0)}28%{transform:translate3d(28vw,0,0)}36%,58%{transform:translate3d(37vw,0,0)}78%{transform:translate3d(13vw,0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes walkerParachute{0%{-webkit-transform:translate3d(0,0,0)}18%{-webkit-transform:translate3d(28vw,0,0)}36%{-webkit-transform:translate3d(37vw,-50vh,0)}45%{-webkit-transform:translate3d(20vw,-50vh,0)}52%{-webkit-transform:translate3d(13vw,-47vh,0)}62%{-webkit-transform:translate3d(20vw,-36vh,0)}72%{-webkit-transform:translate3d(6vw,-24vh,0)}82%{-webkit-transform:translate3d(13vw,-11vh,0)}88%{-webkit-transform:translate3d(6vw,0,0)}94%{-webkit-transform:translate3d(12vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerParachute{0%{transform:translate3d(0,0,0)}18%{transform:translate3d(28vw,0,0)}36%{transform:translate3d(37vw,-50vh,0)}45%{transform:translate3d(20vw,-50vh,0)}52%{transform:translate3d(13vw,-47vh,0)}62%{transform:translate3d(20vw,-36vh,0)}72%{transform:translate3d(6vw,-24vh,0)}82%{transform:translate3d(13vw,-11vh,0)}88%{transform:translate3d(6vw,0,0)}94%{transform:translate3d(12vw,0,0)}100%{transform:translate3d(0,0,0)}}
 @-webkit-keyframes fruitSquash{0%,69%,100%{-webkit-transform:scale(1) rotate(0)}70%{-webkit-transform:scale(1) rotate(-12deg)}72%{-webkit-transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{-webkit-transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{-webkit-transform:scale(1) rotate(0)}85%,100%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,69%,100%{transform:scale(1) rotate(0)}70%{transform:scale(1) rotate(-12deg)}72%{transform:scaleX(1.12) scaleY(.76) rotate(-3deg)}75%{transform:scaleX(1.05) scaleY(.88) rotate(2deg)}79%,84%{transform:scale(1) rotate(0)}85%,100%{transform:scale(1) rotate(0)}}
 @-webkit-keyframes fruitDamage{0%,70%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}72%{opacity:.18;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;-webkit-transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;-webkit-transform:scale(1) rotate(0)}}@keyframes fruitDamage{0%,70%,100%{opacity:1;transform:scale(1) rotate(0)}72%{opacity:.18;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}73%,84%{opacity:0;transform:scaleX(1.45) scaleY(.42) rotate(-4deg)}85%,100%{opacity:1;transform:scale(1) rotate(0)}}
 @-webkit-keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;-webkit-transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;-webkit-transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;-webkit-transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;-webkit-transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}@keyframes fruitSplitLeft{0%,71%,85%,100%{opacity:0;transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;transform:translate3d(-8px,16px,0) rotate(-20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;transform:translate3d(-14px,19px,0) rotate(-29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;transform:translate3d(-16px,20px,0) rotate(-25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;transform:translate3d(-15px,20px,0) rotate(-27deg) scaleX(1.36) scaleY(.44)}}
 @-webkit-keyframes fruitSplitRight{0%,71%,85%,100%{opacity:0;-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;-webkit-transform:translate3d(8px,16px,0) rotate(20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;-webkit-transform:translate3d(14px,19px,0) rotate(29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;-webkit-transform:translate3d(16px,20px,0) rotate(25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;-webkit-transform:translate3d(15px,20px,0) rotate(27deg) scaleX(1.36) scaleY(.44)}}@keyframes fruitSplitRight{0%,71%,85%,100%{opacity:0;transform:translate3d(0,0,0) rotate(0) scale(1)}72%{opacity:1;transform:translate3d(8px,16px,0) rotate(20deg) scaleX(1.2) scaleY(.54)}75%{opacity:1;transform:translate3d(14px,19px,0) rotate(29deg) scaleX(1.34) scaleY(.46)}79%{opacity:1;transform:translate3d(16px,20px,0) rotate(25deg) scaleX(1.38) scaleY(.43)}84%{opacity:1;transform:translate3d(15px,20px,0) rotate(27deg) scaleX(1.36) scaleY(.44)}}
+@-webkit-keyframes fruitTrip{0%,34%,62%,100%{-webkit-transform:translate3d(0,0,0) rotate(0) scale(1)}37%{-webkit-transform:translate3d(3px,3px,0) rotate(28deg) scaleX(1.04) scaleY(.96)}41%{-webkit-transform:translate3d(11px,10px,0) rotate(88deg) scaleX(1.08) scaleY(.82)}48%{-webkit-transform:translate3d(13px,12px,0) rotate(94deg) scaleX(1.14) scaleY(.74)}54%{-webkit-transform:translate3d(9px,8px,0) rotate(72deg) scaleX(1.06) scaleY(.88)}58%{-webkit-transform:translate3d(3px,2px,0) rotate(24deg)}}@keyframes fruitTrip{0%,34%,62%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}37%{transform:translate3d(3px,3px,0) rotate(28deg) scaleX(1.04) scaleY(.96)}41%{transform:translate3d(11px,10px,0) rotate(88deg) scaleX(1.08) scaleY(.82)}48%{transform:translate3d(13px,12px,0) rotate(94deg) scaleX(1.14) scaleY(.74)}54%{transform:translate3d(9px,8px,0) rotate(72deg) scaleX(1.06) scaleY(.88)}58%{transform:translate3d(3px,2px,0) rotate(24deg)}}
+@-webkit-keyframes tripShadow{0%,35%,61%,100%{opacity:0;-webkit-transform:scaleX(.4)}40%,55%{opacity:.72;-webkit-transform:scaleX(2.2)}}@keyframes tripShadow{0%,35%,61%,100%{opacity:0;transform:scaleX(.4)}40%,55%{opacity:.72;transform:scaleX(2.2)}}
+@-webkit-keyframes parachuteSway{0%,43%,89%,100%{-webkit-transform:rotate(0)}49%{-webkit-transform:rotate(-5deg)}57%{-webkit-transform:rotate(5deg)}65%{-webkit-transform:rotate(-6deg)}73%{-webkit-transform:rotate(5deg)}81%{-webkit-transform:rotate(-4deg)}}@keyframes parachuteSway{0%,43%,89%,100%{transform:rotate(0)}49%{transform:rotate(-5deg)}57%{transform:rotate(5deg)}65%{transform:rotate(-6deg)}73%{transform:rotate(5deg)}81%{transform:rotate(-4deg)}}
+@-webkit-keyframes parachuteOpen{0%,42%,90%,100%{opacity:0;-webkit-transform:scale(.2) translateY(12px)}45%{opacity:1;-webkit-transform:scale(1.12) translateY(-2px)}49%,87%{opacity:1;-webkit-transform:scale(1) translateY(0)}89%{opacity:.25;-webkit-transform:scale(.82) translateY(5px)}}@keyframes parachuteOpen{0%,42%,90%,100%{opacity:0;transform:scale(.2) translateY(12px)}45%{opacity:1;transform:scale(1.12) translateY(-2px)}49%,87%{opacity:1;transform:scale(1) translateY(0)}89%{opacity:.25;transform:scale(.82) translateY(5px)}}
 @-webkit-keyframes impactShadow{0%,70%,86%,100%{opacity:0;-webkit-transform:scaleX(.2)}72%,84%{opacity:.82;-webkit-transform:scaleX(2.7)}85%{opacity:.18;-webkit-transform:scaleX(1)}}@keyframes impactShadow{0%,70%,86%,100%{opacity:0;transform:scaleX(.2)}72%,84%{opacity:.82;transform:scaleX(2.7)}85%{opacity:.18;transform:scaleX(1)}}
 @-webkit-keyframes walkerBob{from{-webkit-transform:translateY(0) rotate(-1deg)}to{-webkit-transform:translateY(3px) rotate(1deg)}}@keyframes walkerBob{from{transform:translateY(0) rotate(-1deg)}to{transform:translateY(3px) rotate(1deg)}}
 @-webkit-keyframes fruitBlink{0%,45%,49%,100%{-webkit-transform:scaleY(1)}47%{-webkit-transform:scaleY(.15)}}@keyframes fruitBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.15)}}
@@ -62,7 +78,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 @-webkit-keyframes walkerArmRight{from{-webkit-transform:rotate(-32deg)}to{-webkit-transform:rotate(24deg)}}@keyframes walkerArmRight{from{transform:rotate(-32deg)}to{transform:rotate(24deg)}}
 @-webkit-keyframes walkerLegLeft{from{-webkit-transform:rotate(18deg)}to{-webkit-transform:rotate(-18deg)}}@keyframes walkerLegLeft{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
 @-webkit-keyframes walkerLegRight{from{-webkit-transform:rotate(-18deg)}to{-webkit-transform:rotate(18deg)}}@keyframes walkerLegRight{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.impact-shadow,.walker-body,.fruit-split-half,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
+@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.impact-shadow,.walker-body,.fruit-split-half,.fruit-parachute,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
 </style>
 </head>
 <body>
@@ -76,6 +92,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   <div id="message">カメラを準備しています</div>
   <div id="qrWalker" aria-hidden="true">
     <div class="walker-character">
+      <div class="fruit-parachute"><span class="parachute-canopy"></span><span class="parachute-cord parachute-cord-left"></span><span class="parachute-cord parachute-cord-right"></span></div>
       <span class="walker-arm walker-arm-left"></span><span class="walker-arm walker-arm-right"></span>
       <span class="walker-leg walker-leg-left"></span><span class="walker-leg walker-leg-right"></span>
       <div class="walker-body">
@@ -114,6 +131,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   var walkerBody = document.querySelector('.walker-body');
   var splitLeft = document.querySelector('.fruit-split-left');
   var splitRight = document.querySelector('.fruit-split-right');
+  var parachute = document.querySelector('.fruit-parachute');
   var impactShadow = document.querySelector('.impact-shadow');
   var walkerRouteTimer = 0;
   var nameEl = document.getElementById('name');
@@ -328,12 +346,16 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     var restart;
     if (!qrWalker) return;
     roll = Math.random();
-    if (roll < 0.38) {
+    if (roll < 0.27) {
       route = 'ground'; minimum = 11000; maximum = 18000;
+    } else if (roll < 0.43) {
+      route = 'trip'; minimum = 14000; maximum = 21000;
     } else if (roll < 0.63) {
       route = 'climb'; minimum = 16000; maximum = 24000;
-    } else if (roll < 0.78) {
+    } else if (roll < 0.77) {
       route = 'high'; minimum = 18000; maximum = 27000;
+    } else if (roll < 0.89) {
+      route = 'parachute'; minimum = 24000; maximum = 34000;
     } else {
       route = 'fall'; minimum = 20000; maximum = 29000;
     }
@@ -359,6 +381,10 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     if (splitRight) {
       splitRight.style.webkitAnimationDuration = duration + 'ms';
       splitRight.style.animationDuration = duration + 'ms';
+    }
+    if (parachute) {
+      parachute.style.webkitAnimationDuration = duration + 'ms';
+      parachute.style.animationDuration = duration + 'ms';
     }
     if (impactShadow) {
       impactShadow.style.webkitAnimationDuration = duration + 'ms';
