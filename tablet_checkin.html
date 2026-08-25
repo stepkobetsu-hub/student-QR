@@ -7,6 +7,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <link rel="preload" as="image" href="assets/checkin/goodbye-director-night-fast.webp?v=20260807" type="image/webp" fetchpriority="high">
+<link rel="preload" as="image" href="assets/checkin/goodbye-rare-woman.webp?v=20260819" type="image/webp" fetchpriority="high">
 <title>入退室 | Step個別指導ステップ</title>
 <script>
 (function () {
@@ -195,7 +196,7 @@
     z-index: 2;
   }
   #resultOverlay.entry #resultCharacter { width: min(43vw, 540px); }
-  #resultOverlay.exit.show:not(.photo-variant) #resultCharacter {
+  #resultOverlay.exit.show:not(.photo-variant):not(.rare-variant) #resultCharacter {
     transform-origin: 72% 38%;
     animation: goodbye-wave 1.9s ease-in-out 1;
   }
@@ -211,6 +212,19 @@
     box-shadow: none;
     filter: none;
   }
+  #resultOverlay.rare-variant {
+    color: #20242b;
+    background: radial-gradient(circle at 12% 18%,#ffc9d6 0 5px,transparent 6px), radial-gradient(circle at 25% 72%,#ffd7e2 0 7px,transparent 8px), radial-gradient(circle at 78% 20%,#ffd0dc 0 6px,transparent 7px), radial-gradient(circle at 88% 66%,#ffc7d5 0 5px,transparent 6px), linear-gradient(145deg,#eef7ff 0%,#ffffff 46%,#fff5f8 100%);
+  }
+  #resultOverlay.exit.rare-variant::after { display: none; }
+  #resultOverlay.rare-variant::before {
+    content: 'レアキャラ登場！ ✨'; position: absolute; right: 4%; bottom: 8%; z-index: 4;
+    padding: 12px 18px; border: 3px solid #f7b9c9; border-radius: 999px; background: rgba(255,245,248,.96);
+    color: #20242b; font-size: 20px; font-weight: bold; box-shadow: 0 8px 20px rgba(80,120,160,.16);
+  }
+  #resultOverlay.rare-variant #resultContent { color:#20242b; background:rgba(255,255,255,.96); border:2px solid #b9d8fb; }
+  #resultOverlay.rare-variant #resultType { color:#22a957; }
+  #resultOverlay.rare-variant #resultCharacter { width:min(48vw,610px); height:80vh; max-height:80vh; bottom:0; object-fit:contain; object-position:center bottom; filter:drop-shadow(0 10px 16px rgba(70,90,110,.18)); }
   #resultOverlay.duplicate #resultCharacter { width: min(38vw, 470px); }
   #resultOverlay.teacher #resultCharacter {
     width: min(49vw, 650px);
@@ -428,7 +442,9 @@ const SUCCESS_RESUME_MS = 2500;
 const DUPLICATE_RESUME_MS = 2500;
 const MAIL_FAILURE_RESUME_MS = 3500;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
-const PHOTO_EXIT_PROBABILITY = 0.2;
+const RARE_EXIT_ASSET = 'assets/checkin/goodbye-rare-woman.webp?v=20260819';
+const PHOTO_EXIT_PROBABILITY = 0.10;
+const RARE_EXIT_PROBABILITY = 0.10;
 
 // 結果表示は短いため、軽量な写真版を起動時に読み込んでおく。
 const exitPhotoPreload = new Image();
@@ -436,6 +452,11 @@ exitPhotoPreload.decoding = 'async';
 exitPhotoPreload.fetchPriority = 'high';
 exitPhotoPreload.src = PHOTO_EXIT_ASSET;
 if (typeof exitPhotoPreload.decode === 'function') void exitPhotoPreload.decode().catch(() => {});
+const rareExitPreload = new Image();
+rareExitPreload.decoding = 'async';
+rareExitPreload.fetchPriority = 'high';
+rareExitPreload.src = RARE_EXIT_ASSET;
+if (typeof rareExitPreload.decode === 'function') void rareExitPreload.decode().catch(() => {});
 
 // 時計表示
 function updateClock() {
@@ -980,19 +1001,24 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultPoints.style.display = 'none';
   } else if (ok) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
-    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && Math.random() < PHOTO_EXIT_PROBABILITY;
+    const exitVariantRoll = Math.random();
+    const useRareExitVariant = !isCooldownDuplicate && type === '退室' && exitVariantRoll < RARE_EXIT_PROBABILITY;
+    const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && !useRareExitVariant && exitVariantRoll < RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
     resultOverlay.className = isCooldownDuplicate
       ? 'show duplicate'
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
     if (usePhotoExitVariant) resultOverlay.classList.add('photo-variant');
+    if (useRareExitVariant) resultOverlay.classList.add('rare-variant');
     resultIcon.textContent = '';
     resultCharacter.src = isCooldownDuplicate
       ? 'assets/checkin/duplicate.png?v=429da8e'
       : (type === '入室'
         ? 'assets/checkin/welcome.png?v=429da8e'
-        : (usePhotoExitVariant
-          ? PHOTO_EXIT_ASSET
-          : 'assets/checkin/goodbye.png?v=429da8e'));
+        : (useRareExitVariant
+          ? RARE_EXIT_ASSET
+          : (usePhotoExitVariant
+            ? PHOTO_EXIT_ASSET
+            : 'assets/checkin/goodbye.png?v=429da8e')));
     resultCharacter.style.display = 'block';
     resultName.textContent = name + ' さん';
     resultType.textContent = isCooldownDuplicate
@@ -1001,7 +1027,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
       ? '60秒以内の重複読取のため、記録とメール送信は追加していません'
-      : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider));
+      : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider)));
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
       resultPoints.style.display = 'inline-block';
