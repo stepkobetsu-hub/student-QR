@@ -19,7 +19,7 @@ describe("decideAttendance", () => {
   });
 
   it("does not flip the state inside the duplicate window", () => {
-    expect(decideAttendance("student", 40_999, {
+    expect(decideAttendance("student", 20_999, {
       lastType: "入室",
       lastAcceptedAt: 1_000,
       count: 1,
@@ -27,8 +27,8 @@ describe("decideAttendance", () => {
   });
 
 
-  it("accepts a new stamp at exactly 40 seconds", () => {
-    expect(decideAttendance("student", 41_000, {
+  it("accepts a new stamp at exactly 20 seconds", () => {
+    expect(decideAttendance("student", 21_000, {
       lastType: "入室",
       lastAcceptedAt: 1_000,
       count: 1,
