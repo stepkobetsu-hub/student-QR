@@ -16,6 +16,25 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 #result{display:none;position:absolute;left:0;right:0;top:0;bottom:0;text-align:center;padding-top:24%;background:#17324d}
 #result.show{display:block}#result.entry{background:#f5df4d;color:#17324d}#result.exit{background:#173b7a}#result.error{background:#a83232}
 #name{font-size:36px;font-weight:bold}#type{font-size:30px;font-weight:bold;margin-top:14px}#detail{font-size:16px;margin:14px 22px;line-height:1.5}
+#resultContent{position:absolute;left:5%;top:19%;width:54%;padding:22px 16px;border-radius:24px;box-sizing:border-box;background:rgba(5,18,51,.78);border:2px solid rgba(255,255,255,.3);z-index:3}#resultCharacter{display:none;position:absolute;right:1%;bottom:0;width:43%;height:84%;object-fit:contain;object-position:center bottom;z-index:2}#result.photo-variant #resultCharacter,#result.rare-variant #resultCharacter{width:47%;height:90%}#result.rare-variant{color:#20242b;background:linear-gradient(145deg,#eef7ff 0%,#fff 46%,#fff5f8 100%)}#result.rare-variant #resultContent{background:rgba(255,255,255,.95);color:#20242b;border-color:#b9d8fb}
+#result.mascot-variant{color:#183f2d;background:radial-gradient(circle at 12% 18%,#fff59b 0 5px,transparent 6px),radial-gradient(circle at 28% 75%,#ffcf4d 0 7px,transparent 8px),radial-gradient(circle at 78% 17%,#fff4a0 0 6px,transparent 7px),radial-gradient(circle at 89% 67%,#f8b52f 0 5px,transparent 6px),linear-gradient(145deg,#efffdc 0%,#fff9b8 48%,#ffc752 100%)}
+#result.exit.mascot-variant:after{display:none}
+#result.mascot-variant:before{content:'みかん様 登場！ ★';position:absolute;right:4%;top:7%;z-index:6;padding:11px 16px;border:3px solid #18855b;border-radius:999px;background:rgba(255,255,225,.96);color:#17543c;font-size:19px;font-weight:bold;box-shadow:0 8px 20px rgba(90,90,20,.18)}
+#result.mascot-variant #resultContent{color:#183f2d;background:rgba(255,255,255,.93);border:2px solid #68a84d}
+#result.mascot-variant #type{color:#13764f}
+#resultMascot{display:none;position:absolute;right:20%;bottom:12%;width:70px;height:88px;z-index:5;-webkit-transform:scale(3.15);transform:scale(3.15);-webkit-transform-origin:50% 100%;transform-origin:50% 100%;pointer-events:none}
+#result.mascot-variant #resultMascot{display:block}
+.result-mascot-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
+#resultMascot .result-mascot-body{-webkit-animation:resultMascotProud 1.45s ease-in-out infinite alternate;animation:resultMascotProud 1.45s ease-in-out infinite alternate;box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 7px 14px rgba(70,50,10,.34)}
+#resultMascot .fruit-brow-left{-webkit-transform:rotate(-16deg);transform:rotate(-16deg)}#resultMascot .fruit-brow-right{-webkit-transform:rotate(12deg);transform:rotate(12deg)}#resultMascot .fruit-mouth{-webkit-transform:rotate(-5deg);transform:rotate(-5deg);border-radius:3px 3px 12px 7px}
+#resultMascot .result-arm-proud{left:-1px;top:39px;width:20px;-webkit-animation:none;animation:none;-webkit-transform:rotate(-52deg);transform:rotate(-52deg)}
+#resultMascot .result-wave-arm{right:-8px;top:27px;width:27px;-webkit-animation:resultMascotWave .72s ease-in-out infinite;animation:resultMascotWave .72s ease-in-out infinite}
+#resultMascot .result-arm-proud:after,#resultMascot .result-wave-arm:after{content:'';position:absolute;width:6px;height:6px;border:2px solid #432d18;border-radius:50%;background:#ffc42b;box-sizing:border-box}#resultMascot .result-arm-proud:after{left:-3px;top:-2px}#resultMascot .result-wave-arm:after{right:-4px;top:-2px}
+#resultMascot .result-leg-left,#resultMascot .result-leg-right{-webkit-animation:none;animation:none}#resultMascot .result-leg-left{-webkit-transform:rotate(12deg);transform:rotate(12deg)}#resultMascot .result-leg-right{-webkit-transform:rotate(-12deg);transform:rotate(-12deg)}
+#resultMascot .mascot-crown{position:absolute;left:21px;top:-17px;z-index:7;color:#f7b817;font-size:29px;line-height:28px;text-shadow:-1px -1px 0 #6b4515,1px -1px 0 #6b4515,-1px 1px 0 #6b4515,1px 1px 0 #6b4515;-webkit-transform:rotate(-7deg);transform:rotate(-7deg)}
+@-webkit-keyframes resultMascotWave{0%,100%{-webkit-transform:rotate(-58deg)}50%{-webkit-transform:rotate(-112deg)}}@keyframes resultMascotWave{0%,100%{transform:rotate(-58deg)}50%{transform:rotate(-112deg)}}
+@-webkit-keyframes resultMascotProud{from{-webkit-transform:translateY(0) scaleX(1.02) rotate(-1deg)}to{-webkit-transform:translateY(-2px) scaleX(1.08) rotate(1deg)}}@keyframes resultMascotProud{from{transform:translateY(0) scaleX(1.02) rotate(-1deg)}to{transform:translateY(-2px) scaleX(1.08) rotate(1deg)}}
+@media (prefers-reduced-motion:reduce){#resultMascot .result-mascot-body,#resultMascot .result-wave-arm{-webkit-animation:none;animation:none}}
 
 #qrWalker{position:absolute;left:4%;bottom:78px;width:70px;height:88px;z-index:4;pointer-events:none}
 #qrWalker.walker-hidden{display:none}
@@ -107,7 +126,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     </div>
     <span class="impact-shadow"></span>
   </div>
-  <div id="result"><div id="name"></div><div id="type"></div><div id="detail"></div></div>
+  <div id="result"><div id="resultContent"><div id="name"></div><div id="type"></div><div id="detail"></div></div><img id="resultCharacter" alt=""><div id="resultMascot" aria-hidden="true"><div class="result-mascot-character"><span class="mascot-crown">♛</span><span class="walker-arm walker-arm-left result-arm-proud"></span><span class="walker-arm walker-arm-right result-wave-arm"></span><span class="walker-leg walker-leg-left result-leg-left"></span><span class="walker-leg walker-leg-right result-leg-right"></span><div class="walker-body result-mascot-body"><span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span><span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span><span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span><span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span><span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span></div></div></div></div>
 </div>
 <script src="vendor/jsQR.js"></script>
 <script>
@@ -118,6 +137,12 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   var DEVICE_KEY = 'stepCheckinEdgeDeviceIdV1';
   var FRAME_INTERVAL = 200;
   var REQUEST_TIMEOUT = 25000;
+  var ASSET_BASE = 'https://stepkobetsu-hub.github.io/student-QR/assets/checkin/';
+  var PHOTO_EXIT_ASSET = 'goodbye-director-night-fast.webp?v=20260807';
+  var RARE_EXIT_ASSET = 'goodbye-rare-woman.webp?v=20260819';
+  var PHOTO_EXIT_PROBABILITY = 0.10;
+  var RARE_EXIT_PROBABILITY = 0.40;
+  var MASCOT_EXIT_PROBABILITY = 0.40; // 画面確認用。確認後は0.05へ変更
   var video = document.getElementById('video');
   var scanCanvas = document.getElementById('scanCanvas');
   var scanContext = scanCanvas.getContext('2d');
@@ -126,6 +151,8 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   var message = document.getElementById('message');
   var status = document.getElementById('status');
   var result = document.getElementById('result');
+  var resultCharacter = document.getElementById('resultCharacter');
+  var resultMascot = document.getElementById('resultMascot');
   var qrWalker = document.getElementById('qrWalker');
   var walkerCharacter = document.querySelector('.walker-character');
   var walkerBody = document.querySelector('.walker-body');
@@ -323,7 +350,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
       if (xhr.readyState !== 4) return;
       try { data = JSON.parse(xhr.responseText || '{}'); } catch (ignore) { data = {}; }
       if (xhr.status >= 200 && xhr.status < 300 && data.attendanceSaved) {
-        displayResult(true, data.name || '', data.type || '', data.duplicate ? '60秒以内の同じ受付です' : (data.label || ''));
+        displayResult(true, data.name || '', data.type || '', data.duplicate ? '40秒以内の同じ受付です' : (data.label || ''), !!data.duplicate, !!data.isTeacher);
       } else if (data.code === 'UNAUTHORIZED') {
         displayResult(false, '', '', 'この端末の受付設定を確認してください');
       } else if (data.code === 'SUBJECT_NOT_FOUND') {
@@ -398,18 +425,38 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     qrWalker.style.display = visible ? 'block' : 'none';
   }
 
-  function displayResult(ok, name, type, detail) {
+  function displayResult(ok, name, type, detail, duplicate, isTeacher) {
+    var exitVariantRoll = Math.random();
+    var isStudentExit = ok && !duplicate && !isTeacher && type === '退室';
+    var useMascotExitVariant = isStudentExit && exitVariantRoll < MASCOT_EXIT_PROBABILITY;
+    var useRareExitVariant = isStudentExit && !useMascotExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY;
+    var usePhotoExitVariant = isStudentExit && !useMascotExitVariant && !useRareExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
+    var character = '';
     setWalkerVisible(false);
-    result.className = 'show ' + (ok ? (type === '入室' || type === '出勤' ? 'entry' : 'exit') : 'error');
-    nameEl.innerHTML = ok ? escapeText(name) + ' さん' : '受付できませんでした';
-    typeEl.innerHTML = ok ? escapeText(type) : '';
-    detailEl.innerHTML = escapeText(detail || '');
+    resultCharacter.style.display = 'none';
+    resultMascot.style.display = 'none';
+    result.className = 'show ' + (ok ? (type === '入室' || type === '出勤' ? 'entry' : 'exit') : 'error') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '') + (useMascotExitVariant ? ' mascot-variant' : '');
+    nameEl.innerHTML = ok ? escapeText(name) + (isTeacher ? ' 先生' : ' さん') : '受付できませんでした';
+    typeEl.innerHTML = ok ? (duplicate ? escapeText(type) + '済みです' : (type === '入室' ? '入室しました' : (type === '退室' ? '退室しました' : escapeText(type)))) : '';
+    detailEl.innerHTML = escapeText(duplicate ? '40秒以内の重複読取です' : (useMascotExitVariant ? 'また明日も来るんだぞ！' : (useRareExitVariant ? 'また明日も頑張ろうね！' : (detail || '受付が完了しました'))));
+    if (ok && !duplicate && !isTeacher && (type === '入室' || type === '退室')) {
+      if (useMascotExitVariant) {
+        resultMascot.style.display = 'block';
+      } else {
+        character = type === '入室' ? 'welcome.png' : (useRareExitVariant ? RARE_EXIT_ASSET : (usePhotoExitVariant ? PHOTO_EXIT_ASSET : 'goodbye.png'));
+        resultCharacter.onerror = function () { resultCharacter.onerror = null; resultCharacter.src = ASSET_BASE + (type === '入室' ? 'welcome.png' : 'goodbye.png'); };
+        resultCharacter.src = ASSET_BASE + character;
+        resultCharacter.style.display = 'block';
+      }
+    }
     setTimeout(function () {
       result.className = '';
+      resultCharacter.style.display = 'none';
+      resultMascot.style.display = 'none';
       message.innerHTML = 'QRコードを右下の枠にかざしてください';
       busy = false;
       setWalkerVisible(document.visibilityState !== 'hidden');
-    }, ok ? 2500 : 4000);
+    }, ok ? 3000 : 4000);
   }
 
   function escapeText(value) {
