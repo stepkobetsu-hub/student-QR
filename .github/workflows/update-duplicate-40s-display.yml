@@ -1,0 +1,107 @@
+name: Update duplicate 40s and duplicate display
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: contains(github.event.head_commit.message, '[duplicate-40s-display]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch duplicate window and display
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # Cloudflare authoritative duplicate window: 40 seconds.
+          p=Path('cloudflare/checkin-edge/src/domain.ts')
+          s=p.read_text(encoding='utf-8').replace('export const DUPLICATE_WINDOW_MS = 30_000;', 'export const DUPLICATE_WINDOW_MS = 40_000;')
+          p.write_text(s,encoding='utf-8')
+
+          # Worker response wording.
+          p=Path('cloudflare/checkin-edge/src/index.ts')
+          s=p.read_text(encoding='utf-8').replace('message: result.duplicate ? "30秒以内の同じ受付です" : "受付しました",', 'message: result.duplicate ? "40秒以内の同じ受付です" : "受付しました",')
+          p.write_text(s,encoding='utf-8')
+
+          # Current Worker legacy tablet.
+          p=Path('cloudflare/checkin-edge/src/legacy-tablet.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("#result.duplicate{color:#171717;background:linear-gradient(145deg,#ffe86b 0%,#ffc928 100%)}", "#result.duplicate{color:#171717;background:linear-gradient(145deg,#ffe86b 0%,#ffc928 100%)}\n#result.duplicate.duplicate-exit{color:#fff;background:#165e83}\n#result.duplicate.duplicate-exit #resultContent{color:#fff;background:rgba(7,29,51,.82);border:2px solid rgba(255,255,255,.3)}\n#result.duplicate:not(.teacher) #name{font-size:72px}\n#result.duplicate:not(.teacher) #type{font-size:68px}")
+          s=s.replace("result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '');", "result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (duplicate && !isTeacher && type === '退室' ? ' duplicate-exit' : '') + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '');")
+          s=s.replace("detailEl.innerHTML = duplicate ? '30秒以内の重複読取のため、記録とメール送信は追加していません'", "detailEl.innerHTML = duplicate ? '40秒以内の重複読取のため、記録とメール送信は追加していません'")
+          s=s.replace("}, ok ? (useRareExitVariant ? 3500 : 2500) : 4000);", "}, ok ? (duplicate ? 3500 : (useRareExitVariant ? 3500 : 2500)) : 4000);")
+          p.write_text(s,encoding='utf-8')
+
+          # Normal tablet fallback/current page.
+          p=Path('tablet_checkin.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('const LOCAL_DUPLICATE_WINDOW_MS = 30 * 1000;', 'const LOCAL_DUPLICATE_WINDOW_MS = 40 * 1000;')
+          s=s.replace('const DUPLICATE_RESUME_MS = 2500;', 'const DUPLICATE_RESUME_MS = 3500;')
+          s=s.replace("  #resultOverlay.duplicate {\n    color: #171717;\n    background: linear-gradient(145deg, #ffe55c 0%, #ffc928 100%);\n  }", "  #resultOverlay.duplicate {\n    color: #171717;\n    background: linear-gradient(145deg, #ffe55c 0%, #ffc928 100%);\n  }\n  #resultOverlay.duplicate.duplicate-exit {\n    color: #fff;\n    background: #165e83;\n  }\n  #resultOverlay.duplicate.duplicate-exit #resultContent {\n    color: #fff;\n    background: rgba(7,29,51,.82);\n    border: 2px solid rgba(255,255,255,.3);\n  }\n  #resultOverlay.duplicate:not(.teacher) #resultName { font-size: 80px; }\n  #resultOverlay.duplicate:not(.teacher) #resultType { font-size: 60px; }")
+          s=s.replace("    resultOverlay.className = isCooldownDuplicate\n      ? 'show duplicate'\n      : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));", "    resultOverlay.className = isCooldownDuplicate\n      ? ('show duplicate' + (type === '退室' ? ' duplicate-exit' : ''))\n      : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));")
+          s=s.replace("      ? '30秒以内の重複読取のため、記録とメール送信は追加していません'", "      ? '40秒以内の重複読取のため、記録とメール送信は追加していません'")
+          p.write_text(s,encoding='utf-8')
+
+          # Apps Script source must stay aligned; deployed project needs the same constant changed manually/new version.
+          p=Path('gas/コード.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('const CHECKIN_DUPLICATE_WINDOW_MS = 30 * 1000;', 'const CHECKIN_DUPLICATE_WINDOW_MS = 40 * 1000;')
+          s=s.replace('30秒以内', '40秒以内')
+          p.write_text(s,encoding='utf-8')
+
+          # Domain boundary tests: 39.999 sec duplicate; exactly 40 sec accepted.
+          p=Path('cloudflare/checkin-edge/tests/domain.test.ts')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('expect(decideAttendance("student", 30_999, {', 'expect(decideAttendance("student", 40_999, {')
+          s=s.replace('it("accepts a new stamp at exactly 30 seconds", () => {', 'it("accepts a new stamp at exactly 40 seconds", () => {')
+          s=s.replace('expect(decideAttendance("student", 31_000, {', 'expect(decideAttendance("student", 41_000, {')
+          p.write_text(s,encoding='utf-8')
+
+          # Static legacy page tests.
+          p=Path('cloudflare/checkin-edge/tests/legacy-tablet-page.test.ts')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('expect(html).toContain("30秒以内の重複読取");', 'expect(html).toContain("40秒以内の重複読取");')
+          anchor='    expect(html).toContain("退室済みです");\n'
+          extra='    expect(html).toContain("duplicate-exit");\n    expect(html).toContain("font-size:72px");\n    expect(html).toContain("font-size:68px");\n    expect(html).toContain("background:#165e83");\n'
+          if 'font-size:72px' not in s:
+              s=s.replace(anchor,anchor+extra,1)
+          p.write_text(s,encoding='utf-8')
+
+          checks={
+            'cloudflare/checkin-edge/src/domain.ts':['DUPLICATE_WINDOW_MS = 40_000'],
+            'cloudflare/checkin-edge/src/index.ts':['40秒以内の同じ受付です'],
+            'cloudflare/checkin-edge/src/legacy-tablet.html':['40秒以内の重複読取','font-size:72px','font-size:68px','duplicate-exit','background:#165e83','duplicate ? 3500'],
+            'tablet_checkin.html':['LOCAL_DUPLICATE_WINDOW_MS = 40 * 1000','DUPLICATE_RESUME_MS = 3500','font-size: 80px','font-size: 60px','duplicate-exit','background: #165e83'],
+            'gas/コード.js':['CHECKIN_DUPLICATE_WINDOW_MS = 40 * 1000'],
+          }
+          for filename,needles in checks.items():
+              text=Path(filename).read_text(encoding='utf-8')
+              for needle in needles:
+                  if needle not in text:
+                      raise SystemExit(f'{filename}: missing {needle}')
+          print('duplicate 40s/display patch verified')
+          PY
+
+      - name: Run Worker tests
+        working-directory: cloudflare/checkin-edge
+        run: |
+          npm ci
+          npm test
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "stepkobetsu-hub"
+          git config user.email "stepkobetsu@gmail.com"
+          git add cloudflare/checkin-edge/src/domain.ts cloudflare/checkin-edge/src/index.ts cloudflare/checkin-edge/src/legacy-tablet.html cloudflare/checkin-edge/tests/domain.test.ts cloudflare/checkin-edge/tests/legacy-tablet-page.test.ts tablet_checkin.html gas/コード.js
+          git commit -m "Set duplicate window to 40 seconds and enlarge duplicate status"
+          git push origin main
