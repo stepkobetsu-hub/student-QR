@@ -268,6 +268,69 @@
     display: inline-block;
   }
 
+
+  #qrWalker {
+    bottom: 16vh;
+    position: absolute;
+    left: 4%;
+    width: 62px;
+    height: 78px;
+    z-index: 4;
+    pointer-events: none;
+    -webkit-animation: walkerTravel 12s ease-in-out infinite alternate;
+    animation: walkerTravel 12s ease-in-out infinite alternate;
+  }
+  #qrWalker.walker-hidden { display: none; }
+  .walker-body {
+    position: absolute;
+    left: 7px; top: 7px;
+    width: 48px; height: 48px;
+    border-radius: 13px;
+    background: #11865f;
+    box-shadow: 0 5px 12px rgba(0,0,0,.3);
+    z-index: 2;
+    -webkit-animation: walkerBob .36s ease-in-out infinite alternate;
+    animation: walkerBob .36s ease-in-out infinite alternate;
+  }
+  .walker-finder { position: absolute; width: 10px; height: 10px; border: 4px solid #fff; }
+  .walker-finder-a { left: 7px; top: 7px; }
+  .walker-finder-b { right: 7px; top: 7px; }
+  .walker-finder-c { left: 7px; bottom: 7px; }
+  .walker-pixel { position: absolute; width: 5px; height: 5px; background: #fff; }
+  .walker-pixel-a { left: 29px; top: 29px; }
+  .walker-pixel-b { left: 37px; top: 29px; }
+  .walker-pixel-c { left: 29px; top: 37px; }
+  .walker-pixel-d { left: 37px; top: 37px; }
+  .walker-arm, .walker-leg {
+    position: absolute;
+    display: block;
+    background: #f8fffc;
+    border: 2px solid #11865f;
+    border-radius: 999px;
+    box-sizing: border-box;
+    z-index: 1;
+  }
+  .walker-arm { top: 22px; width: 18px; height: 6px; }
+  .walker-arm-left { left: 0; -webkit-transform-origin: 100% 50%; transform-origin: 100% 50%; -webkit-animation: walkerArmLeft .36s ease-in-out infinite alternate; animation: walkerArmLeft .36s ease-in-out infinite alternate; }
+  .walker-arm-right { right: 0; -webkit-transform-origin: 0 50%; transform-origin: 0 50%; -webkit-animation: walkerArmRight .36s ease-in-out infinite alternate; animation: walkerArmRight .36s ease-in-out infinite alternate; }
+  .walker-leg { top: 49px; width: 7px; height: 25px; -webkit-transform-origin: 50% 0; transform-origin: 50% 0; }
+  .walker-leg-left { left: 18px; -webkit-animation: walkerLegLeft .36s ease-in-out infinite alternate; animation: walkerLegLeft .36s ease-in-out infinite alternate; }
+  .walker-leg-right { right: 18px; -webkit-animation: walkerLegRight .36s ease-in-out infinite alternate; animation: walkerLegRight .36s ease-in-out infinite alternate; }
+  @-webkit-keyframes walkerTravel { from { -webkit-transform: translate3d(0,0,0); } to { -webkit-transform: translate3d(38vw,0,0); } }
+  @keyframes walkerTravel { from { transform: translate3d(0,0,0); } to { transform: translate3d(38vw,0,0); } }
+  @-webkit-keyframes walkerBob { from { -webkit-transform: translateY(0); } to { -webkit-transform: translateY(3px); } }
+  @keyframes walkerBob { from { transform: translateY(0); } to { transform: translateY(3px); } }
+  @-webkit-keyframes walkerArmLeft { from { -webkit-transform: rotate(24deg); } to { -webkit-transform: rotate(-24deg); } }
+  @keyframes walkerArmLeft { from { transform: rotate(24deg); } to { transform: rotate(-24deg); } }
+  @-webkit-keyframes walkerArmRight { from { -webkit-transform: rotate(-24deg); } to { -webkit-transform: rotate(24deg); } }
+  @keyframes walkerArmRight { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
+  @-webkit-keyframes walkerLegLeft { from { -webkit-transform: rotate(16deg); } to { -webkit-transform: rotate(-16deg); } }
+  @keyframes walkerLegLeft { from { transform: rotate(16deg); } to { transform: rotate(-16deg); } }
+  @-webkit-keyframes walkerLegRight { from { -webkit-transform: rotate(-16deg); } to { -webkit-transform: rotate(16deg); } }
+  @keyframes walkerLegRight { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    #qrWalker, .walker-body, .walker-arm, .walker-leg { -webkit-animation: none; animation: none; }
+  }
   #statusDot {
     position: absolute;
     bottom: 20px; left: 20px;
@@ -290,6 +353,15 @@
   <div id="topBar">
     <div class="clock" id="clock">--:--</div>
     <div class="hint">QRコードを右下の枠にかざしてください</div>
+  </div>
+
+  <div id="qrWalker" aria-hidden="true">
+    <span class="walker-arm walker-arm-left"></span><span class="walker-arm walker-arm-right"></span>
+    <span class="walker-leg walker-leg-left"></span><span class="walker-leg walker-leg-right"></span>
+    <div class="walker-body">
+      <span class="walker-finder walker-finder-a"></span><span class="walker-finder walker-finder-b"></span><span class="walker-finder walker-finder-c"></span>
+      <span class="walker-pixel walker-pixel-a"></span><span class="walker-pixel walker-pixel-b"></span><span class="walker-pixel walker-pixel-c"></span><span class="walker-pixel walker-pixel-d"></span>
+    </div>
   </div>
 
   <div id="resultOverlay">
@@ -327,6 +399,7 @@ const ctx = canvas.getContext('2d');
 const photoCanvas = document.getElementById('photoCanvas');
 const photoCtx = photoCanvas.getContext('2d');
 const resultOverlay = document.getElementById('resultOverlay');
+const qrWalker = document.getElementById('qrWalker');
 const resultIcon = document.getElementById('resultIcon');
 const resultCharacter = document.getElementById('resultCharacter');
 const resultName = document.getElementById('resultName');
@@ -777,7 +850,13 @@ function createEdgeDeviceId() {
   return 'tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
 }
 
+function setWalkerVisible(visible) {
+  if (!qrWalker) return;
+  qrWalker.classList.toggle('walker-hidden', !visible);
+}
+
 function showProcessing(qrData, receiptId) {
+  setWalkerVisible(false);
   resultOverlay.className = '';
   resultIcon.textContent = '';
   resultCharacter.style.display = 'none';
@@ -830,6 +909,7 @@ function showLocalDuplicate(scan) {
 }
 
 function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, isTeacher, errorCode, duplicate, mailProvider) {
+  setWalkerVisible(false);
   resultOverlay.classList.remove('photo-variant');
   if (ok && isTeacher) {
     const isCooldownDuplicate = duplicate && errorCode === 'DUPLICATE_WITHIN_COOLDOWN';
@@ -961,8 +1041,13 @@ function finishAndResume(delayMs) {
     scanning = true;
     scanStartedAt = Date.now();
     scanHint.classList.remove('show');
+    setWalkerVisible(document.visibilityState !== 'hidden');
   }, delayMs);
 }
+
+document.addEventListener('visibilitychange', () => {
+  setWalkerVisible(document.visibilityState !== 'hidden' && !requestInFlight && !resultOverlay.classList.contains('show'));
+});
 
 const previewMode = new URLSearchParams(location.search).get('preview');
 if (previewMode === 'entry') {
