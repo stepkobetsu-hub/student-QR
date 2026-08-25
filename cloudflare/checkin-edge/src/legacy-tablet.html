@@ -40,9 +40,16 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 #result.duplicate #resultCharacter{width:40%;height:80%}
 #name{font-size:36px;font-weight:bold;line-height:1.2}#type{font-size:34px;font-weight:bold;margin-top:14px;line-height:1.25}#detail{font-size:17px;margin:15px 10px 0;line-height:1.5}
 #result.processing #type{font-size:42px}#result.processing #detail{font-size:18px}
-#qrWalker{position:absolute;left:4%;bottom:78px;width:70px;height:88px;z-index:4;pointer-events:none;-webkit-animation:walkerTravel 24s ease-in-out infinite;animation:walkerTravel 24s ease-in-out infinite}
+#qrWalker{position:absolute;left:4%;bottom:78px;width:70px;height:88px;z-index:4;pointer-events:none}
 #qrWalker.walker-hidden{display:none}
-.walker-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%;-webkit-animation:fruitSquash 24s ease-in-out infinite;animation:fruitSquash 24s ease-in-out infinite}
+.walker-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
+.impact-shadow{position:absolute;left:20px;bottom:-4px;width:30px;height:6px;border-radius:50%;background:rgba(0,0,0,.62);opacity:0;z-index:0;-webkit-transform-origin:50% 50%;transform-origin:50% 50%}
+.walker-route-ground{-webkit-animation:walkerGround 1s ease-in-out 1 both;animation:walkerGround 1s ease-in-out 1 both}
+.walker-route-climb{-webkit-animation:walkerClimb 1s ease-in-out 1 both;animation:walkerClimb 1s ease-in-out 1 both}
+.walker-route-high{-webkit-animation:walkerHigh 1s ease-in-out 1 both;animation:walkerHigh 1s ease-in-out 1 both}
+.walker-route-fall{-webkit-animation:walkerFall 1s ease-in-out 1 both;animation:walkerFall 1s ease-in-out 1 both}
+.walker-route-fall .walker-character{-webkit-animation:fruitSquash 1s linear 1 both;animation:fruitSquash 1s linear 1 both}
+.walker-route-fall .impact-shadow{-webkit-animation:impactShadow 1s linear 1 both;animation:impactShadow 1s linear 1 both}
 .walker-body{position:absolute;left:6px;top:5px;width:58px;height:60px;border:2px solid #432d18;border-radius:48% 52% 46% 50%;box-sizing:border-box;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 5px 12px rgba(0,0,0,.3);z-index:2;-webkit-animation:walkerBob .4s ease-in-out infinite alternate;animation:walkerBob .4s ease-in-out infinite alternate}
 .fruit-stem{position:absolute;left:27px;top:-7px;width:4px;height:10px;border-radius:4px;background:#385d26;border:1px solid #253c1c;box-sizing:border-box}
 .fruit-leaf{position:absolute;top:-8px;width:17px;height:10px;background:#75ad35;border:2px solid #365b23;box-sizing:border-box;z-index:3}.fruit-leaf-left{left:13px;border-radius:100% 8% 100% 8%;-webkit-transform:rotate(-22deg);transform:rotate(-22deg)}.fruit-leaf-right{right:12px;border-radius:8% 100% 8% 100%;-webkit-transform:rotate(22deg);transform:rotate(22deg)}
@@ -54,15 +61,19 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 .walker-arm,.walker-leg{position:absolute;display:block;background:#432d18;border-radius:999px;box-sizing:border-box;z-index:1}
 .walker-arm{top:34px;width:18px;height:3px}.walker-arm-left{left:0;-webkit-transform-origin:100% 50%;transform-origin:100% 50%;-webkit-animation:walkerArmLeft .4s ease-in-out infinite alternate;animation:walkerArmLeft .4s ease-in-out infinite alternate}.walker-arm-right{right:0;-webkit-transform-origin:0 50%;transform-origin:0 50%;-webkit-animation:walkerArmRight .4s ease-in-out infinite alternate;animation:walkerArmRight .4s ease-in-out infinite alternate}
 .walker-leg{top:62px;width:3px;height:22px;-webkit-transform-origin:50% 0;transform-origin:50% 0}.walker-leg:after{content:'';position:absolute;left:-1px;bottom:0;width:12px;height:3px;border-radius:999px;background:#432d18}.walker-leg-left{left:23px;-webkit-animation:walkerLegLeft .4s ease-in-out infinite alternate;animation:walkerLegLeft .4s ease-in-out infinite alternate}.walker-leg-left:after{-webkit-transform:rotate(-14deg);transform:rotate(-14deg)}.walker-leg-right{right:23px;-webkit-animation:walkerLegRight .4s ease-in-out infinite alternate;animation:walkerLegRight .4s ease-in-out infinite alternate}.walker-leg-right:after{left:-8px;-webkit-transform:rotate(14deg);transform:rotate(14deg)}
-@-webkit-keyframes walkerTravel{0%{-webkit-transform:translate3d(0,0,0)}28%{-webkit-transform:translate3d(43vw,0,0)}40%{-webkit-transform:translate3d(43vw,0,0)}52%{-webkit-transform:translate3d(43vw,-32vh,0)}67%{-webkit-transform:translate3d(8vw,-32vh,0)}72%{-webkit-transform:translate3d(0,-32vh,0)}74%{-webkit-transform:translate3d(0,0,0)}84%{-webkit-transform:translate3d(0,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerTravel{0%{transform:translate3d(0,0,0)}28%{transform:translate3d(43vw,0,0)}40%{transform:translate3d(43vw,0,0)}52%{transform:translate3d(43vw,-32vh,0)}67%{transform:translate3d(8vw,-32vh,0)}72%{transform:translate3d(0,-32vh,0)}74%{transform:translate3d(0,0,0)}84%{transform:translate3d(0,0,0)}100%{transform:translate3d(0,0,0)}}
-@-webkit-keyframes fruitSquash{0%,70%,100%{-webkit-transform:scale(1) rotate(0)}72%{-webkit-transform:scale(1) rotate(-6deg)}74%,76%{-webkit-transform:translateY(20px) scaleX(1.38) scaleY(.55) rotate(0)}79%{-webkit-transform:translateY(-3px) scaleX(.9) scaleY(1.1) rotate(0)}84%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,70%,100%{transform:scale(1) rotate(0)}72%{transform:scale(1) rotate(-6deg)}74%,76%{transform:translateY(20px) scaleX(1.38) scaleY(.55) rotate(0)}79%{transform:translateY(-3px) scaleX(.9) scaleY(1.1) rotate(0)}84%{transform:scale(1) rotate(0)}}
+@-webkit-keyframes walkerGround{0%{-webkit-transform:translate3d(0,0,0)}50%{-webkit-transform:translate3d(43vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerGround{0%{transform:translate3d(0,0,0)}50%{transform:translate3d(43vw,0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes walkerClimb{0%{-webkit-transform:translate3d(0,0,0)}25%{-webkit-transform:translate3d(43vw,0,0)}45%{-webkit-transform:translate3d(43vw,-32vh,0)}65%{-webkit-transform:translate3d(8vw,-32vh,0)}82%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerClimb{0%{transform:translate3d(0,0,0)}25%{transform:translate3d(43vw,0,0)}45%{transform:translate3d(43vw,-32vh,0)}65%{transform:translate3d(8vw,-32vh,0)}82%,100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes walkerHigh{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(43vw,0,0)}40%{-webkit-transform:translate3d(43vw,-48vh,0)}62%{-webkit-transform:translate3d(8vw,-48vh,0)}78%{-webkit-transform:translate3d(0,-22vh,0)}86%,100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerHigh{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(43vw,0,0)}40%{transform:translate3d(43vw,-48vh,0)}62%{transform:translate3d(8vw,-48vh,0)}78%{transform:translate3d(0,-22vh,0)}86%,100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes walkerFall{0%{-webkit-transform:translate3d(0,0,0)}22%{-webkit-transform:translate3d(43vw,0,0)}38%{-webkit-transform:translate3d(43vw,-50vh,0)}60%{-webkit-transform:translate3d(12vw,-50vh,0)}70%{-webkit-transform:translate3d(0,-50vh,0)}72%,82%{-webkit-transform:translate3d(0,0,0)}90%{-webkit-transform:translate3d(18vw,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerFall{0%{transform:translate3d(0,0,0)}22%{transform:translate3d(43vw,0,0)}38%{transform:translate3d(43vw,-50vh,0)}60%{transform:translate3d(12vw,-50vh,0)}70%{transform:translate3d(0,-50vh,0)}72%,82%{transform:translate3d(0,0,0)}90%{transform:translate3d(18vw,0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes fruitSquash{0%,69%,100%{-webkit-transform:scale(1) rotate(0)}70%{-webkit-transform:scale(1) rotate(-12deg)}72%{-webkit-transform:scaleX(2.5) scaleY(.05) skewX(-18deg)}75%{-webkit-transform:scaleX(2.2) scaleY(.1) skewX(15deg) rotate(3deg)}78%{-webkit-transform:scaleX(2.45) scaleY(.06) skewX(-10deg) rotate(-2deg)}80%{-webkit-transform:scaleX(2.35) scaleY(.08)}81%,100%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,69%,100%{transform:scale(1) rotate(0)}70%{transform:scale(1) rotate(-12deg)}72%{transform:scaleX(2.5) scaleY(.05) skewX(-18deg)}75%{transform:scaleX(2.2) scaleY(.1) skewX(15deg) rotate(3deg)}78%{transform:scaleX(2.45) scaleY(.06) skewX(-10deg) rotate(-2deg)}80%{transform:scaleX(2.35) scaleY(.08)}81%,100%{transform:scale(1) rotate(0)}}
+@-webkit-keyframes impactShadow{0%,70%,82%,100%{opacity:0;-webkit-transform:scaleX(.2)}72%,80%{opacity:.82;-webkit-transform:scaleX(2.6)}81%{opacity:.2;-webkit-transform:scaleX(1)}}@keyframes impactShadow{0%,70%,82%,100%{opacity:0;transform:scaleX(.2)}72%,80%{opacity:.82;transform:scaleX(2.6)}81%{opacity:.2;transform:scaleX(1)}}
 @-webkit-keyframes walkerBob{from{-webkit-transform:translateY(0) rotate(-1deg)}to{-webkit-transform:translateY(3px) rotate(1deg)}}@keyframes walkerBob{from{transform:translateY(0) rotate(-1deg)}to{transform:translateY(3px) rotate(1deg)}}
 @-webkit-keyframes fruitBlink{0%,45%,49%,100%{-webkit-transform:scaleY(1)}47%{-webkit-transform:scaleY(.15)}}@keyframes fruitBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.15)}}
 @-webkit-keyframes walkerArmLeft{from{-webkit-transform:rotate(32deg)}to{-webkit-transform:rotate(-24deg)}}@keyframes walkerArmLeft{from{transform:rotate(32deg)}to{transform:rotate(-24deg)}}
 @-webkit-keyframes walkerArmRight{from{-webkit-transform:rotate(-32deg)}to{-webkit-transform:rotate(24deg)}}@keyframes walkerArmRight{from{transform:rotate(-32deg)}to{transform:rotate(24deg)}}
 @-webkit-keyframes walkerLegLeft{from{-webkit-transform:rotate(18deg)}to{-webkit-transform:rotate(-18deg)}}@keyframes walkerLegLeft{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
 @-webkit-keyframes walkerLegRight{from{-webkit-transform:rotate(-18deg)}to{-webkit-transform:rotate(18deg)}}@keyframes walkerLegRight{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
+@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.impact-shadow,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
 @media (max-width:720px){#frame{right:4%;width:32%;height:36%}#resultContent{left:3%;width:58%;padding:18px 12px}#name{font-size:29px}#type{font-size:29px}#detail{font-size:14px}}
 </style>
 </head>
@@ -87,6 +98,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
         <span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span>
       </div>
     </div>
+    <span class="impact-shadow"></span>
   </div>
   <div id="result"><div id="resultContent"><div id="name"></div><div id="type"></div><div id="detail"></div></div><img id="resultCharacter" alt=""></div>
 </div>
@@ -117,6 +129,9 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   var detailEl = document.getElementById('detail');
   var resultCharacter = document.getElementById('resultCharacter');
   var qrWalker = document.getElementById('qrWalker');
+  var walkerCharacter = document.querySelector('.walker-character');
+  var impactShadow = document.querySelector('.impact-shadow');
+  var walkerRouteTimer = 0;
   var config;
   var deviceId;
   var busy = false;
@@ -393,9 +408,45 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     resultCharacter.removeAttribute('src');
   }
 
+  function startRandomWalkerRoute() {
+    var roll;
+    var route;
+    var minimum;
+    var maximum;
+    var duration;
+    var restart;
+    if (!qrWalker) return;
+    roll = Math.random();
+    if (roll < 0.38) {
+      route = 'ground'; minimum = 9000; maximum = 15000;
+    } else if (roll < 0.63) {
+      route = 'climb'; minimum = 13000; maximum = 20000;
+    } else if (roll < 0.78) {
+      route = 'high'; minimum = 15000; maximum = 22000;
+    } else {
+      route = 'fall'; minimum = 16000; maximum = 24000;
+    }
+    duration = Math.round(minimum + Math.random() * (maximum - minimum));
+    if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
+    qrWalker.className = '';
+    restart = qrWalker.offsetWidth;
+    qrWalker.className = 'walker-route-' + route;
+    qrWalker.style.webkitAnimationDuration = duration + 'ms';
+    qrWalker.style.animationDuration = duration + 'ms';
+    if (walkerCharacter) {
+      walkerCharacter.style.webkitAnimationDuration = duration + 'ms';
+      walkerCharacter.style.animationDuration = duration + 'ms';
+    }
+    if (impactShadow) {
+      impactShadow.style.webkitAnimationDuration = duration + 'ms';
+      impactShadow.style.animationDuration = duration + 'ms';
+    }
+    walkerRouteTimer = setTimeout(startRandomWalkerRoute, duration + 120);
+  }
+
   function setWalkerVisible(visible) {
     if (!qrWalker) return;
-    qrWalker.className = visible ? '' : 'walker-hidden';
+    qrWalker.style.display = visible ? 'block' : 'none';
   }
 
   function displayProcessing() {
@@ -471,6 +522,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   }
   updateClock();
   setInterval(updateClock, 1000);
+  startRandomWalkerRoute();
   if (document.addEventListener) {
     document.addEventListener('visibilitychange', function () {
       setWalkerVisible(document.visibilityState !== 'hidden' && !busy && result.className.indexOf('show') === -1);
