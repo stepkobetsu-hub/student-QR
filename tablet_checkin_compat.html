@@ -17,68 +17,27 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 #result.show{display:block}#result.entry{background:#f5df4d;color:#17324d}#result.exit{background:#173b7a}#result.error{background:#a83232}
 #name{font-size:36px;font-weight:bold}#type{font-size:30px;font-weight:bold;margin-top:14px}#detail{font-size:16px;margin:14px 22px;line-height:1.5}
 
-#qrWalker {
-  bottom: 78px;
-  position: absolute;
-  left: 4%;
-  width: 62px;
-  height: 78px;
-  z-index: 4;
-  pointer-events: none;
-  -webkit-animation: walkerTravel 12s ease-in-out infinite alternate;
-  animation: walkerTravel 12s ease-in-out infinite alternate;
-}
-#qrWalker.walker-hidden { display: none; }
-.walker-body {
-  position: absolute;
-  left: 7px; top: 7px;
-  width: 48px; height: 48px;
-  border-radius: 13px;
-  background: #11865f;
-  box-shadow: 0 5px 12px rgba(0,0,0,.3);
-  z-index: 2;
-  -webkit-animation: walkerBob .36s ease-in-out infinite alternate;
-  animation: walkerBob .36s ease-in-out infinite alternate;
-}
-.walker-finder { position: absolute; width: 10px; height: 10px; border: 4px solid #fff; }
-.walker-finder-a { left: 7px; top: 7px; }
-.walker-finder-b { right: 7px; top: 7px; }
-.walker-finder-c { left: 7px; bottom: 7px; }
-.walker-pixel { position: absolute; width: 5px; height: 5px; background: #fff; }
-.walker-pixel-a { left: 29px; top: 29px; }
-.walker-pixel-b { left: 37px; top: 29px; }
-.walker-pixel-c { left: 29px; top: 37px; }
-.walker-pixel-d { left: 37px; top: 37px; }
-.walker-arm, .walker-leg {
-  position: absolute;
-  display: block;
-  background: #f8fffc;
-  border: 2px solid #11865f;
-  border-radius: 999px;
-  box-sizing: border-box;
-  z-index: 1;
-}
-.walker-arm { top: 22px; width: 18px; height: 6px; }
-.walker-arm-left { left: 0; -webkit-transform-origin: 100% 50%; transform-origin: 100% 50%; -webkit-animation: walkerArmLeft .36s ease-in-out infinite alternate; animation: walkerArmLeft .36s ease-in-out infinite alternate; }
-.walker-arm-right { right: 0; -webkit-transform-origin: 0 50%; transform-origin: 0 50%; -webkit-animation: walkerArmRight .36s ease-in-out infinite alternate; animation: walkerArmRight .36s ease-in-out infinite alternate; }
-.walker-leg { top: 49px; width: 7px; height: 25px; -webkit-transform-origin: 50% 0; transform-origin: 50% 0; }
-.walker-leg-left { left: 18px; -webkit-animation: walkerLegLeft .36s ease-in-out infinite alternate; animation: walkerLegLeft .36s ease-in-out infinite alternate; }
-.walker-leg-right { right: 18px; -webkit-animation: walkerLegRight .36s ease-in-out infinite alternate; animation: walkerLegRight .36s ease-in-out infinite alternate; }
-@-webkit-keyframes walkerTravel { from { -webkit-transform: translate3d(0,0,0); } to { -webkit-transform: translate3d(38vw,0,0); } }
-@keyframes walkerTravel { from { transform: translate3d(0,0,0); } to { transform: translate3d(38vw,0,0); } }
-@-webkit-keyframes walkerBob { from { -webkit-transform: translateY(0); } to { -webkit-transform: translateY(3px); } }
-@keyframes walkerBob { from { transform: translateY(0); } to { transform: translateY(3px); } }
-@-webkit-keyframes walkerArmLeft { from { -webkit-transform: rotate(24deg); } to { -webkit-transform: rotate(-24deg); } }
-@keyframes walkerArmLeft { from { transform: rotate(24deg); } to { transform: rotate(-24deg); } }
-@-webkit-keyframes walkerArmRight { from { -webkit-transform: rotate(-24deg); } to { -webkit-transform: rotate(24deg); } }
-@keyframes walkerArmRight { from { transform: rotate(-24deg); } to { transform: rotate(24deg); } }
-@-webkit-keyframes walkerLegLeft { from { -webkit-transform: rotate(16deg); } to { -webkit-transform: rotate(-16deg); } }
-@keyframes walkerLegLeft { from { transform: rotate(16deg); } to { transform: rotate(-16deg); } }
-@-webkit-keyframes walkerLegRight { from { -webkit-transform: rotate(-16deg); } to { -webkit-transform: rotate(16deg); } }
-@keyframes walkerLegRight { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
-@media (prefers-reduced-motion: reduce) {
-  #qrWalker, .walker-body, .walker-arm, .walker-leg { -webkit-animation: none; animation: none; }
-}
+#qrWalker{position:absolute;left:4%;bottom:78px;width:70px;height:88px;z-index:4;pointer-events:none;-webkit-animation:walkerTravel 12s ease-in-out infinite alternate;animation:walkerTravel 12s ease-in-out infinite alternate}
+#qrWalker.walker-hidden{display:none}
+.walker-body{position:absolute;left:6px;top:5px;width:58px;height:60px;border:2px solid #432d18;border-radius:48% 52% 46% 50%;box-sizing:border-box;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 5px 12px rgba(0,0,0,.3);z-index:2;-webkit-animation:walkerBob .4s ease-in-out infinite alternate;animation:walkerBob .4s ease-in-out infinite alternate}
+.fruit-stem{position:absolute;left:27px;top:-7px;width:4px;height:10px;border-radius:4px;background:#385d26;border:1px solid #253c1c;box-sizing:border-box}
+.fruit-leaf{position:absolute;top:-8px;width:17px;height:10px;background:#75ad35;border:2px solid #365b23;box-sizing:border-box;z-index:3}.fruit-leaf-left{left:13px;border-radius:100% 8% 100% 8%;-webkit-transform:rotate(-22deg);transform:rotate(-22deg)}.fruit-leaf-right{right:12px;border-radius:8% 100% 8% 100%;-webkit-transform:rotate(22deg);transform:rotate(22deg)}
+.fruit-brow{position:absolute;top:14px;width:14px;height:5px;border-top:2px solid #432d18;border-radius:50%}.fruit-brow-left{left:9px;-webkit-transform:rotate(7deg);transform:rotate(7deg)}.fruit-brow-right{right:9px;-webkit-transform:rotate(-7deg);transform:rotate(-7deg)}
+.fruit-eye{position:absolute;top:19px;width:15px;height:9px;border:2px solid #432d18;border-radius:50%;box-sizing:border-box;background:#fff;-webkit-transform-origin:50% 50%;transform-origin:50% 50%;-webkit-animation:fruitBlink 4.2s linear infinite;animation:fruitBlink 4.2s linear infinite}.fruit-eye-left{left:9px}.fruit-eye-right{right:9px}.fruit-pupil{position:absolute;left:4px;top:1px;width:5px;height:5px;border-radius:50%;background:#2d2118}
+.fruit-cheek{position:absolute;top:33px;width:11px;height:8px;border:1px solid #9a2737;border-radius:50%;box-sizing:border-box;background:#f05468;box-shadow:inset 2px 1px 0 rgba(255,255,255,.65)}.fruit-cheek-left{left:5px}.fruit-cheek-right{right:5px}
+.fruit-mouth{position:absolute;left:19px;top:31px;width:18px;height:14px;border:2px solid #432d18;border-radius:3px 3px 12px 12px;box-sizing:border-box;background:#721d36;overflow:hidden}.fruit-tongue{position:absolute;left:4px;bottom:0;width:8px;height:5px;border-radius:8px 8px 0 0;background:#ff7690}
+.fruit-dot{position:absolute;left:13px;top:47px;width:3px;height:3px;border-radius:50%;background:rgba(174,90,18,.45);box-shadow:12px 4px 0 rgba(174,90,18,.35),27px 1px 0 rgba(174,90,18,.4),34px 6px 0 rgba(174,90,18,.3)}
+.walker-arm,.walker-leg{position:absolute;display:block;background:#432d18;border-radius:999px;box-sizing:border-box;z-index:1}
+.walker-arm{top:34px;width:18px;height:3px}.walker-arm-left{left:0;-webkit-transform-origin:100% 50%;transform-origin:100% 50%;-webkit-animation:walkerArmLeft .4s ease-in-out infinite alternate;animation:walkerArmLeft .4s ease-in-out infinite alternate}.walker-arm-right{right:0;-webkit-transform-origin:0 50%;transform-origin:0 50%;-webkit-animation:walkerArmRight .4s ease-in-out infinite alternate;animation:walkerArmRight .4s ease-in-out infinite alternate}
+.walker-leg{top:62px;width:3px;height:22px;-webkit-transform-origin:50% 0;transform-origin:50% 0}.walker-leg:after{content:'';position:absolute;left:-1px;bottom:0;width:12px;height:3px;border-radius:999px;background:#432d18}.walker-leg-left{left:23px;-webkit-animation:walkerLegLeft .4s ease-in-out infinite alternate;animation:walkerLegLeft .4s ease-in-out infinite alternate}.walker-leg-left:after{-webkit-transform:rotate(-14deg);transform:rotate(-14deg)}.walker-leg-right{right:23px;-webkit-animation:walkerLegRight .4s ease-in-out infinite alternate;animation:walkerLegRight .4s ease-in-out infinite alternate}.walker-leg-right:after{left:-8px;-webkit-transform:rotate(14deg);transform:rotate(14deg)}
+@-webkit-keyframes walkerTravel{from{-webkit-transform:translate3d(0,0,0)}to{-webkit-transform:translate3d(37vw,0,0)}}@keyframes walkerTravel{from{transform:translate3d(0,0,0)}to{transform:translate3d(37vw,0,0)}}
+@-webkit-keyframes walkerBob{from{-webkit-transform:translateY(0) rotate(-1deg)}to{-webkit-transform:translateY(3px) rotate(1deg)}}@keyframes walkerBob{from{transform:translateY(0) rotate(-1deg)}to{transform:translateY(3px) rotate(1deg)}}
+@-webkit-keyframes fruitBlink{0%,45%,49%,100%{-webkit-transform:scaleY(1)}47%{-webkit-transform:scaleY(.15)}}@keyframes fruitBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.15)}}
+@-webkit-keyframes walkerArmLeft{from{-webkit-transform:rotate(32deg)}to{-webkit-transform:rotate(-24deg)}}@keyframes walkerArmLeft{from{transform:rotate(32deg)}to{transform:rotate(-24deg)}}
+@-webkit-keyframes walkerArmRight{from{-webkit-transform:rotate(-32deg)}to{-webkit-transform:rotate(24deg)}}@keyframes walkerArmRight{from{transform:rotate(-32deg)}to{transform:rotate(24deg)}}
+@-webkit-keyframes walkerLegLeft{from{-webkit-transform:rotate(18deg)}to{-webkit-transform:rotate(-18deg)}}@keyframes walkerLegLeft{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
+@-webkit-keyframes walkerLegRight{from{-webkit-transform:rotate(-18deg)}to{-webkit-transform:rotate(18deg)}}@keyframes walkerLegRight{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
+@media (prefers-reduced-motion:reduce){#qrWalker,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
 </style>
 </head>
 <body>
@@ -94,11 +53,13 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     <span class="walker-arm walker-arm-left"></span><span class="walker-arm walker-arm-right"></span>
     <span class="walker-leg walker-leg-left"></span><span class="walker-leg walker-leg-right"></span>
     <div class="walker-body">
-      <span class="walker-finder walker-finder-a"></span><span class="walker-finder walker-finder-b"></span><span class="walker-finder walker-finder-c"></span>
-      <span class="walker-pixel walker-pixel-a"></span><span class="walker-pixel walker-pixel-b"></span><span class="walker-pixel walker-pixel-c"></span><span class="walker-pixel walker-pixel-d"></span>
+      <span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span>
+      <span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span>
+      <span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span>
+      <span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span>
+      <span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span>
     </div>
   </div>
-
   <div id="result"><div id="name"></div><div id="type"></div><div id="detail"></div></div>
 </div>
 <script src="vendor/jsQR.js"></script>
