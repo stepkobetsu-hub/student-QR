@@ -62,8 +62,8 @@ const ROSTER_REFRESH_LEASE_MS = 30_000;
 const LEGACY_TERMINAL_COOKIE = "__Host-step_legacy_terminal";
 const LEGACY_TERMINAL_COOKIE_MAX_AGE = 31_536_000;
 const LEGACY_TABLET_MANIFEST = JSON.stringify({
-  name: "入退室チェックイン",
-  short_name: "入退室",
+  name: "出退くん",
+  short_name: "出退くん",
   start_url: "/legacy-tablet",
   scope: "/",
   display: "standalone",
@@ -71,13 +71,13 @@ const LEGACY_TABLET_MANIFEST = JSON.stringify({
   theme_color: "#2e7d5b",
   icons: [
     {
-      src: "https://stepkobetsu-hub.github.io/student-QR/icon-192.png",
+      src: "https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826",
       sizes: "192x192",
       type: "image/png",
       purpose: "any maskable",
     },
     {
-      src: "https://stepkobetsu-hub.github.io/student-QR/icon-512.png",
+      src: "https://stepkobetsu-hub.github.io/student-QR/icon-512.png?v=20260826",
       sizes: "512x512",
       type: "image/png",
       purpose: "any maskable",

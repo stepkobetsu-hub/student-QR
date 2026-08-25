@@ -13,7 +13,7 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain('rel="icon" type="image/png" sizes="192x192"');
     expect(html).toContain('rel="apple-touch-icon" sizes="192x192"');
     expect(html).toContain('rel="manifest" href="/legacy-tablet-manifest.json"');
-    expect(html).toContain("https://stepkobetsu-hub.github.io/student-QR/icon-192.png");
+    expect(html).toContain("https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826");
     expect(html).toContain('<script src="/legacy-jsqr.js"></script>');
     expect(html).toContain("/v1/checkins");
     expect(html).toContain("width:30%;height:38%");
@@ -64,17 +64,17 @@ describe("legacy tablet launcher", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("application/manifest+json");
-    expect(manifest.name).toBe("入退室チェックイン");
-    expect(manifest.short_name).toBe("入退室");
+    expect(manifest.name).toBe("出退くん");
+    expect(manifest.short_name).toBe("出退くん");
     expect(manifest.start_url).toBe("/legacy-tablet");
     expect(manifest.icons).toEqual([
       expect.objectContaining({
-        src: "https://stepkobetsu-hub.github.io/student-QR/icon-192.png",
+        src: "https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826",
         sizes: "192x192",
         purpose: "any maskable",
       }),
       expect.objectContaining({
-        src: "https://stepkobetsu-hub.github.io/student-QR/icon-512.png",
+        src: "https://stepkobetsu-hub.github.io/student-QR/icon-512.png?v=20260826",
         sizes: "512x512",
         purpose: "any maskable",
       }),
