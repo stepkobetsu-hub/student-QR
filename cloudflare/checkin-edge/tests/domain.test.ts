@@ -19,11 +19,20 @@ describe("decideAttendance", () => {
   });
 
   it("does not flip the state inside the duplicate window", () => {
-    expect(decideAttendance("student", 59_999, {
+    expect(decideAttendance("student", 30_999, {
       lastType: "入室",
       lastAcceptedAt: 1_000,
       count: 1,
     })).toEqual({ type: "入室", duplicate: true, nextCount: 1 });
+  });
+
+
+  it("accepts a new stamp at exactly 30 seconds", () => {
+    expect(decideAttendance("student", 31_000, {
+      lastType: "入室",
+      lastAcceptedAt: 1_000,
+      count: 1,
+    })).toEqual({ type: "退室", duplicate: false, nextCount: 2 });
   });
 
   it("uses teacher labels", () => {

@@ -456,7 +456,7 @@ function checkinClientResponse(result: AcceptResponse): Record<string, unknown> 
     isTeacher: result.role === "teacher",
     label: result.acceptedAt ? formatTokyoLabel(result.acceptedAt) : "",
     mailStatus: result.legacyState === "PENDING" || result.legacyState === "RETRYING" ? "PENDING" : "NOT_REQUIRED",
-    message: result.duplicate ? "60秒以内の同じ受付です" : "受付しました",
+    message: result.duplicate ? "30秒以内の同じ受付です" : "受付しました",
   };
 }
 

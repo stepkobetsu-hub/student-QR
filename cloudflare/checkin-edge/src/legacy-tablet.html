@@ -502,7 +502,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '');
       if (duplicate) {
         character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
-        actionText = '受付済みです';
+        actionText = isTeacher ? (type === '出勤' ? '出勤済みです' : '退勤済みです') : (type === '入室' ? '入室済みです' : '退室済みです');
       } else if (isTeacher) {
         character = entry ? 'teacher-arrival.png' : 'teacher-goodbye.png';
         actionText = entry ? '出勤しました' : '退勤しました';
@@ -520,7 +520,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
       resultCharacter.style.display = 'block';
       nameEl.innerHTML = escapeText(name) + suffix;
       typeEl.innerHTML = actionText;
-      detailEl.innerHTML = duplicate ? '60秒以内の重複読取のため、記録とメール送信は追加していません' : (useRareExitVariant ? 'また明日も頑張ろうね！' : escapeText(detail || '受付が完了しました'));
+      detailEl.innerHTML = duplicate ? '30秒以内の重複読取のため、記録とメール送信は追加していません' : (useRareExitVariant ? 'また明日も頑張ろうね！' : escapeText(detail || '受付が完了しました'));
     } else {
       playResultSound('error');
       result.className = 'show error';
