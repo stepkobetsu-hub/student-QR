@@ -269,8 +269,9 @@
   }
 
 
-  #qrWalker{position:absolute;left:4%;bottom:16vh;width:70px;height:88px;z-index:4;pointer-events:none;-webkit-animation:walkerTravel 24s ease-in-out infinite alternate;animation:walkerTravel 24s ease-in-out infinite alternate}
+  #qrWalker{position:absolute;left:4%;bottom:16vh;width:70px;height:88px;z-index:4;pointer-events:none;-webkit-animation:walkerTravel 24s ease-in-out infinite;animation:walkerTravel 24s ease-in-out infinite}
 #qrWalker.walker-hidden{display:none}
+.walker-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%;-webkit-animation:fruitSquash 24s ease-in-out infinite;animation:fruitSquash 24s ease-in-out infinite}
 .walker-body{position:absolute;left:6px;top:5px;width:58px;height:60px;border:2px solid #432d18;border-radius:48% 52% 46% 50%;box-sizing:border-box;background:radial-gradient(circle at 28% 20%,#ffe96c 0,#ffc42b 38%,#f28b16 100%);box-shadow:inset -5px -7px 0 rgba(190,89,10,.12),0 5px 12px rgba(0,0,0,.3);z-index:2;-webkit-animation:walkerBob .4s ease-in-out infinite alternate;animation:walkerBob .4s ease-in-out infinite alternate}
 .fruit-stem{position:absolute;left:27px;top:-7px;width:4px;height:10px;border-radius:4px;background:#385d26;border:1px solid #253c1c;box-sizing:border-box}
 .fruit-leaf{position:absolute;top:-8px;width:17px;height:10px;background:#75ad35;border:2px solid #365b23;box-sizing:border-box;z-index:3}.fruit-leaf-left{left:13px;border-radius:100% 8% 100% 8%;-webkit-transform:rotate(-22deg);transform:rotate(-22deg)}.fruit-leaf-right{right:12px;border-radius:8% 100% 8% 100%;-webkit-transform:rotate(22deg);transform:rotate(22deg)}
@@ -282,14 +283,15 @@
 .walker-arm,.walker-leg{position:absolute;display:block;background:#432d18;border-radius:999px;box-sizing:border-box;z-index:1}
 .walker-arm{top:34px;width:18px;height:3px}.walker-arm-left{left:0;-webkit-transform-origin:100% 50%;transform-origin:100% 50%;-webkit-animation:walkerArmLeft .4s ease-in-out infinite alternate;animation:walkerArmLeft .4s ease-in-out infinite alternate}.walker-arm-right{right:0;-webkit-transform-origin:0 50%;transform-origin:0 50%;-webkit-animation:walkerArmRight .4s ease-in-out infinite alternate;animation:walkerArmRight .4s ease-in-out infinite alternate}
 .walker-leg{top:62px;width:3px;height:22px;-webkit-transform-origin:50% 0;transform-origin:50% 0}.walker-leg:after{content:'';position:absolute;left:-1px;bottom:0;width:12px;height:3px;border-radius:999px;background:#432d18}.walker-leg-left{left:23px;-webkit-animation:walkerLegLeft .4s ease-in-out infinite alternate;animation:walkerLegLeft .4s ease-in-out infinite alternate}.walker-leg-left:after{-webkit-transform:rotate(-14deg);transform:rotate(-14deg)}.walker-leg-right{right:23px;-webkit-animation:walkerLegRight .4s ease-in-out infinite alternate;animation:walkerLegRight .4s ease-in-out infinite alternate}.walker-leg-right:after{left:-8px;-webkit-transform:rotate(14deg);transform:rotate(14deg)}
-@-webkit-keyframes walkerTravel{0%{-webkit-transform:translate3d(0,0,0)}30%{-webkit-transform:translate3d(37vw,0,0)}43%{-webkit-transform:translate3d(37vw,0,0)}54%{-webkit-transform:translate3d(37vw,-32vh,0)}70%{-webkit-transform:translate3d(8vw,-32vh,0)}78%{-webkit-transform:translate3d(0,-20vh,0)}85%{-webkit-transform:translate3d(0,0,0)}100%{-webkit-transform:translate3d(37vw,0,0)}}@keyframes walkerTravel{0%{transform:translate3d(0,0,0)}30%{transform:translate3d(37vw,0,0)}43%{transform:translate3d(37vw,0,0)}54%{transform:translate3d(37vw,-32vh,0)}70%{transform:translate3d(8vw,-32vh,0)}78%{transform:translate3d(0,-20vh,0)}85%{transform:translate3d(0,0,0)}100%{transform:translate3d(37vw,0,0)}}
+@-webkit-keyframes walkerTravel{0%{-webkit-transform:translate3d(0,0,0)}28%{-webkit-transform:translate3d(37vw,0,0)}40%{-webkit-transform:translate3d(37vw,0,0)}52%{-webkit-transform:translate3d(37vw,-32vh,0)}67%{-webkit-transform:translate3d(8vw,-32vh,0)}72%{-webkit-transform:translate3d(0,-32vh,0)}74%{-webkit-transform:translate3d(0,0,0)}84%{-webkit-transform:translate3d(0,0,0)}100%{-webkit-transform:translate3d(0,0,0)}}@keyframes walkerTravel{0%{transform:translate3d(0,0,0)}28%{transform:translate3d(37vw,0,0)}40%{transform:translate3d(37vw,0,0)}52%{transform:translate3d(37vw,-32vh,0)}67%{transform:translate3d(8vw,-32vh,0)}72%{transform:translate3d(0,-32vh,0)}74%{transform:translate3d(0,0,0)}84%{transform:translate3d(0,0,0)}100%{transform:translate3d(0,0,0)}}
+@-webkit-keyframes fruitSquash{0%,70%,100%{-webkit-transform:scale(1) rotate(0)}72%{-webkit-transform:scale(1) rotate(-6deg)}74%,76%{-webkit-transform:translateY(20px) scaleX(1.38) scaleY(.55) rotate(0)}79%{-webkit-transform:translateY(-3px) scaleX(.9) scaleY(1.1) rotate(0)}84%{-webkit-transform:scale(1) rotate(0)}}@keyframes fruitSquash{0%,70%,100%{transform:scale(1) rotate(0)}72%{transform:scale(1) rotate(-6deg)}74%,76%{transform:translateY(20px) scaleX(1.38) scaleY(.55) rotate(0)}79%{transform:translateY(-3px) scaleX(.9) scaleY(1.1) rotate(0)}84%{transform:scale(1) rotate(0)}}
 @-webkit-keyframes walkerBob{from{-webkit-transform:translateY(0) rotate(-1deg)}to{-webkit-transform:translateY(3px) rotate(1deg)}}@keyframes walkerBob{from{transform:translateY(0) rotate(-1deg)}to{transform:translateY(3px) rotate(1deg)}}
 @-webkit-keyframes fruitBlink{0%,45%,49%,100%{-webkit-transform:scaleY(1)}47%{-webkit-transform:scaleY(.15)}}@keyframes fruitBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.15)}}
 @-webkit-keyframes walkerArmLeft{from{-webkit-transform:rotate(32deg)}to{-webkit-transform:rotate(-24deg)}}@keyframes walkerArmLeft{from{transform:rotate(32deg)}to{transform:rotate(-24deg)}}
 @-webkit-keyframes walkerArmRight{from{-webkit-transform:rotate(-32deg)}to{-webkit-transform:rotate(24deg)}}@keyframes walkerArmRight{from{transform:rotate(-32deg)}to{transform:rotate(24deg)}}
 @-webkit-keyframes walkerLegLeft{from{-webkit-transform:rotate(18deg)}to{-webkit-transform:rotate(-18deg)}}@keyframes walkerLegLeft{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
 @-webkit-keyframes walkerLegRight{from{-webkit-transform:rotate(-18deg)}to{-webkit-transform:rotate(18deg)}}@keyframes walkerLegRight{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
-@media (prefers-reduced-motion:reduce){#qrWalker,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
+@media (prefers-reduced-motion:reduce){#qrWalker,.walker-character,.walker-body,.walker-arm,.walker-leg,.fruit-eye{-webkit-animation:none;animation:none}}
   #statusDot {
     position: absolute;
     bottom: 20px; left: 20px;
@@ -315,14 +317,16 @@
   </div>
 
   <div id="qrWalker" aria-hidden="true">
-    <span class="walker-arm walker-arm-left"></span><span class="walker-arm walker-arm-right"></span>
-    <span class="walker-leg walker-leg-left"></span><span class="walker-leg walker-leg-right"></span>
-    <div class="walker-body">
-      <span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span>
-      <span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span>
-      <span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span>
-      <span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span>
-      <span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span>
+    <div class="walker-character">
+      <span class="walker-arm walker-arm-left"></span><span class="walker-arm walker-arm-right"></span>
+      <span class="walker-leg walker-leg-left"></span><span class="walker-leg walker-leg-right"></span>
+      <div class="walker-body">
+        <span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span>
+        <span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span>
+        <span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span>
+        <span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span>
+        <span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span>
+      </div>
     </div>
   </div>
   <div id="resultOverlay">
