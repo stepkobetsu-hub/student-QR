@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826">
 <link rel="apple-touch-icon" sizes="192x192" href="https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826">
 <link rel="manifest" href="/legacy-tablet-manifest.json">
+<link rel="preconnect" href="https://step-checkin-edge-staging.stepkobetsu.workers.dev" crossorigin>
 <title>出退くん | 軽量モード</title>
 <!-- deploy-retry-immediate-qr-confirmation-20260827 -->
 <style>
@@ -362,6 +363,16 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
+  function warmEdgeConnection() {
+    var xhr;
+    try {
+      xhr = new XMLHttpRequest();
+      xhr.open('GET', String(config.apiUrl).replace(/\/$/, '') + '/health', true);
+      xhr.timeout = 5000;
+      xhr.send();
+    } catch (ignore) {}
+  }
+
   function updateClock() {
     var now = new Date();
     var hours = String(now.getHours());
@@ -698,10 +709,13 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
   }
   updateClock();
   setInterval(updateClock, 1000);
+  warmEdgeConnection();
+  setInterval(warmEdgeConnection, 30000);
   startRandomWalkerRoute();
   if (document.addEventListener) {
     document.addEventListener('visibilitychange', function () {
       setWalkerVisible(document.visibilityState !== 'hidden' && !busy && result.className.indexOf('show') === -1);
+      if (document.visibilityState !== 'hidden') warmEdgeConnection();
     }, false);
   }
   if (!window.jsQR) {
