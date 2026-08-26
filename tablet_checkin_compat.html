@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#17324d">
+<link rel="dns-prefetch" href="//step-checkin-edge-staging.stepkobetsu.workers.dev">
+<link rel="preconnect" href="https://step-checkin-edge-staging.stepkobetsu.workers.dev" crossorigin>
 <title>出退くん | 軽量モード</title>
 <style>
 html,body{width:100%;height:100%;margin:0;background:#111;color:#fff;font-family:sans-serif;overflow:hidden}
@@ -273,6 +275,17 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 
   function makeDeviceId() {
     return 'legacy-tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function warmEdgeConnection() {
+    var xhr;
+    if (!config) return;
+    try {
+      xhr = new XMLHttpRequest();
+      xhr.open('GET', String(config.apiUrl).replace(/\/$/, '') + '/health', true);
+      xhr.timeout = 5000;
+      xhr.send();
+    } catch (ignore) {}
   }
 
   function updateClock() {
@@ -590,10 +603,13 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   }
   updateClock();
   setInterval(updateClock, 1000);
+  warmEdgeConnection();
+  setInterval(warmEdgeConnection, 30000);
   startRandomWalkerRoute();
   if (document.addEventListener) {
     document.addEventListener('visibilitychange', function () {
       setWalkerVisible(document.visibilityState !== 'hidden' && !busy && result.className.indexOf('show') === -1);
+      if (document.visibilityState !== 'hidden') warmEdgeConnection();
     }, false);
   }
   if (!window.jsQR) {
