@@ -830,8 +830,8 @@
 
   <div class="workspace-shell">
   <nav class="tabs" aria-label="管理機能メニュー">
-    <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">既存QR登録</button>
-    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">QR確認・印刷</button>
+    <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">入退くんＱＲ取込</button>
+    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">生徒用QR確認・印刷</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行・名札印刷</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
@@ -839,7 +839,7 @@
   </nav>
 
   <!-- ① 既存の入退くんQRを登録するパネル -->
-  <div class="tab-panel active" id="panelExisting" data-title="既存QR登録">
+  <div class="tab-panel active" id="panelExisting" data-title="入退くんＱＲ取込">
     <div class="panel-form-width">
     <label for="studentCode">① 生徒・講師番号</label>
     <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
@@ -870,7 +870,7 @@
   </div>
 
   <!-- ② 現在登録されているQRを確認するパネル -->
-  <div class="tab-panel" id="panelCheck" data-title="QR確認・印刷">
+  <div class="tab-panel" id="panelCheck" data-title="生徒用QR確認・印刷">
     <div class="panel-primary">
     <div class="check-panel-header">
       <h2>QR確認対象生徒</h2>
