@@ -383,7 +383,6 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       }
     });
 
-    if (shouldQueueLegacy) await this.scheduleOldestOutbox();
     return {
       ok: true,
       code: decision.duplicate ? "DUPLICATE_WITHIN_WINDOW" : "ACCEPTED",
@@ -397,6 +396,10 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       dateKey,
       legacyState: decision.duplicate || !shouldQueueLegacy ? "NOT_REQUIRED" : "PENDING",
     };
+  }
+
+  async scheduleLegacyOutbox(): Promise<void> {
+    await this.scheduleOldestOutbox();
   }
 
   getLegacyStatus(receiptId: string): LegacyStatusResponse {
