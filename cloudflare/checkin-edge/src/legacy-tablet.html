@@ -24,8 +24,8 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 #result.duplicate{color:#171717;background:linear-gradient(145deg,#ffe86b 0%,#ffc928 100%)}
 #result.duplicate.duplicate-exit{color:#fff;background:#165e83}
 #result.duplicate.duplicate-exit #resultContent{color:#fff;background:rgba(7,29,51,.82);border:2px solid rgba(255,255,255,.3)}
-#result.duplicate:not(.teacher) #name{font-size:72px}
-#result.duplicate:not(.teacher) #type{font-size:68px}
+#result.duplicate #name{font-size:72px}
+#result.duplicate #type{font-size:68px}
 #result.processing{color:#fff;background:linear-gradient(145deg,#075f73 0%,#188fa2 52%,#47c7b7 100%)}
 #result.error{color:#fff;background:linear-gradient(145deg,#8f2430 0%,#c74444 100%)}
 #resultContent{position:absolute;left:5%;top:18%;width:54%;padding:24px 18px;border-radius:26px;box-sizing:border-box;background:rgba(255,255,255,.88);box-shadow:0 12px 30px rgba(0,0,0,.25);z-index:3}
@@ -639,7 +639,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     clearCharacter();
     if (ok) {
       playResultSound(duplicate ? 'duplicate' : 'success');
-      result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (duplicate && !isTeacher && type === '退室' ? ' duplicate-exit' : '') + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '') + (useMascotExitVariant ? ' mascot-variant' : '');
+      result.className = 'show ' + (duplicate ? 'duplicate' : (entry ? 'entry' : 'exit')) + (duplicate && (type === '退室' || type === '退勤') ? ' duplicate-exit' : '') + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '') + (useMascotExitVariant ? ' mascot-variant' : '');
       if (duplicate) {
         character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
         actionText = isTeacher ? (type === '出勤' ? '出勤済みです' : '退勤済みです') : (type === '入室' ? '入室済みです' : '退室済みです');
