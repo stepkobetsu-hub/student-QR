@@ -38,11 +38,11 @@ const TEACHER_INDEX_CACHE_VERSION = 'v43-email-p15';
 const COL_STUDENT_ID = 1;      // A列: 生徒番号
 const COL_STUDENT_NAME = 5;    // E列: 生徒氏名
 const COL_SCHOOL = 8;          // H列: 校舎
-const COL_GUARDIAN_EMAIL = 24; // X列: メールアドレス（保護者）
-const COL_QR_DATA = 52;        // AZ列: QRデータ
-const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 入退室通知メール1〜4
-const DELIVERY_EMAIL_COLS = [24, 53, 54, 55]; // X, BA, BB, BC
-const DELIVERY_EMAIL_ENABLED_COLS = [67, 68, 69, 70]; // BO, BP, BQ, BR
+const COL_GUARDIAN_EMAIL = 24;   // X列: メールアドレス（保護者）
+const COL_GUARDIAN_EMAIL_2 = 30; // AD列: メールアドレス2
+const COL_QR_DATA = 52;          // AZ列: QRデータ
+const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 旧通知先メール設定（管理画面互換）
+const DELIVERY_EMAIL_COLS = [COL_GUARDIAN_EMAIL, COL_GUARDIAN_EMAIL_2]; // 入退室通知はX列・AD列のみ
 
 const DEFAULT_FROM_NAME  = 'Step個別指導ステップ';
 const SCHOOL_DISPLAY_NAME = '個別指導ステップ';
@@ -236,46 +236,24 @@ function issueNewStudentQr_(code) {
 }
 
 /**
- * その生徒の通知先メール一覧（最大4件）を取得
- * BK〜BN列が空の場合は、X列（保護者メール）を1件だけ返す
+ * その生徒の入退室通知先を取得する。
+ * 生徒マスタのX列・AD列だけを正本とし、空欄と重複アドレスを除外する。
  */
 function getNotifyEmailsForRow_(sheet, row) {
-  const seen = {};
-  const configured = {};
-  const result = [];
-  DELIVERY_EMAIL_COLS.forEach((col, i) => {
-    const email = String(sheet.getRange(row, col).getValue()).trim();
-    const flag = String(sheet.getRange(row, DELIVERY_EMAIL_ENABLED_COLS[i]).getValue()).trim().toUpperCase();
-    const key = normalizeDeliveryEmail_(email);
-    if (email) configured[key] = true;
-    if (!email || flag === '0' || flag === 'FALSE') return;
-    if (!seen[key]) { seen[key] = true; result.push(email); }
-  });
-  // 旧BK〜BN列も互換用に残す。新構成に未登録のアドレスだけ補完する。
-  COL_NOTIFY_EMAILS.forEach(col => {
-    const email = String(sheet.getRange(row, col).getValue()).trim();
-    const key = normalizeDeliveryEmail_(email);
-    if (email && !seen[key] && !configured[key]) { seen[key] = true; result.push(email); }
-  });
-  return result;
+  const lastDeliveryCol = Math.max.apply(null, DELIVERY_EMAIL_COLS);
+  const rowValues = sheet.getRange(row, 1, 1, lastDeliveryCol).getValues()[0];
+  return getNotifyEmailsFromValues_(rowValues);
 }
 
 function getNotifyEmailsFromValues_(rowValues) {
   const seen = {};
-  const configured = {};
   const result = [];
-  DELIVERY_EMAIL_COLS.forEach((col, i) => {
-    const email = String(rowValues[col - 1] || '').trim();
-    const flag = String(rowValues[DELIVERY_EMAIL_ENABLED_COLS[i] - 1] || '').trim().toUpperCase();
-    const key = normalizeDeliveryEmail_(email);
-    if (email) configured[key] = true;
-    if (!email || flag === '0' || flag === 'FALSE') return;
-    if (!seen[key]) { seen[key] = true; result.push(email); }
-  });
-  COL_NOTIFY_EMAILS.forEach(col => {
+  DELIVERY_EMAIL_COLS.forEach(col => {
     const email = String(rowValues[col - 1] || '').trim();
     const key = normalizeDeliveryEmail_(email);
-    if (email && !seen[key] && !configured[key]) { seen[key] = true; result.push(email); }
+    if (!email || !key || seen[key]) return;
+    seen[key] = true;
+    result.push(email);
   });
   return result;
 }
@@ -288,12 +266,14 @@ function getNotifyEmails_(code) {
 
   const registered = COL_NOTIFY_EMAILS.map(col => String(sheet.getRange(row, col).getValue()).trim());
   const guardianEmail = String(sheet.getRange(row, COL_GUARDIAN_EMAIL).getValue()).trim();
+  const deliveryEmails = getNotifyEmailsForRow_(sheet, row);
 
   return {
     ok: true,
     name: sheet.getRange(row, COL_STUDENT_NAME).getValue(),
     emails: registered,
-    guardianEmail: guardianEmail
+    guardianEmail: guardianEmail,
+    deliveryEmails: deliveryEmails
   };
 }
 
