@@ -933,8 +933,9 @@
   <!-- ② 新規生徒のQRを発行するパネル -->
   <div class="tab-panel" id="panelNew" data-title="新規QR発行・名札印刷">
     <div class="panel-form-width">
-    <label for="newStudentCode">生徒・講師番号</label>
-    <input type="text" id="newStudentCode" placeholder="例: 1250" inputmode="numeric" autocomplete="off">
+    <label for="newStudentCode">生徒番号</label>
+    <input type="text" id="newStudentCode" placeholder="例: 1331" inputmode="numeric" autocomplete="off">
+    <div class="hint">生徒番号を入力すると、☆マスタのAZ列に生徒用QRが登録済みか確認します。</div>
     <div id="newStudentInfo" class="student-info">
       <div class="name" id="newStudentName"></div>
       <div id="newStudentSchool"></div>
@@ -947,8 +948,8 @@
     </div>
 
     <div class="new-qr-action-row">
-      <button id="viewCurrentQrBtn" onclick="showCurrentQr()" disabled>現行QRの確認</button>
-      <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;" disabled>🆕 新規QR発行</button>
+      <button id="viewCurrentQrBtn" onclick="showCurrentQr()" disabled>登録済みQRを表示</button>
+      <button id="issueBtn" onclick="issueQr()" style="background:#b5651d;" disabled>生徒用QRを作成してAZ列へ登録</button>
       <a class="name-badge-link" href="https://step-name-badge.mintcocoajasmine.chatgpt.site" target="_blank" rel="noopener">🏷️ 名札発行</a>
     </div>
 
@@ -2311,10 +2312,10 @@ function uniqueQrContacts(result) {
 
 function renderNewQrStatus(hasCurrentQr, contacts) {
   newQrStatusEl.className = 'new-qr-status show ' + (hasCurrentQr ? 'has-current' : 'no-current');
-  newQrStatusTitleEl.textContent = hasCurrentQr ? '現行QRが登録されています' : '現行QRはありません';
+  newQrStatusTitleEl.textContent = hasCurrentQr ? '生徒用QRは登録済みです' : '生徒用QRは未登録です';
   newQrStatusDetailEl.textContent = hasCurrentQr
-    ? '現在有効な現行QRを下に表示しています。そのまま印刷できます。新規発行すると現行QRは使えなくなります。'
-    : 'この生徒には現在有効なQRが登録されていません。必要な場合は「新規QR発行」を押してください。';
+    ? '☆マスタのAZ列に登録済みのQRを下に表示しています。この画面からそのまま印刷できます。'
+    : '「生徒用QRを作成してAZ列へ登録」を押すと、STEP-生徒番号のQRを作成し、☆マスタのAZ列へ保存します。';
   newQrContactInfoEl.textContent = contacts === null
     ? '登録済みの連絡先：確認中...'
     : (contacts.length ? '登録済みの連絡先：' + contacts.join(' ／ ') : '登録済みの連絡先：なし');
@@ -2329,6 +2330,10 @@ newStudentCodeEl.addEventListener('input', () => {
   const seq = ++newLookupSeq;
   if (!code) return;
 
+  newStudentNameEl.textContent = '生徒情報を確認中...';
+  newStudentSchoolEl.textContent = '☆マスタのAZ列を確認しています。数秒かかる場合があります。';
+  newStudentInfoEl.classList.add('show');
+
   newLookupTimer = setTimeout(async () => {
     try {
       const res = await authorizedJsonp({ action: 'getStudent', code });
@@ -2337,11 +2342,13 @@ newStudentCodeEl.addEventListener('input', () => {
         newStudentNameEl.textContent = res.name || '(氏名なし)';
         newStudentSchoolEl.textContent = res.isTeacher ? '講師' : (res.school ? res.school + '校' : '');
         newTabStudent = { code, name: res.name || '(氏名なし)' };
-        issueBtnEl.disabled = false;
         if (res.qrData) {
           newTabHasExistingQr = true;
           newTabExistingQrData = res.qrData;
           viewCurrentQrBtnEl.disabled = false;
+          issueBtnEl.disabled = true;
+        } else {
+          issueBtnEl.disabled = false;
         }
         renderNewQrStatus(newTabHasExistingQr, null);
         if (newTabHasExistingQr) showCurrentQr(false);
@@ -2356,12 +2363,17 @@ newStudentCodeEl.addEventListener('input', () => {
           if (seq === newLookupSeq) newQrContactInfoEl.textContent = '登録済みの連絡先：取得できませんでした';
         }
       } else {
-        newStudentNameEl.textContent = res.message;
-        newStudentSchoolEl.textContent = '';
+        newStudentNameEl.textContent = res.message || '生徒情報を確認できませんでした。';
+        newStudentSchoolEl.textContent = '生徒番号を確認して、もう一度入力してください。';
+        showNewMsg(res.message || '生徒情報を確認できませんでした。', 'error');
       }
       newStudentInfoEl.classList.add('show');
     } catch (e) {
-      // 通信中は何もしない
+      if (seq !== newLookupSeq) return;
+      newStudentNameEl.textContent = '生徒情報を確認できませんでした。';
+      newStudentSchoolEl.textContent = '通信状態を確認して、もう一度入力してください。';
+      newStudentInfoEl.classList.add('show');
+      showNewMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
     }
   }, 400);
 });
@@ -2398,13 +2410,9 @@ async function issueQr() {
   }
 
   if (newTabHasExistingQr) {
-    const confirmed = confirm(
-      '⚠️ 現行QRを新しいQRに変更します。\n\n' +
-      '新規QRを発行すると、現在のQRカードは使えなくなります。\n' +
-      'すでに配布済みのカードも無効になります。\n\n' +
-      '本当に新規QRを発行してよろしいですか？'
-    );
-    if (!confirmed) return;
+    showNewMsg('この生徒はすでにAZ列へQRが登録されています。登録済みQRを表示・印刷してください。', 'error');
+    showCurrentQr(false);
+    return;
   }
 
   const btn = issueBtnEl;
@@ -2414,22 +2422,22 @@ async function issueQr() {
   try {
     const res = await authorizedJsonp({ action: 'issueNewQr', code });
     if (res.ok) {
-      showNewMsg(`${res.name} さんのQRを発行し、登録しました。`, 'success');
+      showNewMsg(`${res.name} さんの生徒用QRを作成し、☆マスタのAZ列へ登録しました。`, 'success');
       cardCodeEl.textContent = code;
       cardNameEl.textContent = res.name;
       cardQrImgEl.src = res.qrImageUrl;
-      qrCardStatusLabelEl.textContent = '新規発行したQR（現在有効）';
+      qrCardStatusLabelEl.textContent = '新しく作成した生徒用QR';
       qrCardStatusLabelEl.className = 'qr-card-status-label newly-issued';
       qrCardEl.classList.add('show');
       printBtnEl.style.display = 'block';
-      printBtnEl.textContent = '🖨 新規発行したQRを印刷する';
+      printBtnEl.textContent = '🖨 生徒用QRを印刷する';
       document.getElementById('pdfEmailWrap').style.display = 'block';
       currentIssuedCode = code;
       newTabHasExistingQr = true;
       newTabExistingQrData = res.qrData || '';
       newQrStatusEl.className = 'new-qr-status show updated';
-      newQrStatusTitleEl.textContent = '新規QRへ更新しました';
-      newQrStatusDetailEl.textContent = '下に表示しているQRが、現在有効な新しいQRです。以前のQRは使用できません。';
+      newQrStatusTitleEl.textContent = '生徒用QRを登録しました';
+      newQrStatusDetailEl.textContent = '下に表示しているQRを☆マスタのAZ列へ保存しました。このQRを印刷して使用してください。';
       viewCurrentQrBtnEl.disabled = !newTabExistingQrData;
     } else {
       showNewMsg(res.message || '発行に失敗しました。', 'error');
@@ -2441,7 +2449,7 @@ async function issueQr() {
     showNewMsg('通信エラーが発生しました。もう一度お試しください。', 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = '🆕 新規QR発行';
+    btn.textContent = '生徒用QRを作成してAZ列へ登録';
   }
 }
 
