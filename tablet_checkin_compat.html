@@ -15,7 +15,8 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 #message{position:absolute;left:4%;right:4%;bottom:4%;padding:10px;text-align:center;background:rgba(0,0,0,.7);border-radius:12px;font-size:15px}
 #result{display:none;position:absolute;left:0;right:0;top:0;bottom:0;text-align:center;padding-top:24%;background:#17324d}
 #result.show{display:block}#result.entry{background:#f5df4d;color:#17324d}#result.exit{background:#173b7a}#result.error{background:#a83232}
-#name{font-size:36px;font-weight:bold}#type{font-size:30px;font-weight:bold;margin-top:14px}#detail{font-size:16px;margin:14px 22px;line-height:1.5}
+#result.duplicate{color:#171717;background:#f5df4d}#result.duplicate.duplicate-exit{color:#fff;background:#165e83}#result.duplicate.duplicate-exit #resultContent{color:#fff;background:rgba(7,29,51,.82);border:2px solid rgba(255,255,255,.3)}
+#name{font-size:36px;font-weight:bold}#type{font-size:30px;font-weight:bold;margin-top:14px}#result.duplicate #name{font-size:72px}#result.duplicate #type{font-size:60px}#detail{font-size:16px;margin:14px 22px;line-height:1.5}
 #resultContent{position:absolute;left:5%;top:19%;width:54%;padding:22px 16px;border-radius:24px;box-sizing:border-box;background:rgba(5,18,51,.78);border:2px solid rgba(255,255,255,.3);z-index:3}#resultCharacter{display:none;position:absolute;right:1%;bottom:0;width:43%;height:84%;object-fit:contain;object-position:center bottom;z-index:2}#result.photo-variant #resultCharacter,#result.rare-variant #resultCharacter{width:47%;height:90%}#result.rare-variant{color:#20242b;background:linear-gradient(145deg,#eef7ff 0%,#fff 46%,#fff5f8 100%)}#result.rare-variant #resultContent{background:rgba(255,255,255,.95);color:#20242b;border-color:#b9d8fb}
 #result.mascot-variant{color:#183f2d;background:radial-gradient(circle at 12% 18%,#fff59b 0 5px,transparent 6px),radial-gradient(circle at 28% 75%,#ffcf4d 0 7px,transparent 8px),radial-gradient(circle at 78% 17%,#fff4a0 0 6px,transparent 7px),radial-gradient(circle at 89% 67%,#f8b52f 0 5px,transparent 6px),linear-gradient(145deg,#efffdc 0%,#fff9b8 48%,#ffc752 100%)}
 #result.exit.mascot-variant:after{display:none}
@@ -537,11 +538,15 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     setWalkerVisible(false);
     resultCharacter.style.display = 'none';
     resultMascot.style.display = 'none';
-    result.className = 'show ' + (ok ? (type === '入室' || type === '出勤' ? 'entry' : 'exit') : 'error') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '') + (useMascotExitVariant ? ' mascot-variant' : '');
+    result.className = 'show ' + (ok ? (duplicate ? 'duplicate' : (type === '入室' || type === '出勤' ? 'entry' : 'exit')) : 'error') + (duplicate && (type === '退室' || type === '退勤') ? ' duplicate-exit' : '') + (isTeacher ? ' teacher' : '') + (usePhotoExitVariant ? ' photo-variant' : '') + (useRareExitVariant ? ' rare-variant' : '') + (useMascotExitVariant ? ' mascot-variant' : '');
     nameEl.innerHTML = ok ? escapeText(name) + (isTeacher ? ' 先生' : ' さん') : '受付できませんでした';
     typeEl.innerHTML = ok ? (duplicate ? escapeText(type) + '済みです' : (type === '入室' ? '入室しました' : (type === '退室' ? '退室しました' : escapeText(type)))) : '';
     detailEl.innerHTML = escapeText(duplicate ? '20秒以内の重複読取です' : (useMascotExitVariant ? 'また明日も来るんだぞ！' : (useRareExitVariant ? 'また明日も頑張ろうね！' : (detail || '受付が完了しました'))));
-    if (ok && !duplicate && !isTeacher && (type === '入室' || type === '退室')) {
+    if (ok && duplicate) {
+      character = isTeacher ? 'teacher-duplicate.png' : 'duplicate.png';
+      resultCharacter.src = ASSET_BASE + character;
+      resultCharacter.style.display = 'block';
+    } else if (ok && !isTeacher && (type === '入室' || type === '退室')) {
       if (useMascotExitVariant) {
         resultMascot.style.display = 'block';
       } else {
