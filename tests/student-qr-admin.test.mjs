@@ -40,9 +40,9 @@ test('selected QR cards can be printed together', () => {
   assert.match(page, /height: 74mm/);
 });
 
-test('QR confirmation menu clearly includes printing', () => {
-  assert.match(page, /id="tabCheckBtn"[^>]*>QR確認・印刷<\/button>/);
-  assert.match(page, /id="panelCheck" data-title="QR確認・印刷"/);
+test('student QR confirmation menu clearly includes printing', () => {
+  assert.match(page, /id="tabCheckBtn"[^>]*>生徒用QR確認・印刷<\/button>/);
+  assert.match(page, /id="panelCheck" data-title="生徒用QR確認・印刷"/);
 });
 
 test('admin functions use a desktop-first workspace with responsive fallback', () => {
@@ -111,4 +111,9 @@ test('attendance CSV dates show reliable Japanese weekdays', () => {
   assert.match(page, /\['日', '月', '火', '水', '木', '金', '土'\]/);
   assert.match(page, /function updateCsvWeekdayDisplays\(\)/);
   assert.match(page, /updateCsvWeekdayDisplays\(\)/);
+});
+
+test('new QR status prefers actual X and AD delivery contacts', () => {
+  assert.match(page, /Array\.isArray\(result\.deliveryEmails\)/);
+  assert.match(page, /contacts\.push\(\.\.\.result\.deliveryEmails\)/);
 });
