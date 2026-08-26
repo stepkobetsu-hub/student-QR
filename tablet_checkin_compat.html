@@ -15,6 +15,8 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 #top{position:absolute;left:0;right:0;top:0;padding:16px;text-align:center;background:rgba(0,0,0,.55)}#clock{font-size:23px;font-weight:bold}
 #mode{font-size:13px;margin-top:4px;color:#d6e7ff}#status{position:absolute;left:12px;bottom:12px;width:14px;height:14px;border-radius:50%;background:#45c879}
 #message{position:absolute;left:4%;right:4%;bottom:4%;padding:10px;text-align:center;background:rgba(0,0,0,.7);border-radius:12px;font-size:15px}
+#idleOverlay{display:none;position:absolute;left:0;right:0;top:0;bottom:0;z-index:100;border:0;background:#030506;color:#fff;text-align:center;padding-top:30%;box-sizing:border-box}
+#idleOverlay.show{display:block}#idleOverlay .idleIcon{font-size:54px;line-height:1}#idleOverlay .idleTitle{margin-top:20px;font-size:32px;font-weight:bold}#idleOverlay .idleHelp{margin-top:15px;font-size:20px;color:#cbd5df}
 #result{display:none;position:absolute;left:0;right:0;top:0;bottom:0;text-align:center;padding-top:24%;background:#17324d}
 #result.show{display:block}#result.entry{background:#f5df4d;color:#17324d}#result.exit{background:#173b7a}#result.error{background:#a83232}
 #result.duplicate{color:#171717;background:#f5df4d}#result.duplicate.duplicate-exit{color:#fff;background:#165e83}#result.duplicate.duplicate-exit #resultContent{color:#fff;background:rgba(7,29,51,.82);border:2px solid rgba(255,255,255,.3)}
@@ -185,6 +187,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     <span class="impact-shadow"></span>
   </div>
   <div id="result"><div id="resultContent"><div id="name"></div><div id="type"></div><div id="detail"></div></div><img id="resultCharacter" alt=""><div id="resultMascot" aria-hidden="true"><span class="mascot-chair-back"></span><span class="mascot-chair-seat"></span><span class="mascot-chair-arm mascot-chair-arm-left"></span><span class="mascot-chair-arm mascot-chair-arm-right"></span><span class="mascot-chair-leg mascot-chair-leg-left"></span><span class="mascot-chair-leg mascot-chair-leg-right"></span><div class="result-mascot-character"><span class="walker-arm walker-arm-left result-arm-proud"></span><span class="walker-arm walker-arm-right result-wave-arm"></span><span class="walker-leg walker-leg-left result-leg-left"></span><span class="walker-leg walker-leg-right result-leg-right"></span><div class="walker-body result-mascot-body"><span class="fruit-stem"></span><span class="fruit-leaf fruit-leaf-left"></span><span class="fruit-leaf fruit-leaf-right"></span><span class="fruit-brow fruit-brow-left"></span><span class="fruit-brow fruit-brow-right"></span><span class="fruit-eye fruit-eye-left"><span class="fruit-pupil"></span></span><span class="fruit-eye fruit-eye-right"><span class="fruit-pupil"></span></span><span class="fruit-cheek fruit-cheek-left"></span><span class="fruit-cheek fruit-cheek-right"></span><span class="fruit-mouth"><span class="fruit-tongue"></span></span><span class="fruit-dot"></span></div></div></div></div>
+  <button id="idleOverlay" type="button" aria-label="画面をタップしてQR読取を再開"><div class="idleIcon" aria-hidden="true">☾</div><div class="idleTitle">休止中</div><div class="idleHelp">画面をタップすると再開します</div></button>
 </div>
 <script src="vendor/jsQR.js"></script>
 <script>
@@ -208,6 +211,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   var photoContext = photoCanvas.getContext('2d');
   var message = document.getElementById('message');
   var status = document.getElementById('status');
+  var idleOverlay = document.getElementById('idleOverlay');
   var result = document.getElementById('result');
   var resultCharacter = document.getElementById('resultCharacter');
   var resultMascot = document.getElementById('resultMascot');
@@ -227,10 +231,14 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   var config;
   var deviceId;
   var busy = false;
+  var sleeping = false;
+  var inactivityTimer = 0;
+  var currentStream = null;
   var lastFrameAt = 0;
   var lastCode = '';
   var lastCodeAt = 0;
   var raf = window.requestAnimationFrame || function (callback) { return setTimeout(function () { callback(Date.now()); }, 40); };
+  var INACTIVITY_TIMEOUT = 5 * 60 * 60 * 1000;
 
   function parseParams(raw) {
     var values = {};
@@ -279,7 +287,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 
   function warmEdgeConnection() {
     var xhr;
-    if (!config) return;
+    if (!config || sleeping) return;
     try {
       xhr = new XMLHttpRequest();
       xhr.open('GET', String(config.apiUrl).replace(/\/$/, '') + '/health', true);
@@ -321,6 +329,11 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
 
   function attachStream(stream) {
     try {
+      if (sleeping) {
+        if (stream && stream.getTracks) stream.getTracks().forEach(function (track) { track.stop(); });
+        return;
+      }
+      currentStream = stream;
       if ('srcObject' in video) video.srcObject = stream;
       else video.src = (window.URL || window.webkitURL).createObjectURL(stream);
       var played = video.play();
@@ -340,6 +353,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     var image;
     var code;
     var now;
+    if (sleeping) return;
     if (!busy && frameTime - lastFrameAt >= FRAME_INTERVAL && video.readyState >= 2) {
       lastFrameAt = frameTime;
       width = video.videoWidth || 640;
@@ -352,6 +366,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
         image = scanContext.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
         code = window.jsQR ? window.jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' }) : null;
         if (code && code.data) {
+          resetInactivityTimer();
           now = Date.now();
           if (code.data !== lastCode || now - lastCodeAt >= 5000) {
             lastCode = code.data;
@@ -540,6 +555,65 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
     qrWalker.style.display = visible ? 'block' : 'none';
   }
 
+  function notifyNativeSleepState(isSleeping) {
+    try {
+      if (window.SleepControl && typeof window.SleepControl.setSleeping === 'function') {
+        window.SleepControl.setSleeping(isSleeping);
+      }
+    } catch (ignore) {}
+  }
+
+  function stopCameraStream() {
+    var tracks;
+    var i;
+    if (currentStream && currentStream.getTracks) {
+      tracks = currentStream.getTracks();
+      for (i = 0; i < tracks.length; i += 1) tracks[i].stop();
+    }
+    currentStream = null;
+    try { video.pause(); } catch (ignore) {}
+    try {
+      if ('srcObject' in video) video.srcObject = null;
+      else { video.removeAttribute('src'); video.load(); }
+    } catch (ignore2) {}
+  }
+
+  function resetInactivityTimer() {
+    if (sleeping) return;
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(enterRestMode, INACTIVITY_TIMEOUT);
+  }
+
+  function enterRestMode() {
+    if (sleeping) return;
+    if (busy || result.className.indexOf('show') !== -1) {
+      resetInactivityTimer();
+      return;
+    }
+    sleeping = true;
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = 0;
+    if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
+    setWalkerVisible(false);
+    stopCameraStream();
+    notifyNativeSleepState(true);
+    idleOverlay.className = 'show';
+  }
+
+  function resumeFromRest() {
+    if (!sleeping) return;
+    sleeping = false;
+    idleOverlay.className = '';
+    notifyNativeSleepState(false);
+    lastFrameAt = 0;
+    warmEdgeConnection();
+    startRandomWalkerRoute();
+    resetInactivityTimer();
+    requestCamera(attachStream, function () {
+      showError('カメラを再開できませんでした。カメラ権限を確認してください');
+    });
+  }
+
   function displayProcessing() {
     setWalkerVisible(false);
     resultCharacter.style.display = 'none';
@@ -585,7 +659,7 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
       resultMascot.style.display = 'none';
       message.innerHTML = 'QRコードを右下の枠にかざしてください';
       busy = false;
-      setWalkerVisible(document.visibilityState !== 'hidden');
+      setWalkerVisible(!sleeping && document.visibilityState !== 'hidden');
     }, ok ? 3000 : 4000);
   }
 
@@ -605,11 +679,16 @@ canvas{display:none}#frame{position:absolute;right:4%;bottom:16%;width:44%;heigh
   setInterval(updateClock, 1000);
   warmEdgeConnection();
   setInterval(warmEdgeConnection, 30000);
+  resetInactivityTimer();
   startRandomWalkerRoute();
   if (document.addEventListener) {
+    document.addEventListener('touchstart', resetInactivityTimer, false);
+    document.addEventListener('mousedown', resetInactivityTimer, false);
+    document.addEventListener('keydown', resetInactivityTimer, false);
+    idleOverlay.addEventListener('click', resumeFromRest, false);
     document.addEventListener('visibilitychange', function () {
-      setWalkerVisible(document.visibilityState !== 'hidden' && !busy && result.className.indexOf('show') === -1);
-      if (document.visibilityState !== 'hidden') warmEdgeConnection();
+      setWalkerVisible(!sleeping && document.visibilityState !== 'hidden' && !busy && result.className.indexOf('show') === -1);
+      if (!sleeping && document.visibilityState !== 'hidden') warmEdgeConnection();
     }, false);
   }
   if (!window.jsQR) {
