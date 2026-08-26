@@ -1,1 +1,2 @@
-2026-08-27T22:40:00+09:00
+Deploy trigger: 2026-08-27T00:18:00+09:00
+Reason: remove intrusive full-screen processing UI and warm Edge connection before QR scans.
