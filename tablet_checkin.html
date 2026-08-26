@@ -439,6 +439,25 @@
     background: #4caf50;
   }
   #statusDot.error { background: #e53935; }
+  #idleOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 32px;
+    border: 0;
+    background: #030506;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+  }
+  #idleOverlay.show { display: flex; }
+  #idleOverlay .idle-icon { font-size: 58px; line-height: 1; }
+  #idleOverlay .idle-title { margin-top: 22px; font-size: 34px; font-weight: bold; }
+  #idleOverlay .idle-help { margin-top: 16px; font-size: 21px; color: #cbd5df; }
 </style>
 </head>
 <body>
@@ -488,6 +507,11 @@
 
   <div id="statusDot"></div>
   <div id="scanHint" role="status" aria-live="polite"></div>
+  <button id="idleOverlay" type="button" aria-label="画面をタップしてQR読取を再開">
+    <span class="idle-icon" aria-hidden="true">☾</span>
+    <span class="idle-title">休止中</span>
+    <span class="idle-help">画面をタップすると再開します</span>
+  </button>
 </div>
 
 <script src="vendor/jsQR.js"></script>
@@ -530,9 +554,12 @@ const resultPoints = document.getElementById('resultPoints');
 const statusDot = document.getElementById('statusDot');
 const clockEl = document.getElementById('clock');
 const scanHint = document.getElementById('scanHint');
+const idleOverlay = document.getElementById('idleOverlay');
 
 let scanning = true;
 let requestInFlight = false;
+let sleeping = false;
+let inactivityTimer = 0;
 let lastScannedCode = null;
 let lastScannedTime = 0;
 let lastAcceptedScan = null;
@@ -550,6 +577,7 @@ const EDGE_REQUEST_TIMEOUT_MS = 25000;
 const SUCCESS_RESUME_MS = 2500;
 const DUPLICATE_RESUME_MS = 3500;
 const MAIL_FAILURE_RESUME_MS = 3500;
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const RARE_EXIT_ASSET = 'assets/checkin/goodbye-rare-woman.webp?v=20260819';
 const PHOTO_EXIT_PROBABILITY = 0.10;
@@ -642,6 +670,10 @@ async function startCamera() {
       video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 12, max: 20 } },
       audio: false
     });
+    if (sleeping) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
     video.srcObject = stream;
     await video.play();
     const track = stream.getVideoTracks()[0];
@@ -662,6 +694,7 @@ async function startCamera() {
 
 // QRスキャンループ
 function scanLoop(frameTime) {
+  if (sleeping) return;
   if (!scanning || requestInFlight) {
     requestAnimationFrame(scanLoop);
     return;
@@ -690,6 +723,7 @@ function scanLoop(frameTime) {
     }
 
     if (code && code.data) {
+      resetInactivityTimer();
       scanHint.classList.remove('show');
       const now = Date.now();
       if (code.data === lastScannedCode && (now - lastScannedTime) < RESCAN_COOLDOWN_MS) {
@@ -982,12 +1016,67 @@ function createEdgeDeviceId() {
 }
 
 function warmEdgeConnection() {
-  if (!edgeConfig) return;
+  if (!edgeConfig || sleeping) return;
   fetch(edgeConfig.apiUrl.replace(/\/$/, '') + '/health', {
     method: 'GET',
     cache: 'no-store',
     credentials: 'omit'
   }).catch(() => {});
+}
+
+function notifyNativeSleepState(isSleeping) {
+  try {
+    if (window.SleepControl && typeof window.SleepControl.setSleeping === 'function') {
+      window.SleepControl.setSleeping(isSleeping);
+    }
+  } catch (ignore) {}
+}
+
+function stopCameraStream() {
+  const stream = video.srcObject;
+  if (stream && typeof stream.getTracks === 'function') {
+    stream.getTracks().forEach(track => track.stop());
+  }
+  try { video.pause(); } catch (ignore) {}
+  video.srcObject = null;
+}
+
+function resetInactivityTimer() {
+  if (sleeping) return;
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(enterRestMode, INACTIVITY_TIMEOUT_MS);
+}
+
+function enterRestMode() {
+  if (sleeping) return;
+  if (requestInFlight || resultOverlay.classList.contains('show')) {
+    resetInactivityTimer();
+    return;
+  }
+  sleeping = true;
+  scanning = false;
+  if (inactivityTimer) clearTimeout(inactivityTimer);
+  inactivityTimer = 0;
+  if (walkerRouteTimer) clearTimeout(walkerRouteTimer);
+  setWalkerVisible(false);
+  scanHint.classList.remove('show');
+  stopCameraStream();
+  notifyNativeSleepState(true);
+  idleOverlay.classList.add('show');
+}
+
+async function resumeFromRest() {
+  if (!sleeping) return;
+  sleeping = false;
+  idleOverlay.classList.remove('show');
+  notifyNativeSleepState(false);
+  scanning = true;
+  scanStartedAt = Date.now();
+  lastFrameAt = 0;
+  warmEdgeConnection();
+  startRandomWalkerRoute();
+  resetInactivityTimer();
+  await startCamera();
 }
 
 function startRandomWalkerRoute() {
@@ -1296,17 +1385,23 @@ function finishAndResume(delayMs) {
     scanning = true;
     scanStartedAt = Date.now();
     scanHint.classList.remove('show');
-    setWalkerVisible(document.visibilityState !== 'hidden');
+    setWalkerVisible(!sleeping && document.visibilityState !== 'hidden');
   }, delayMs);
 }
 
 document.addEventListener('visibilitychange', () => {
-  setWalkerVisible(document.visibilityState !== 'hidden' && !requestInFlight && !resultOverlay.classList.contains('show'));
-  if (document.visibilityState !== 'hidden') warmEdgeConnection();
+  setWalkerVisible(!sleeping && document.visibilityState !== 'hidden' && !requestInFlight && !resultOverlay.classList.contains('show'));
+  if (!sleeping && document.visibilityState !== 'hidden') warmEdgeConnection();
 });
+
+['touchstart', 'mousedown', 'keydown'].forEach(eventName => {
+  document.addEventListener(eventName, resetInactivityTimer, { passive: true });
+});
+idleOverlay.addEventListener('click', resumeFromRest);
 
 warmEdgeConnection();
 setInterval(warmEdgeConnection, 30000);
+resetInactivityTimer();
 
 const previewMode = new URLSearchParams(location.search).get('preview');
 if (previewMode === 'entry') {
