@@ -152,6 +152,31 @@
   }
   #resultOverlay.duplicate #resultName { font-size: 80px; }
   #resultOverlay.duplicate #resultType { font-size: 60px; }
+  #resultOverlay.processing {
+    color: #fff;
+    background: linear-gradient(145deg, #075f73 0%, #188fa2 52%, #47c7b7 100%);
+  }
+  #resultOverlay.processing #resultContent {
+    max-width: min(88vw, 760px);
+    padding: 34px 42px;
+    border-radius: 30px;
+    background: rgba(255,255,255,.18);
+    border: 2px solid rgba(255,255,255,.42);
+    box-shadow: 0 14px 34px rgba(0,0,0,.24);
+  }
+  #resultOverlay.processing #resultIcon {
+    font-size: 96px;
+    line-height: 1;
+    margin-bottom: 18px;
+    animation: processing-pulse 1.1s ease-in-out infinite alternate;
+  }
+  #resultOverlay.processing #resultName { font-size: 48px; }
+  #resultOverlay.processing #resultType { font-size: 32px; margin-top: 12px; }
+  #resultOverlay.processing #resultSub { font-size: 20px; margin-top: 16px; opacity: .95; }
+  @keyframes processing-pulse {
+    from { transform: scale(.94); opacity: .78; }
+    to { transform: scale(1.06); opacity: 1; }
+  }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
   #scanHint {
@@ -733,6 +758,9 @@ async function handleQrDetected(qrData) {
   activeReceiptId = receiptId;
   const clientTimings = { qrParsedAt: new Date().toISOString(), requestStartedAt: '' };
 
+  // QRを認識したことを先に大きく表示し、保存処理は裏側で続ける
+  showProcessing(qrData, receiptId);
+
   // 写真を撮影（QR検出時点のビデオフレームをそのまま使用）
   const photoScale = Math.min(1, 360 / video.videoWidth);
   photoCanvas.width = Math.max(1, Math.round(video.videoWidth * photoScale));
@@ -740,7 +768,6 @@ async function handleQrDetected(qrData) {
   photoCtx.drawImage(video, 0, 0, photoCanvas.width, photoCanvas.height);
   const photoBase64 = photoCanvas.toDataURL('image/jpeg', 0.35);
 
-  showProcessing(qrData, receiptId);
   let resumeDelayMs = 4500;
   let slowTimer = setTimeout(() => {
     resultSub.textContent = '処理に時間がかかっています。受付状態を確認します…';
@@ -1085,18 +1112,17 @@ function setWalkerVisible(visible) {
 
 function showProcessing(qrData, receiptId) {
   setWalkerVisible(false);
-  resultOverlay.className = '';
-  resultIcon.textContent = '';
+  resultOverlay.className = 'show processing';
+  resultIcon.textContent = '✓';
   resultCharacter.style.display = 'none';
   resultMascot.style.display = 'none';
-  resultName.textContent = '';
-  resultType.textContent = '';
+  resultName.textContent = 'QRを読み取りました';
+  resultType.textContent = '受付を確認しています';
   resultTime.textContent = '';
-  resultSub.textContent = '';
+  resultSub.textContent = 'そのまま少しお待ちください';
   resultPoints.textContent = '';
   resultPoints.style.display = 'none';
-  scanHint.textContent = '確認しています。少しお待ちください';
-  scanHint.classList.add('show');
+  scanHint.classList.remove('show');
 }
 
 function renderServerResult(data) {
