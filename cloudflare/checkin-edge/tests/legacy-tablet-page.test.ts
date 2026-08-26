@@ -13,11 +13,14 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain('rel="icon" type="image/png" sizes="192x192"');
     expect(html).toContain('rel="apple-touch-icon" sizes="192x192"');
     expect(html).toContain('rel="manifest" href="/legacy-tablet-manifest.json"');
+    expect(html).toContain('rel="preconnect" href="https://step-checkin-edge-staging.stepkobetsu.workers.dev"');
     expect(html).toContain("https://stepkobetsu-hub.github.io/student-QR/icon-192.png?v=20260826");
     expect(html).toContain('<script src="/legacy-jsqr.js"></script>');
     expect(html).toContain("/v1/checkins");
     expect(html).toContain("width:30%;height:38%");
     expect(html).toContain("displayProcessing()");
+    expect(html).toContain("warmEdgeConnection()");
+    expect(html).toContain("setInterval(warmEdgeConnection, 30000)");
     expect(html).toContain("result.className = ''");
     expect(html).toContain("message.innerHTML = '受付中です…'");
     expect(html).not.toContain("nameEl.innerHTML = 'QRを読み取りました'");
