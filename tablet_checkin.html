@@ -150,8 +150,8 @@
     background: rgba(7,29,51,.82);
     border: 2px solid rgba(255,255,255,.3);
   }
-  #resultOverlay.duplicate:not(.teacher) #resultName { font-size: 80px; }
-  #resultOverlay.duplicate:not(.teacher) #resultType { font-size: 60px; }
+  #resultOverlay.duplicate #resultName { font-size: 80px; }
+  #resultOverlay.duplicate #resultType { font-size: 60px; }
   #resultOverlay.error { background: rgba(192, 57, 43, 0.95); }
   #resultOverlay.warning { background: rgba(181, 113, 0, 0.95); }
   #scanHint {
@@ -1144,7 +1144,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
   if (ok && isTeacher) {
     const isCooldownDuplicate = duplicate && (errorCode === 'DUPLICATE_WITHIN_COOLDOWN' || errorCode === 'DUPLICATE_WITHIN_WINDOW');
     resultOverlay.className = isCooldownDuplicate
-      ? 'show duplicate teacher'
+      ? ('show duplicate teacher' + (type === '退勤' ? ' duplicate-exit' : ''))
       : (mailStatus === 'FAILED' ? 'show warning teacher' : 'show teacher ' + (type === '出勤' ? 'entry' : 'exit'));
     resultIcon.textContent = '';
     resultCharacter.src = isCooldownDuplicate
