@@ -1284,17 +1284,21 @@ function showLoginPanel(message) {
   if (message) showLoginMsg(message, 'error');
 }
 
-function scheduleStudentQrAutoLogin() {
+function scheduleStudentQrAutoLogin(event) {
   clearTimeout(studentQrAutoLoginTimer);
   if (studentQrLoginBusy) return;
+
+  const explicitlyLoggedOut = localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1';
+  const manualTyping = Boolean(event?.isTrusted && event.type === 'input' && event.inputType);
+  // ログアウト直後のパスワード自動入力では、勝手に入り直さない。
+  // 本人が入力を再開した場合、またはログインボタンを押した場合だけ再開する。
+  if (explicitlyLoggedOut && !manualTyping) return;
 
   const loginId = document.getElementById('loginId').value.trim();
   const password = document.getElementById('loginPassword').value;
   if (!loginId || !password) return;
 
-  // 自分でログアウトした直後は勝手に再ログインしない。
-  // その後、IDまたはパスワードを入力したときだけログインを再開する。
-  localStorage.removeItem(EXPLICIT_LOGOUT_KEY);
+  if (manualTyping) localStorage.removeItem(EXPLICIT_LOGOUT_KEY);
   studentQrAutoLoginTimer = setTimeout(() => loginStudentQr(), 650);
 }
 
