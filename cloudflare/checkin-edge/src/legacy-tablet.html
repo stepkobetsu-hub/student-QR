@@ -621,11 +621,11 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     setWalkerVisible(false);
     if (resultTimer) clearTimeout(resultTimer);
     clearCharacter();
-    result.className = 'show processing';
-    nameEl.innerHTML = 'QRを読み取りました';
-    typeEl.innerHTML = '受付を確認しています';
-    detailEl.innerHTML = 'そのまま少しお待ちください';
-    message.innerHTML = 'QRを読み取りました';
+    result.className = '';
+    nameEl.innerHTML = '';
+    typeEl.innerHTML = '';
+    detailEl.innerHTML = '';
+    message.innerHTML = '受付中です…';
   }
 
   function displayResult(ok, name, type, detail, duplicate, isTeacher) {
