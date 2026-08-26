@@ -4,6 +4,8 @@
   <link rel="manifest" href="manifest-qr.json">
 <link rel="apple-touch-icon" href="icon-qr-192.png">
 <meta name="theme-color" content="#2e7d5b">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>生徒・講師QR／入退室管理 | Step個別指導ステップ</title>
@@ -1116,8 +1118,6 @@
 
 <div id="batchPrintHost" aria-hidden="true"></div>
 
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 // ここをGASのウェブアプリURL（/exec で終わるもの）に書き換えてください
 const API_URL = "https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec";
@@ -1132,6 +1132,9 @@ const EXPLICIT_LOGOUT_KEY = 'studentQrExplicitlyLoggedOut';
 const DEVICE_CREDENTIAL_KEY = 'studentQrDeviceCredentialV1';
 const DEVICE_SECRET_KEY = 'studentQrDeviceSecretV1';
 const QR_ALLOWED_PERMISSION_LEVELS = ['2', '3', '4'];
+const QR_SCANNER_SCRIPT_URL = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+const PDF_SCRIPT_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const externalScriptLoads = new Map();
 
 let studentQrAuth = null;
 let studentQrAutoLoginTimer = null;
@@ -1155,6 +1158,36 @@ async function authApi(payload) {
     body: JSON.stringify(payload)
   });
   return await res.json();
+}
+
+function loadExternalScriptOnce(src, readyCheck) {
+  if (readyCheck()) return Promise.resolve();
+  if (externalScriptLoads.has(src)) return externalScriptLoads.get(src);
+
+  const load = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => readyCheck()
+      ? resolve()
+      : reject(new Error('機能の読み込みを確認できませんでした。'));
+    script.onerror = () => reject(new Error('機能の読み込みに失敗しました。'));
+    document.head.appendChild(script);
+  }).catch(error => {
+    externalScriptLoads.delete(src);
+    throw error;
+  });
+
+  externalScriptLoads.set(src, load);
+  return load;
+}
+
+function ensureQrScannerLibrary() {
+  return loadExternalScriptOnce(QR_SCANNER_SCRIPT_URL, () => typeof window.Html5Qrcode === 'function');
+}
+
+function ensurePdfLibrary() {
+  return loadExternalScriptOnce(PDF_SCRIPT_URL, () => typeof window.jspdf?.jsPDF === 'function');
 }
 
 function getSavedStudentQrAuth() {
@@ -1391,7 +1424,7 @@ async function verifySavedStudentQrAuth(saved) {
   return true;
 }
 
-async function initStudentQrAuth() {
+function initStudentQrAuth() {
   const savedId = localStorage.getItem(LOGIN_ID_KEY) || '';
   if (savedId) document.getElementById('loginId').value = savedId;
 
@@ -1400,20 +1433,34 @@ async function initStudentQrAuth() {
     return;
   }
 
-  // 端末側の時刻や短い有効期限だけでログアウト扱いにせず、
-  // サーバーへ確認して継続・更新できる限りそのまま利用する。
   const saved = getSavedStudentQrAuth();
   if (saved) {
-    try {
-      if (await verifySavedStudentQrAuth(saved)) return;
-    } catch (e) {
-      // 保存済みID・パスワードで静かに再ログインを試す
-    }
+    // 保存済みログインがある端末では画面を先に表示し、
+    // 時間のかかるGoogle側の確認は裏側で行う。
+    showAppPanel(saved);
+    refreshStudentQrAuthInBackground(saved);
+    return;
+  }
+
+  // 初回や保存セッションがない場合も、白紙にせずログイン画面を先に表示する。
+  showLoginPanel();
+  resumeStudentQrLogin().then(success => {
+    if (!success) startStudentQrAutofillWatch();
+  });
+}
+
+async function refreshStudentQrAuthInBackground(saved) {
+  try {
+    if (await verifySavedStudentQrAuth(saved)) return;
+  } catch (e) {
+    // Google側が一時的に遅い・応答しない場合は、表示中の画面を維持する。
+    studentQrAuth = saved;
+    return;
   }
 
   clearStudentQrSession(true);
   if (await resumeStudentQrLogin()) return;
-  showLoginPanel();
+  showLoginPanel('ログイン状態を更新できませんでした。もう一度ログインしてください。');
   startStudentQrAutofillWatch();
 }
 
@@ -1694,6 +1741,18 @@ async function toggleScanner() {
     return;
   }
 
+  btn.disabled = true;
+  btn.textContent = 'カメラ機能を準備中...';
+  try {
+    await ensureQrScannerLibrary();
+  } catch (err) {
+    showMsg('カメラ機能を読み込めませんでした。通信状態を確認して、もう一度お試しください。', 'error');
+    btn.disabled = false;
+    btn.textContent = '📷 カメラでQRをスキャン';
+    return;
+  }
+
+  btn.disabled = false;
   wrap.style.display = 'block';
   btn.textContent = '■ スキャンを停止';
   scanning = true;
@@ -2148,8 +2207,11 @@ async function sendCheckQrPdf() {
   btn.textContent = 'PDF作成中...';
 
   try {
-    const auth = await requireStudentQrAuth();
-    const qrDataUrl = await loadImageAsDataUrl(currentCheckedQr.qrImageUrl);
+    const [auth, qrDataUrl] = await Promise.all([
+      requireStudentQrAuth(),
+      loadImageAsDataUrl(currentCheckedQr.qrImageUrl),
+      ensurePdfLibrary()
+    ]).then(([auth, qrDataUrl]) => [auth, qrDataUrl]);
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a6' });
@@ -2420,9 +2482,12 @@ async function sendQrPdf() {
   btn.textContent = 'PDF作成中...';
 
   try {
-    const auth = await requireStudentQrAuth();
+    const [auth, qrDataUrl] = await Promise.all([
+      requireStudentQrAuth(),
+      loadImageAsDataUrl(cardQrImgEl.src),
+      ensurePdfLibrary()
+    ]).then(([auth, qrDataUrl]) => [auth, qrDataUrl]);
     // QR画像を読み込んでPDFに埋め込む
-    const qrDataUrl = await loadImageAsDataUrl(cardQrImgEl.src);
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a6' });
