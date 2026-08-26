@@ -171,3 +171,17 @@ test('public errors are distinct', () => {
     assert.match(page + backend, new RegExp(code));
   }
 });
+
+test('student notifications use guardian email columns X and AD only', () => {
+  assert.match(backend, /COL_GUARDIAN_EMAIL = 24/);
+  assert.match(backend, /COL_GUARDIAN_EMAIL_2 = 30/);
+  assert.match(backend, /DELIVERY_EMAIL_COLS = \[COL_GUARDIAN_EMAIL, COL_GUARDIAN_EMAIL_2\]/);
+  assert.doesNotMatch(backend, /DELIVERY_EMAIL_ENABLED_COLS/);
+  const recipients = backend.slice(
+    backend.indexOf('function getNotifyEmailsForRow_'),
+    backend.indexOf('function getNotifyEmails_(code)')
+  );
+  assert.match(recipients, /getNotifyEmailsFromValues_/);
+  assert.doesNotMatch(recipients, /COL_NOTIFY_EMAILS/);
+  assert.match(backend, /deliveryEmails: deliveryEmails/);
+});
