@@ -67,7 +67,7 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
 #result.teacher #resultCharacter{width:44%;height:94%}
 #result.duplicate #resultCharacter{width:40%;height:80%}
 #name{font-size:36px;font-weight:bold;line-height:1.2}#type{font-size:34px;font-weight:bold;margin-top:14px;line-height:1.25}#detail{font-size:17px;margin:15px 10px 0;line-height:1.5}
-#result.processing #type{font-size:42px}#result.processing #detail{font-size:18px}
+#result.processing #name{font-size:48px}#result.processing #type{font-size:36px}#result.processing #detail{font-size:20px}
 #qrWalker{position:absolute;left:4%;bottom:78px;width:70px;height:88px;z-index:4;pointer-events:none}
 #qrWalker.walker-hidden{display:none}
 .walker-character{position:absolute;left:0;top:0;width:70px;height:88px;-webkit-transform-origin:50% 100%;transform-origin:50% 100%}
@@ -470,7 +470,6 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     }
     busy = true;
     displayProcessing();
-    message.innerHTML = '確認しています。初回の名簿更新には20秒ほどかかる場合があります';
     id = receiptId();
     payload = {
       campus: config.campus,
@@ -621,8 +620,11 @@ canvas{display:none}#frame{position:absolute;right:5%;bottom:15%;width:30%;heigh
     setWalkerVisible(false);
     if (resultTimer) clearTimeout(resultTimer);
     clearCharacter();
-    result.className = '';
-    message.innerHTML = '確認しています。少しお待ちください';
+    result.className = 'show processing';
+    nameEl.innerHTML = 'QRを読み取りました';
+    typeEl.innerHTML = '受付を確認しています';
+    detailEl.innerHTML = 'そのまま少しお待ちください';
+    message.innerHTML = 'QRを読み取りました';
   }
 
   function displayResult(ok, name, type, detail, duplicate, isTeacher) {
