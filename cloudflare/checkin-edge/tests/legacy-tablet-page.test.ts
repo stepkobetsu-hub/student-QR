@@ -19,6 +19,8 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("width:30%;height:38%");
     expect(html).toContain("displayProcessing()");
     expect(html).toContain("result.className = ''");
+    expect(html).toContain("message.innerHTML = '受付中です…'");
+    expect(html).not.toContain("nameEl.innerHTML = 'QRを読み取りました'");
     expect(html).not.toContain("typeEl.innerHTML = '受付中'");
     expect(html).toContain("teacher-arrival.png");
     expect(html).toContain("teacher-goodbye.png");
@@ -28,8 +30,9 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("goodbye-director-night-fast.webp?v=20260807");
     expect(html).toContain("goodbye-rare-woman.webp?v=20260819");
     expect(html).toContain("PHOTO_EXIT_PROBABILITY = 0.10");
-    expect(html).toContain("RARE_EXIT_PROBABILITY = 0.10");
-    expect(html).toContain("40秒以内の重複読取");
+    expect(html).toContain("RARE_EXIT_PROBABILITY = 0.05");
+    expect(html).toContain("MASCOT_EXIT_PROBABILITY = 0.05");
+    expect(html).toContain("20秒以内の重複読取");
     expect(html).toContain("入室済みです");
     expect(html).toContain("退室済みです");
     expect(html).toContain("duplicate-exit");
