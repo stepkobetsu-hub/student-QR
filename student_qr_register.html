@@ -2305,8 +2305,12 @@ function resetNewQrDisplay() {
 function uniqueQrContacts(result) {
   if (!result || !result.ok) return [];
   const contacts = [];
-  if (result.guardianEmail) contacts.push(result.guardianEmail);
-  if (Array.isArray(result.emails)) contacts.push(...result.emails);
+  if (Array.isArray(result.deliveryEmails)) {
+    contacts.push(...result.deliveryEmails);
+  } else {
+    if (result.guardianEmail) contacts.push(result.guardianEmail);
+    if (Array.isArray(result.emails)) contacts.push(...result.emails);
+  }
   return [...new Set(contacts.map(value => String(value || '').trim()).filter(Boolean))];
 }
 
