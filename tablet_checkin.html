@@ -4,6 +4,8 @@
  <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png?v=20260826">
 <meta name="theme-color" content="#2e7d5b">
+<link rel="dns-prefetch" href="//step-checkin-edge-staging.stepkobetsu.workers.dev">
+<link rel="preconnect" href="https://step-checkin-edge-staging.stepkobetsu.workers.dev" crossorigin>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <link rel="preload" as="image" href="assets/checkin/goodbye-director-night-fast.webp?v=20260807" type="image/webp" fetchpriority="high">
@@ -979,6 +981,15 @@ function createEdgeDeviceId() {
   return 'tablet-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14);
 }
 
+function warmEdgeConnection() {
+  if (!edgeConfig) return;
+  fetch(edgeConfig.apiUrl.replace(/\/$/, '') + '/health', {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'omit'
+  }).catch(() => {});
+}
+
 function startRandomWalkerRoute() {
   var roll;
   var route;
@@ -1291,7 +1302,11 @@ function finishAndResume(delayMs) {
 
 document.addEventListener('visibilitychange', () => {
   setWalkerVisible(document.visibilityState !== 'hidden' && !requestInFlight && !resultOverlay.classList.contains('show'));
+  if (document.visibilityState !== 'hidden') warmEdgeConnection();
 });
+
+warmEdgeConnection();
+setInterval(warmEdgeConnection, 30000);
 
 const previewMode = new URLSearchParams(location.search).get('preview');
 if (previewMode === 'entry') {
