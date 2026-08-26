@@ -21,6 +21,13 @@ describe("legacy tablet launcher", () => {
     expect(html).toContain("displayProcessing()");
     expect(html).toContain("warmEdgeConnection()");
     expect(html).toContain("setInterval(warmEdgeConnection, 30000)");
+    expect(html).toContain("INACTIVITY_TIMEOUT = 5 * 60 * 60 * 1000");
+    expect(html).toContain('id="idleOverlay"');
+    expect(html).toContain("画面をタップすると再開します");
+    expect(html).toContain("function enterRestMode()");
+    expect(html).toContain("function stopCameraStream()");
+    expect(html).toContain("window.SleepControl.setSleeping(isSleeping)");
+    expect(html).toContain("idleOverlay.addEventListener('click', resumeFromRest");
     expect(html).toContain("result.className = ''");
     expect(html).toContain("message.innerHTML = '受付中です…'");
     expect(html).not.toContain("nameEl.innerHTML = 'QRを読み取りました'");
