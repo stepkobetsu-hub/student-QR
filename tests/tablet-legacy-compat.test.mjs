@@ -30,6 +30,19 @@ test('compatibility page avoids modern-only request APIs and limits camera work'
   assert.match(compat, /280 \/ width/);
 });
 
+test('both tablet pages stop the camera after five inactive hours and resume on tap', () => {
+  for (const page of [modern, compat]) {
+    assert.match(page, /5 \* 60 \* 60 \* 1000/);
+    assert.match(page, /id="idleOverlay"/);
+    assert.match(page, /画面をタップすると再開します/);
+    assert.match(page, /function enterRestMode\(\)/);
+    assert.match(page, /function stopCameraStream\(\)/);
+    assert.match(page, /track\.stop\(\)/);
+    assert.match(page, /SleepControl\.setSleeping\(isSleeping\)/);
+    assert.match(page, /resumeFromRest/);
+  }
+});
+
 test('all inline scripts are syntactically valid', () => {
   for (const page of [modern, compat]) {
     const scripts = [...page.matchAll(/<script(?:[^>]*)>([\s\S]*?)<\/script>/gi)];
