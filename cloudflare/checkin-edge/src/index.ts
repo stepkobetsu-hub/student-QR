@@ -91,6 +91,10 @@ export interface CampusCheckinApi {
   completeRosterRefresh(completedAt: number, succeeded: boolean): Promise<void>;
 }
 
+interface LegacyOutboxScheduler {
+  scheduleLegacyOutbox(): Promise<void>;
+}
+
 export interface LegacyStatusApi {
   getLegacyStatus(receiptId: string): Promise<LegacyStatusResponse>;
 }
@@ -148,6 +152,7 @@ export default {
         }
         const stub = env.CAMPUS_CHECKIN.getByName(campus);
         const alternate = alternateCampus(campus);
+        const alternateStub = alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined;
         const acceptedAt = Date.now();
         const input: AcceptRequest = {
           qrKey: body.qrKey.trim(),
@@ -163,16 +168,25 @@ export default {
           () => syncFromGoogle(env),
           () => Date.now(),
           campus,
-          alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
+          alternateStub,
         );
+        if (result.ok && result.legacyState === "PENDING") {
+          ctx.waitUntil(scheduleLegacyOutboxes(
+            alternateStub ? [stub, alternateStub] : [stub],
+            campus,
+            body.receiptId,
+          ));
+        }
+        const edgeMs = Date.now() - acceptedAt;
         console.log(JSON.stringify({
           event: "checkin",
           campus,
           code: result.code,
           receiptId: body.receiptId,
           legacyState: result.legacyState,
+          edgeMs,
         }));
-        return json(checkinClientResponse(result), result.ok ? 200 : 404, origin, env);
+        return json({ ...checkinClientResponse(result), timings: { edgeMs } }, result.ok ? 200 : 404, origin, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/receipt-status") {
         const body = await readJson<ReceiptStatusRequest>(request);
@@ -213,6 +227,29 @@ export default {
     ctx.waitUntil(syncFromGoogle(env));
   },
 } satisfies ExportedHandler<AppEnv>;
+
+async function scheduleLegacyOutboxes(
+  initialSchedulers: LegacyOutboxScheduler[],
+  campus: string,
+  receiptId: string,
+): Promise<void> {
+  let schedulers = initialSchedulers;
+  for (let attempt = 1; attempt <= 2 && schedulers.length > 0; attempt += 1) {
+    const results = await Promise.allSettled(schedulers.map((scheduler) => scheduler.scheduleLegacyOutbox()));
+    schedulers = schedulers.filter((_scheduler, index) => results[index].status === "rejected");
+    if (schedulers.length > 0 && attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  if (schedulers.length > 0) {
+    console.error(JSON.stringify({
+      event: "legacy_outbox_schedule_failed",
+      campus,
+      receiptId,
+      remainingSchedulers: schedulers.length,
+    }));
+  }
+}
 
 export async function acceptWithRosterRefresh(
   stub: CampusCheckinApi,
