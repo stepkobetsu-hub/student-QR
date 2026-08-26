@@ -1134,11 +1134,17 @@ const DEVICE_SECRET_KEY = 'studentQrDeviceSecretV1';
 const QR_ALLOWED_PERMISSION_LEVELS = ['2', '3', '4'];
 
 let studentQrAuth = null;
+let studentQrAutoLoginTimer = null;
+let studentQrLoginBusy = false;
 
 document.getElementById('loginForm').addEventListener('submit', (e) => {
   e.preventDefault();
   loginStudentQr();
 });
+document.getElementById('loginId').addEventListener('input', scheduleStudentQrAutoLogin);
+document.getElementById('loginId').addEventListener('change', scheduleStudentQrAutoLogin);
+document.getElementById('loginPassword').addEventListener('input', scheduleStudentQrAutoLogin);
+document.getElementById('loginPassword').addEventListener('change', scheduleStudentQrAutoLogin);
 
 document.addEventListener('DOMContentLoaded', initStudentQrAuth);
 
@@ -1157,7 +1163,7 @@ function getSavedStudentQrAuth() {
   const permissionLevel = localStorage.getItem(PERMISSION_KEY) || '';
   const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY) || '';
   const expiresAt = localStorage.getItem(SESSION_EXPIRES_KEY) || '';
-  if (!loginId || !sessionToken || !expiresAt) return null;
+  if (!loginId || !sessionToken) return null;
   return { loginId, name, permissionLevel, sessionToken, expiresAt };
 }
 
@@ -1250,6 +1256,12 @@ async function getEncryptedStudentQrCredential() {
 
 async function getStudentQrCredential() {
   if (localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') return null;
+
+  // このページで最後に成功した認証を最優先する。
+  // ブラウザーに別の古いパスワードが残っていても、そちらで上書きしない。
+  const deviceCredential = await getEncryptedStudentQrCredential();
+  if (deviceCredential) return deviceCredential;
+
   try {
     const credential = await navigator.credentials?.get?.({
       password: true,
@@ -1261,7 +1273,7 @@ async function getStudentQrCredential() {
   } catch (e) {
     // 対応していないブラウザーでは通常のログイン画面へ進む
   }
-  return getEncryptedStudentQrCredential();
+  return null;
 }
 
 function showLoginPanel(message) {
@@ -1270,6 +1282,40 @@ function showLoginPanel(message) {
   const savedId = localStorage.getItem(LOGIN_ID_KEY) || '';
   if (savedId) document.getElementById('loginId').value = savedId;
   if (message) showLoginMsg(message, 'error');
+}
+
+function scheduleStudentQrAutoLogin() {
+  clearTimeout(studentQrAutoLoginTimer);
+  if (studentQrLoginBusy) return;
+
+  const loginId = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!loginId || !password) return;
+
+  // 自分でログアウトした直後は勝手に再ログインしない。
+  // その後、IDまたはパスワードを入力したときだけログインを再開する。
+  localStorage.removeItem(EXPLICIT_LOGOUT_KEY);
+  studentQrAutoLoginTimer = setTimeout(() => loginStudentQr(), 650);
+}
+
+function startStudentQrAutofillWatch() {
+  let checks = 0;
+  const timer = setInterval(() => {
+    checks += 1;
+    const loginPanelVisible = !document.getElementById('loginPanel').classList.contains('hidden');
+    const explicitlyLoggedOut = localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1';
+    const loginId = document.getElementById('loginId').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!loginPanelVisible || checks >= 20) {
+      clearInterval(timer);
+      return;
+    }
+    if (!explicitlyLoggedOut && loginId && password) {
+      clearInterval(timer);
+      scheduleStudentQrAutoLogin();
+    }
+  }, 250);
 }
 
 function showAppPanel(auth) {
@@ -1350,8 +1396,10 @@ async function initStudentQrAuth() {
     return;
   }
 
+  // 端末側の時刻や短い有効期限だけでログアウト扱いにせず、
+  // サーバーへ確認して継続・更新できる限りそのまま利用する。
   const saved = getSavedStudentQrAuth();
-  if (saved && new Date(saved.expiresAt).getTime() > Date.now()) {
+  if (saved) {
     try {
       if (await verifySavedStudentQrAuth(saved)) return;
     } catch (e) {
@@ -1362,17 +1410,20 @@ async function initStudentQrAuth() {
   clearStudentQrSession(true);
   if (await resumeStudentQrLogin()) return;
   showLoginPanel();
+  startStudentQrAutofillWatch();
 }
 
 async function loginStudentQr() {
   const loginId = document.getElementById('loginId').value.trim();
   const password = document.getElementById('loginPassword').value;
   const btn = document.getElementById('loginBtn');
-  if (!loginId) {
-    showLoginMsg('IDを入力してください。', 'error');
+  if (!loginId || !password || studentQrLoginBusy) {
+    if (!loginId) showLoginMsg('IDを入力してください。', 'error');
     return;
   }
 
+  clearTimeout(studentQrAutoLoginTimer);
+  studentQrLoginBusy = true;
   btn.disabled = true;
   btn.textContent = '確認中...';
   showLoginMsg('確認しています...', 'success');
@@ -1383,6 +1434,7 @@ async function loginStudentQr() {
     });
     if (success) document.getElementById('loginPassword').value = '';
   } finally {
+    studentQrLoginBusy = false;
     btn.disabled = false;
     btn.textContent = 'ログイン';
   }
@@ -1395,10 +1447,11 @@ async function requireStudentQrAuth() {
   }
 
   let saved = studentQrAuth || getSavedStudentQrAuth();
-  if (!saved || !saved.sessionToken || new Date(saved.expiresAt).getTime() <= Date.now()) {
+  if (!saved || !saved.sessionToken) {
     clearStudentQrSession(true);
     if (await resumeStudentQrLogin()) return studentQrAuth;
     showLoginPanel('ログインしてください。');
+    startStudentQrAutofillWatch();
     throw new Error('ログインしてください。');
   }
 
@@ -1411,12 +1464,15 @@ async function requireStudentQrAuth() {
       return auth;
     }
   } catch (e) {
-    // セッション再作成へ進む
+    // 確認先の一時的な通信失敗だけでは画面から追い出さない。
+    studentQrAuth = saved;
+    return saved;
   }
 
   clearStudentQrSession(true);
   if (await resumeStudentQrLogin()) return studentQrAuth;
   showLoginPanel('ログイン状態を更新できませんでした。もう一度ログインしてください。');
+  startStudentQrAutofillWatch();
   throw new Error('ログインしてください。');
 }
 
