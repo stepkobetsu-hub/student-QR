@@ -193,9 +193,30 @@ function findStudentRowByQrData_(sheet, qrData) {
 }
 
 function getStudent_(code) {
-  if (!code) return { ok: false, message: '生徒番号を入力してください' };
+  const target = String(code || '').trim();
+  if (!target) return { ok: false, message: '番号を入力してください' };
+
+  // 7000番台は講師マスターを正本とする。
+  if (/^7\d{3}$/.test(target)) {
+    const teacherSheet = getTeacherMasterSheet_();
+    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません' };
+    const email = String(teacherSheet.getRange(teacherRow, TEACHER_COL_EMAIL).getDisplayValue() || '').trim();
+    return {
+      ok: true,
+      isTeacher: true,
+      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue(),
+      school: '講師',
+      qrData: teacherSheet.getRange(teacherRow, TEACHER_COL_QR).getValue(),
+      email: email,
+      teacherEmail: email,
+      emailChecked: true,
+      emailSource: '講師マスターP列'
+    };
+  }
+
   const sheet = getMasterSheet_();
-  const row = findStudentRow_(sheet, code);
+  const row = findStudentRow_(sheet, target);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
 
   return {
@@ -259,6 +280,27 @@ function getNotifyEmailsFromValues_(rowValues) {
 }
 
 function getNotifyEmails_(code) {
+  const target = String(code || '').trim();
+  if (!target) return { ok: false, message: '番号を入力してください' };
+
+  if (/^7\d{3}$/.test(target)) {
+    const teacherSheet = getTeacherMasterSheet_();
+    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません' };
+    const email = String(teacherSheet.getRange(teacherRow, TEACHER_COL_EMAIL).getDisplayValue() || '').trim();
+    return {
+      ok: true,
+      isTeacher: true,
+      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue(),
+      teacherEmail: email,
+      email: email,
+      emails: email ? [email] : [],
+      deliveryEmails: email ? [email] : [],
+      emailChecked: true,
+      emailSource: '講師マスターP列'
+    };
+  }
+
   if (!code) return { ok: false, message: '生徒番号を入力してください' };
   const sheet = getMasterSheet_();
   const row = findStudentRow_(sheet, code);
@@ -616,6 +658,17 @@ function sendQrPdfEmail_(code, toEmail, pdfBase64) {
 
 function getTeacherMasterSheet_() {
   return SpreadsheetApp.openById(TEACHER_SS_ID).getSheetByName(TEACHER_SHEET_NAME);
+}
+
+function findTeacherRowByCode_(sheet, code) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  const values = sheet.getRange(2, TEACHER_COL_CODE, lastRow - 1, 1).getValues();
+  const target = String(code || '').trim();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0] || '').trim() === target) return i + 2;
+  }
+  return -1;
 }
 
 function findTeacherRowByQrData_(sheet, qrData) {
