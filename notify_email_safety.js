@@ -1,5 +1,29 @@
 (() => {
+  function installTabRouting() {
+    if (typeof window.switchTab !== 'function') return;
+    const valid = new Set(['existing','check','email','points','csv']);
+    const original = window.switchTab;
+    if (!original.__hashAware) {
+      const wrapped = function(tab) {
+        const result = original.apply(this, arguments);
+        if (valid.has(tab)) history.replaceState(null, '', '#' + tab);
+        return result;
+      };
+      wrapped.__hashAware = true;
+      window.switchTab = wrapped;
+    }
+    const openFromLocation = () => {
+      const hash = location.hash.replace(/^#/, '');
+      const query = new URLSearchParams(location.search).get('tab');
+      const tab = valid.has(query) ? query : (valid.has(hash) ? hash : '');
+      if (tab) window.switchTab(tab);
+    };
+    openFromLocation();
+    window.addEventListener('hashchange', openFromLocation);
+  }
+
   function init() {
+    installTabRouting();
     const codeEl = document.getElementById('emailStudentCode');
     const searchEl = document.getElementById('emailStudentSearch');
     const searchCountEl = document.getElementById('emailStudentSearchCount');
