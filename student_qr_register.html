@@ -777,6 +777,11 @@
     #teacherCheckList { grid-template-columns: 1fr; }
     .batch-qr-grid { grid-template-columns: 1fr; }
   }
+  .check-qr-status-email { margin-top:14px; padding-top:14px; border-top:1px solid rgba(23,105,170,.22); }
+  .check-qr-status-email-title { margin-bottom:7px; color:#555; font-size:13px; font-weight:800; }
+  .check-qr-status-email-list { color:#234b3b; font-size:14px; line-height:1.8; word-break:break-all; }
+  .check-qr-status-email-list .empty { color:#d93025; font-size:18px; font-weight:900; }
+  .check-qr-status-email-link { display:inline-flex; min-height:44px; margin-top:10px; padding:10px 16px; align-items:center; justify-content:center; border-radius:8px; background:var(--main-color); color:#fff; font-size:14px; font-weight:800; text-decoration:none; }
 </style>
 
 <style id="hide-duplicate-email-selection-ui">
@@ -922,6 +927,15 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
     </div>
 
     <div class="panel-secondary" style="margin-top:24px;">
+    <div id="checkQrStatusBox" class="new-qr-status has-current" style="display:none; margin-top:0; margin-bottom:18px;">
+      <div class="new-qr-status-title">生徒用QRは登録済みです</div>
+      <div class="new-qr-status-detail">登録済みのQRを下に表示しています。この画面からそのまま印刷できます。</div>
+      <div class="check-qr-status-email">
+        <div class="check-qr-status-email-title">登録済みの通知先メールアドレス</div>
+        <div id="checkQrNotifyEmails" class="check-qr-status-email-list"></div>
+        <a href="#email" class="check-qr-status-email-link" onclick="openCheckStudentEmailEditor(event)">メールアドレス登録・変更</a>
+      </div>
+    </div>
     <button id="checkLoadQrBtn" onclick="loadSelectedQrCards()" disabled>選択したQRを表示する</button>
     <div id="checkBatchMsg" class="msg"></div>
     <div id="checkBatchPrintArea" class="batch-qr-grid"></div>
@@ -2120,6 +2134,8 @@ function resetLoadedQrCards() {
   checkPrintBtnEl.style.display = 'none';
   document.getElementById('checkPdfEmailWrap').style.display = 'none';
   checkBatchMsgEl.className = 'msg';
+  const checkStatusBox = document.getElementById('checkQrStatusBox');
+  if (checkStatusBox) checkStatusBox.style.display = 'none';
 }
 
 async function loadSelectedQrCards() {
@@ -2170,6 +2186,7 @@ async function loadSelectedQrCards() {
   checkBatchMsgEl.className = 'msg ' + (cards.length ? 'success' : 'error');
   checkLoadQrBtnEl.disabled = false;
   checkLoadQrBtnEl.textContent = '選択したQRを表示する';
+  await renderCheckQrStatus(cards);
 }
 
 async function printSelectedQrCards() {
@@ -2193,6 +2210,35 @@ checkStudentSearchEl.addEventListener('input', renderQrStudentList);
 checkSchoolFilterEl.addEventListener('change', renderQrStudentList);
 renderQrGradeButtons();
 renderQrSelectedSummary();
+
+async function renderCheckQrStatus(cards) {
+  const box = document.getElementById('checkQrStatusBox');
+  const list = document.getElementById('checkQrNotifyEmails');
+  if (!box || !list) return;
+  if (!Array.isArray(cards) || cards.length !== 1) { box.style.display='none'; list.innerHTML=''; return; }
+  box.style.display='block';
+  list.innerHTML='<span style="color:#777">メール情報を確認中...</span>';
+  try {
+    const r = await authorizedJsonp({ action:'getNotifyEmails', code:cards[0].code });
+    const all=[];
+    const add=value=>{ value=String(value||'').trim(); if(value&&!all.some(item=>item.toLowerCase()===value.toLowerCase())) all.push(value); };
+    add(r&&r.guardianEmail);
+    (Array.isArray(r&&r.deliveryEmails)?r.deliveryEmails:[]).forEach(add);
+    (Array.isArray(r&&r.emails)?r.emails:[]).forEach(add);
+    add(r&&r.email); add(r&&r.teacherEmail);
+    list.innerHTML=all.length?all.map(value=>'<div>・'+escapeQrHtml(value)+'</div>').join(''):'<span class="empty">メールアドレス未登録</span>';
+  } catch(e) { list.innerHTML='<span class="empty">取得できませんでした</span>'; }
+}
+
+function openCheckStudentEmailEditor(event) {
+  if(event) event.preventDefault();
+  const code=currentCheckedCode||(loadedQrCards.length===1?loadedQrCards[0].code:'');
+  switchTab('email');
+  if(!code) return;
+  emailStudentSearchEl.value=code;
+  renderEmailStudentSearch();
+  if(qrStudentRosterLoaded) selectEmailStudent(code);
+}
 
 async function sendCheckQrPdf() {
   const email = document.getElementById('checkPdfEmail').value.trim();
@@ -3092,5 +3138,18 @@ async function exportAttendanceCsv() {
 })();
 </script>
 <script src="notify_email_safety.js?v=20260831-2"></script>
+
+<script id="qr-tab-persistence-20260831">
+(() => {
+  const validTabs=new Set(['existing','check','email','points','csv']);
+  const hashTab=()=>{const value=(location.hash||'').replace(/^#/,'').trim();return validTabs.has(value)?value:null;};
+  const originalSwitchTab=window.switchTab;
+  if(typeof originalSwitchTab!=='function') return;
+  window.switchTab=function(tab){originalSwitchTab(tab);if(validTabs.has(tab))history.replaceState(null,'','#'+tab);};
+  const restore=()=>{const tab=hashTab();if(tab)originalSwitchTab(tab);};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restore,{once:true});else restore();
+  window.addEventListener('hashchange',restore);
+})();
+</script>
 </body>
 </html>
