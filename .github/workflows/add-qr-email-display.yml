@@ -1,0 +1,75 @@
+name: Add QR notification email display
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-qr-email-display.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add notification emails below QR
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('student_qr_create.html')
+          s=p.read_text(encoding='utf-8')
+
+          css_old='.qr img{width:160px;height:160px}.print{display:none;background:#6a4fa0}'
+          css_new='.qr img{width:160px;height:160px}.qr-mail-box{margin:18px auto 0;max-width:560px;padding:14px 16px;border-top:1px solid #d8e0dc;text-align:left}.qr-mail-title{font-size:13px;font-weight:800;color:#555;margin-bottom:7px}.qr-mail-list{font-size:14px;line-height:1.8;color:#234b3b;word-break:break-all}.qr-mail-list .empty{color:#999}.qr-mail-link{display:inline-block;margin-top:10px;padding:9px 14px;border-radius:8px;background:#2e7d5b;color:#fff;text-decoration:none;font-size:14px;font-weight:800}.print{display:none;background:#6a4fa0}'
+          if css_old in s:
+              s=s.replace(css_old,css_new,1)
+
+          html_old='<img id="qrImg" alt="QRコード"></div>'
+          html_new='<img id="qrImg" alt="QRコード"><div class="qr-mail-box"><div class="qr-mail-title">登録済みの通知先メールアドレス</div><div id="qrNotifyEmails" class="qr-mail-list"><span class="empty">確認中...</span></div><a class="qr-mail-link" href="student_qr_register.html#email">メールアドレス登録・変更</a></div></div>'
+          if html_old not in s:
+              raise SystemExit('QR image target not found')
+          s=s.replace(html_old,html_new,1)
+
+          reset_old="$('contacts').textContent='';$('qr').classList.remove('show');"
+          reset_new="$('contacts').textContent='';if($('qrNotifyEmails'))$('qrNotifyEmails').innerHTML='<span class=\"empty\">確認中...</span>';$('qr').classList.remove('show');"
+          if reset_old in s:
+              s=s.replace(reset_old,reset_new,1)
+
+          marker='function showQR(notice){'
+          helper="""function renderQrNotifyEmails(r){
+  const el=$('qrNotifyEmails');if(!el)return;
+  const all=[];
+  const add=v=>{v=String(v||'').trim();if(v&&!all.some(x=>x.toLowerCase()===v.toLowerCase()))all.push(v)};
+  add(r&&r.guardianEmail);
+  (Array.isArray(r&&r.deliveryEmails)?r.deliveryEmails:[]).forEach(add);
+  (Array.isArray(r&&r.emails)?r.emails:[]).forEach(add);
+  add(r&&r.email);add(r&&r.teacherEmail);
+  if(!all.length){el.innerHTML='<span class=\"empty\">登録なし</span>';return}
+  el.innerHTML=all.map(v=>'<div>・'+v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>').join('');
+}
+"""
+          if 'function renderQrNotifyEmails(' not in s:
+              if marker not in s: raise SystemExit('showQR marker not found')
+              s=s.replace(marker,helper+marker,1)
+
+          old="const a=[...new Set((c.emails||[]).map(v=>String(v||'').trim()).filter(Boolean))];$('contacts').textContent=a.length?'登録済みの連絡先：'+a.join(' ／ '):'登録済みの連絡先：なし'"
+          new="const a=[...new Set((c.emails||[]).map(v=>String(v||'').trim()).filter(Boolean))];$('contacts').textContent=a.length?'登録済みの連絡先：'+a.join(' ／ '):'登録済みの連絡先：なし';renderQrNotifyEmails(c)"
+          if old not in s:
+              raise SystemExit('notify response target not found')
+          s=s.replace(old,new,1)
+
+          issue_old="msg(r.name+' さんの生徒用QRを作成し、☆マスタのAZ列へ登録しました。',true)"
+          issue_new="try{const c=await jsonp({action:'getNotifyEmails',code});renderQrNotifyEmails(c)}catch(e){};msg(r.name+' さんの生徒用QRを作成し、☆マスタのAZ列へ登録しました。',true)"
+          if issue_old in s:
+              s=s.replace(issue_old,issue_new,1)
+
+          p.write_text(s,encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_create.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Show registered notification emails under student QR"
+          git push
