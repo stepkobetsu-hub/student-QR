@@ -4,6 +4,14 @@
     const saveBtn = document.getElementById('saveEmailBtn');
     if (!codeEl || !saveBtn) return;
 
+    // 上の検索結果だけを使う。二重入力による別人上書きを防ぐため、
+    // 2つ目のコード入力欄と、その直下の氏名・確認表示は画面から隠す。
+    const duplicateLabel = document.querySelector('label[for="emailStudentCode"]');
+    const duplicateInfo = document.getElementById('emailStudentInfo');
+    if (duplicateLabel) duplicateLabel.style.display = 'none';
+    codeEl.style.display = 'none';
+    if (duplicateInfo) duplicateInfo.style.display = 'none';
+
     if (!document.getElementById('notifyEmailLoadingPopup')) {
       const style = document.createElement('style');
       style.textContent = '#notifyEmailLoadingPopup{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,40,30,.30);z-index:9999;padding:20px}#notifyEmailLoadingPopup.show{display:flex}#notifyEmailLoadingPopup .box{width:min(440px,92vw);background:#fff;border:2px solid #2e7d5b;border-radius:14px;box-shadow:0 18px 55px rgba(0,0,0,.24);padding:24px 26px;text-align:center}#notifyEmailLoadingPopup .title{font-size:21px;font-weight:800;color:#1f664a;margin-bottom:8px}#notifyEmailLoadingPopup .text{font-size:14px;line-height:1.7;color:#555}#notifyEmailLoadingPopup .spinner{width:34px;height:34px;margin:0 auto 14px;border:4px solid #dce9e3;border-top-color:#2e7d5b;border-radius:50%;animation:notifySpin .8s linear infinite}@keyframes notifySpin{to{transform:rotate(360deg)}}';
