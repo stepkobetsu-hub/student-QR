@@ -1,0 +1,152 @@
+name: Fix notify email load
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-notify-email-load.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make notification email loading safe and visible
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('student_qr_register.html')
+          s=p.read_text(encoding='utf-8')
+
+          old="""emailStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(emailLookupTimer);
+  const code = emailStudentCodeEl.value.trim();
+  emailStudentInfoEl.classList.remove('show');
+  renderEmailStudentSearch();
+  notifyEmailEls.forEach(el => el.value = '');
+  notifyEnabledEls.forEach(el => el.checked = true);
+  if (!code) return;
+
+  const seq = ++emailLookupSeq;
+  emailLookupTimer = setTimeout(async () => {
+    try {
+      const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
+      if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
+      if (res.ok) {
+        emailStudentNameEl.textContent = res.name || '(氏名なし)';
+        (Array.isArray(res.emails) ? res.emails : []).forEach((v, i) => {
+          if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
+        });
+        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
+          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
+        });
+      } else {
+        emailStudentNameEl.textContent = res.message;
+      }
+      emailStudentInfoEl.classList.add('show');
+    } catch (e) {
+      // 通信中は何もしない
+    }
+  }, 400);
+});"""
+
+          new="""emailStudentCodeEl.addEventListener('input', () => {
+  clearTimeout(emailLookupTimer);
+  const code = emailStudentCodeEl.value.trim();
+  const saveBtn = document.getElementById('saveEmailBtn');
+  emailStudentInfoEl.classList.remove('show');
+  renderEmailStudentSearch();
+  notifyEmailEls.forEach(el => el.value = '');
+  notifyEnabledEls.forEach(el => el.checked = true);
+  emailMsgEl.className = 'msg';
+  emailMsgEl.textContent = '';
+  saveBtn.disabled = true;
+  if (!code) return;
+
+  emailStudentNameEl.textContent = '現在登録されているメールを確認中...';
+  emailStudentInfoEl.classList.add('show');
+
+  const seq = ++emailLookupSeq;
+  emailLookupTimer = setTimeout(async () => {
+    try {
+      const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
+      if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
+      if (res.ok) {
+        emailStudentNameEl.textContent = res.name || '(氏名なし)';
+
+        // APIの世代差を吸収して、現在登録されているメールをできるだけ確実に表示する。
+        const values = Array.isArray(res.emails) ? res.emails.slice(0, 4).map(v => String(v || '').trim()) : [];
+        while (values.length < 4) values.push('');
+
+        // 生徒の保護者メール(X列)は①として最優先で表示する。
+        const guardian = String(res.guardianEmail || '').trim();
+        if (guardian) values[0] = guardian;
+
+        // 実際の通知先配列が返るAPIでは、まだ空いている欄へ補完する。
+        const delivery = Array.isArray(res.deliveryEmails) ? res.deliveryEmails.map(v => String(v || '').trim()).filter(Boolean) : [];
+        delivery.forEach(mail => {
+          if (values.some(v => v.toLowerCase() === mail.toLowerCase())) return;
+          const empty = values.findIndex(v => !v);
+          if (empty >= 0) values[empty] = mail;
+        });
+
+        // 講師APIの実装差に備え、単一メール項目も①へ補完する。
+        const teacherMail = String(res.teacherEmail || res.email || res.mail || '').trim();
+        if (teacherMail && !values[0]) values[0] = teacherMail;
+
+        values.forEach((v, i) => {
+          if (notifyEmailEls[i]) notifyEmailEls[i].value = v;
+        });
+        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
+          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
+        });
+
+        saveBtn.disabled = false;
+        showEmailMsg('現在登録されているメールを読み込みました。内容を確認してから保存してください。', 'success');
+      } else {
+        emailStudentNameEl.textContent = res.message || 'メール情報を取得できませんでした。';
+        showEmailMsg('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+      }
+      emailStudentInfoEl.classList.add('show');
+    } catch (e) {
+      if (seq !== emailLookupSeq) return;
+      emailStudentNameEl.textContent = 'メール情報を取得できませんでした。';
+      showEmailMsg('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+      emailStudentInfoEl.classList.add('show');
+    }
+  }, 220);
+});"""
+
+          if old not in s:
+              raise SystemExit('target email lookup block not found')
+          s=s.replace(old,new,1)
+
+          # 保存処理でも、読込完了前の保存を二重に防止する。
+          needle="""async function saveNotifyEmails() {
+  const code = emailStudentCodeEl.value.trim();"""
+          replacement="""async function saveNotifyEmails() {
+  const code = emailStudentCodeEl.value.trim();
+  const saveBtnGuard = document.getElementById('saveEmailBtn');
+  if (saveBtnGuard.disabled) {
+    showEmailMsg('現在登録されているメールの読み込み完了後に保存できます。', 'error');
+    return;
+  }"""
+          if needle not in s:
+              raise SystemExit('saveNotifyEmails target not found')
+          s=s.replace(needle,replacement,1)
+
+          # 初期状態も保存不可にする。
+          s=s.replace('<button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;">通知先メールを保存する</button>', '<button id="saveEmailBtn" onclick="saveNotifyEmails()" style="background:#c0392b;" disabled>通知先メールを保存する</button>', 1)
+
+          p.write_text(s,encoding='utf-8')
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_register.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Show registered notification emails before saving"
+          git push
