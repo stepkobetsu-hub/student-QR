@@ -832,7 +832,8 @@
   <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn active" id="tabExistingBtn" onclick="switchTab('existing')">入退くんＱＲ取込</button>
     <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">生徒用QR確認・印刷</button>
-    <button type="button" class="tab-btn" id="tabNewBtn" onclick="switchTab('new')">新規QR発行・名札印刷</button>
+    <button type="button" class="tab-btn" id="tabNewBtn" onclick="location.href='student_qr_create.html'">生徒用：新規QR発行</button>
+    <button type="button" class="tab-btn" onclick="location.href='teacher_qr_create.html'">講師用：新規QR発行・名札印刷</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール</button>
     <button type="button" class="tab-btn" id="tabPointsBtn" onclick="switchTab('points')">ポイント付与</button>
     <button type="button" class="tab-btn" id="tabCsvBtn" onclick="switchTab('csv')">勤怠CSV出力</button>
