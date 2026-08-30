@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply QR page UI patch
         run: python3 .github/scripts/unify_qr_pages_20260831.py
+      - name: Apply teacher email status UI
+        run: python3 .github/scripts/teacher_email_ui_20260831.py
       - name: Apply card-size print CSS to new QR pages
         run: |
           python3 - <<'PY'
