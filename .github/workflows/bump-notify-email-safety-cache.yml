@@ -1,0 +1,34 @@
+name: Refresh notification email safety cache
+
+on:
+  push:
+    paths:
+      - '.github/workflows/bump-notify-email-safety-cache.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bump notify email safety script version
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('student_qr_register.html')
+          s = p.read_text(encoding='utf-8')
+          old = '<script src="notify_email_safety.js?v=20260831-1"></script>'
+          new = '<script src="notify_email_safety.js?v=20260831-2"></script>'
+          if old not in s:
+              raise SystemExit('old script tag not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_register.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Refresh notification email safety script cache"
+          git push
