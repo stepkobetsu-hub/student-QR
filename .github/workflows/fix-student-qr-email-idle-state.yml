@@ -1,0 +1,42 @@
+name: Fix student QR email idle state
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-student-qr-email-idle-state.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hide email controls until student is selected
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('student_qr_create.html')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('.qr-mail-box{margin-top:14px;', '.qr-mail-box{display:none;margin-top:14px;', 1)
+          s = s.replace('<div class="qr-mail-box"><div class="qr-mail-title">', '<div id="qrMailBox" class="qr-mail-box"><div class="qr-mail-title">', 1)
+          s = s.replace('<div id="qrNotifyEmails" class="qr-mail-list"><span class="empty">確認中...</span></div>', '<div id="qrNotifyEmails" class="qr-mail-list"></div>', 1)
+          old = "if($('qrNotifyEmails'))$('qrNotifyEmails').innerHTML='<span class=\"empty\">確認中...</span>';$('qr').classList.remove('show');"
+          new = "if($('qrNotifyEmails'))$('qrNotifyEmails').innerHTML='';if($('qrMailBox'))$('qrMailBox').style.display='none';$('qr').classList.remove('show');"
+          if old in s:
+              s = s.replace(old, new, 1)
+          target = "student={code,name:r.name||'(氏名なし)'};"
+          replacement = target + "if($('qrMailBox'))$('qrMailBox').style.display='block';if($('qrNotifyEmails'))$('qrNotifyEmails').innerHTML='<span style=\"color:#777\">メール情報を確認中...</span>';"
+          if target not in s:
+              raise SystemExit('student success target not found')
+          s = s.replace(target, replacement, 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_create.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Hide notification email area until student lookup"
+          git push
