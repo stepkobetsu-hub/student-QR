@@ -26,62 +26,8 @@ jobs:
         run: python3 .github/scripts/unify_qr_pages_20260831.py
       - name: Apply teacher email status UI
         run: python3 .github/scripts/teacher_email_ui_20260831.py
-      - name: Apply card-size print CSS to new QR pages
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          css = r'''
-<style id="qr-card-print-size-20260831">
-@media print {
-  @page { margin: 0; }
-  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  .wrap { width: auto !important; max-width: none !important; margin: 0 !important; }
-  .page-shell, .content-main, .panel { display: block !important; width: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
-  .side-menu { display: none !important; }
-  .qr {
-    display: block !important;
-    box-sizing: border-box !important;
-    width: 86mm !important;
-    height: 54mm !important;
-    min-height: 54mm !important;
-    max-width: 86mm !important;
-    margin: 0 !important;
-    padding: 5mm 5mm 4mm !important;
-    border: 0.45mm solid #333 !important;
-    border-radius: 2mm !important;
-    page-break-inside: avoid !important;
-    overflow: hidden !important;
-    text-align: center !important;
-  }
-  .qr .pill {
-    margin: 0 0 1.5mm !important;
-    padding: 0 !important;
-    background: none !important;
-    color: #333 !important;
-    font-size: 10pt !important;
-    line-height: 1.2 !important;
-  }
-  .qr .school { margin: 0 0 0.8mm !important; font-size: 8pt !important; line-height: 1.1 !important; }
-  .qr .code { margin: 0 !important; font-size: 10pt !important; line-height: 1.15 !important; }
-  .qr .student { margin: 0 0 1mm !important; font-size: 9pt !important; line-height: 1.15 !important; }
-  .qr img {
-    width: 29mm !important;
-    height: 29mm !important;
-    margin: 0 auto !important;
-    display: block !important;
-  }
-}
-</style>
-'''
-
-          for name in ('student_qr_create.html', 'teacher_qr_create.html'):
-              p = Path(name)
-              s = p.read_text(encoding='utf-8')
-              if 'qr-card-print-size-20260831' not in s:
-                  s = s.replace('</head>', css + '</head>')
-                  p.write_text(s, encoding='utf-8')
-          PY
+      - name: Match QR print size and email button
+        run: python3 .github/scripts/fix_qr_print_and_email_button_20260831.py
       - name: Build public artifact
         env:
           MY_QR_API_URL: ${{ vars.MY_QR_API_URL }}
