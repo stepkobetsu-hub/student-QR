@@ -41,6 +41,7 @@
     const emailChecks = [1,2,3,4].map(n => document.getElementById('notifyEnabled' + n)).filter(Boolean);
     let confirmedCode = '';
     let missingNeedsSave = false;
+    let autoConfirmTimer = null;
 
     let saveRow = document.getElementById('emailSaveRow');
     let missingInline = document.getElementById('emailMissingInline');
@@ -95,6 +96,27 @@
       hint.style.fontSize = '14px';
     };
 
+    const autoConfirmSingleResult = () => {
+      clearTimeout(autoConfirmTimer);
+      autoConfirmTimer = setTimeout(() => {
+        if (!searchListEl || confirmedCode) return;
+        const rows = Array.from(searchListEl.querySelectorAll('.email-student-row'));
+        if (rows.length !== 1) {
+          ensureConfirmHint();
+          return;
+        }
+        const row = rows[0];
+        const code = String(row.dataset.code || '').trim();
+        if (!code) return;
+        confirmedCode = code;
+        missingNeedsSave = false;
+        showMissing();
+        ensureConfirmHint();
+        // 既存の行クリック処理をそのまま利用し、対象確定→登録済みメール取得まで自動実行する。
+        row.click();
+      }, 80);
+    };
+
     const clearUnconfirmedSelection = () => {
       confirmedCode = '';
       missingNeedsSave = false;
@@ -111,16 +133,24 @@
     if (searchEl) {
       searchEl.addEventListener('input', () => {
         clearUnconfirmedSelection();
-        setTimeout(ensureConfirmHint, 0);
+        setTimeout(() => {
+          ensureConfirmHint();
+          autoConfirmSingleResult();
+        }, 0);
       }, true);
     }
 
     if (searchCountEl) {
-      const countObserver = new MutationObserver(() => ensureConfirmHint());
+      const countObserver = new MutationObserver(() => {
+        ensureConfirmHint();
+        autoConfirmSingleResult();
+      });
       countObserver.observe(searchCountEl, { childList: true, subtree: true, characterData: true });
     }
 
     if (searchListEl) {
+      const listObserver = new MutationObserver(() => autoConfirmSingleResult());
+      listObserver.observe(searchListEl, { childList: true, subtree: true });
       searchListEl.addEventListener('click', (event) => {
         const row = event.target.closest('.email-student-row');
         if (!row) return;
@@ -192,6 +222,8 @@
       wrapped.__confirmWrapped = true;
       window.saveNotifyEmails = wrapped;
     }
+
+    setTimeout(autoConfirmSingleResult, 0);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
