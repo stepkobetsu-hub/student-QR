@@ -1,16 +1,59 @@
 (() => {
   function init() {
     const codeEl = document.getElementById('emailStudentCode');
+    const searchEl = document.getElementById('emailStudentSearch');
+    const searchCountEl = document.getElementById('emailStudentSearchCount');
+    const searchListEl = document.getElementById('emailStudentSearchList');
     const saveBtn = document.getElementById('saveEmailBtn');
     if (!codeEl || !saveBtn) return;
 
-    // 上の検索結果だけを使う。二重入力による別人上書きを防ぐため、
-    // 2つ目のコード入力欄と、その直下の氏名・確認表示は画面から隠す。
     const duplicateLabel = document.querySelector('label[for="emailStudentCode"]');
     const duplicateInfo = document.getElementById('emailStudentInfo');
     if (duplicateLabel) duplicateLabel.style.display = 'none';
     codeEl.style.display = 'none';
     if (duplicateInfo) duplicateInfo.style.display = 'none';
+
+    const emailInputs = [1,2,3,4].map(n => document.getElementById('notifyEmail' + n)).filter(Boolean);
+    const emailChecks = [1,2,3,4].map(n => document.getElementById('notifyEnabled' + n)).filter(Boolean);
+    let confirmedCode = '';
+
+    const clearUnconfirmedSelection = () => {
+      confirmedCode = '';
+      codeEl.value = '';
+      emailInputs.forEach(el => { el.value = ''; });
+      emailChecks.forEach(el => { el.checked = true; });
+      saveBtn.disabled = true;
+      const msg = document.getElementById('emailMsg');
+      if (msg) { msg.textContent = ''; msg.className = 'msg'; }
+    };
+
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        clearUnconfirmedSelection();
+        setTimeout(() => {
+          const text = (searchCountEl?.textContent || '').trim();
+          if (/人見つかりました/.test(text) && searchCountEl) {
+            if (!searchCountEl.querySelector('.confirm-search-hint')) {
+              const hint = document.createElement('span');
+              hint.className = 'confirm-search-hint';
+              hint.textContent = '　クリックして確定してください。';
+              hint.style.color = '#1267c4';
+              hint.style.fontWeight = '800';
+              hint.style.fontSize = '14px';
+              searchCountEl.appendChild(hint);
+            }
+          }
+        }, 0);
+      }, true);
+    }
+
+    if (searchListEl) {
+      searchListEl.addEventListener('click', (event) => {
+        const row = event.target.closest('.email-student-row');
+        if (!row) return;
+        confirmedCode = String(row.dataset.code || '').trim();
+      }, true);
+    }
 
     if (!document.getElementById('notifyEmailLoadingPopup')) {
       const style = document.createElement('style');
@@ -27,7 +70,8 @@
     const hidePopup = () => popup.classList.remove('show');
 
     codeEl.addEventListener('input', () => {
-      if (codeEl.value.trim()) showPopup();
+      const code = codeEl.value.trim();
+      if (code && confirmedCode === code) showPopup();
       else hidePopup();
     });
 
