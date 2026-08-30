@@ -41,6 +41,29 @@
     const emailChecks = [1,2,3,4].map(n => document.getElementById('notifyEnabled' + n)).filter(Boolean);
     let confirmedCode = '';
 
+    let saveRow = document.getElementById('emailSaveRow');
+    let missingInline = document.getElementById('emailMissingInline');
+    if (!saveRow) {
+      saveRow = document.createElement('div');
+      saveRow.id = 'emailSaveRow';
+      saveRow.style.display = 'flex';
+      saveRow.style.alignItems = 'center';
+      saveRow.style.gap = '18px';
+      saveRow.style.flexWrap = 'wrap';
+      saveRow.style.marginTop = '20px';
+      saveBtn.parentNode.insertBefore(saveRow, saveBtn);
+      saveRow.appendChild(saveBtn);
+      saveBtn.style.marginTop = '0';
+      missingInline = document.createElement('div');
+      missingInline.id = 'emailMissingInline';
+      missingInline.textContent = 'メールアドレス未登録';
+      missingInline.style.display = 'none';
+      missingInline.style.color = '#d93025';
+      missingInline.style.fontSize = '19px';
+      missingInline.style.fontWeight = '900';
+      saveRow.appendChild(missingInline);
+    }
+
     const ensureConfirmHint = () => {
       if (!searchCountEl) return;
       const text = (searchCountEl.textContent || '').trim();
@@ -67,6 +90,7 @@
       emailInputs.forEach(el => { el.value = ''; });
       emailChecks.forEach(el => { el.checked = true; });
       saveBtn.disabled = true;
+      if (missingInline) missingInline.style.display = 'none';
       const msg = document.getElementById('emailMsg');
       if (msg) { msg.textContent = ''; msg.className = 'msg'; msg.removeAttribute('style'); }
       setTimeout(ensureConfirmHint, 0);
@@ -120,20 +144,18 @@
 
     const emailMsg = document.getElementById('emailMsg');
     const emphasizeMissingEmail = () => {
-      if (!emailMsg || !confirmedCode) return;
+      if (!emailMsg || !confirmedCode) {
+        if (missingInline) missingInline.style.display = 'none';
+        return;
+      }
       const allEmpty = emailInputs.every(el => !String(el.value || '').trim());
-      const loaded = /現在登録されているメールを読み込みました/.test(emailMsg.textContent || '');
+      const loaded = /現在登録されているメールを読み込みました|メールアドレス未登録/.test(emailMsg.textContent || '');
       if (loaded && allEmpty) {
-        emailMsg.textContent = 'メールアドレス未登録';
-        emailMsg.className = 'msg error';
-        emailMsg.style.display = 'block';
-        emailMsg.style.background = '#fdecea';
-        emailMsg.style.color = '#d93025';
-        emailMsg.style.fontSize = '19px';
-        emailMsg.style.fontWeight = '900';
-        emailMsg.style.border = '2px solid #ef9a9a';
-      } else if (!allEmpty && emailMsg.textContent === 'メールアドレス未登録') {
-        emailMsg.removeAttribute('style');
+        if (missingInline) missingInline.style.display = 'block';
+        emailMsg.style.display = 'none';
+      } else {
+        if (missingInline) missingInline.style.display = 'none';
+        if (emailMsg.textContent.trim()) emailMsg.style.display = '';
       }
     };
 
