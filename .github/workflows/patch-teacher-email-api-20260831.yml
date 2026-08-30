@@ -1,0 +1,31 @@
+name: Patch teacher email API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/patch_teacher_email_api_20260831.py'
+      - '.github/workflows/patch-teacher-email-api-20260831.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch GAS source
+        run: python3 .github/scripts/patch_teacher_email_api_20260831.py
+      - name: Commit patched source
+        run: |
+          if git diff --quiet -- gas/コード.js; then
+            echo 'No changes needed'
+            exit 0
+          fi
+          git config user.name 'stepkobetsu-hub'
+          git config user.email 'stepkobetsu@gmail.com'
+          git add gas/コード.js
+          git commit -m 'Return teacher master P-column email from QR API'
+          git push
