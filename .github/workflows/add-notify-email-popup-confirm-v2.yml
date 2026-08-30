@@ -1,0 +1,72 @@
+name: Add notify email popup and confirm v2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/add-notify-email-popup-confirm-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject popup and confirmation
+        shell: python
+        env:
+          PATCH_B64: PHN0eWxlIGlkPSJub3RpZnktZW1haWwtcG9wdXAtY29uZmlybS1zdHlsZSI+CiNub3RpZnlFbWFpbExvYWRpbmdQb3B1cHtwb3NpdGlvbjpmaXhlZDtpbnNldDowO2Rpc3BsYXk6bm9uZTthbGlnbi1pdGVtczpjZW50ZXI7anVzdGlmeS1jb250ZW50OmNlbnRlcjtiYWNrZ3JvdW5kOnJnYmEoMjAsNDAsMzAsLjMwKTt6LWluZGV4Ojk5OTk7cGFkZGluZzoyMHB4fQojbm90aWZ5RW1haWxMb2FkaW5nUG9wdXAuc2hvd3tkaXNwbGF5OmZsZXh9CiNub3RpZnlFbWFpbExvYWRpbmdQb3B1cCAuYm94e3dpZHRoOm1pbig0NDBweCw5MnZ3KTtiYWNrZ3JvdW5kOiNmZmY7Ym9yZGVyOjJweCBzb2xpZCAjMmU3ZDViO2JvcmRlci1yYWRpdXM6MTRweDtib3gtc2hhZG93OjAgMThweCA1NXB4IHJnYmEoMCwwLDAsLjI0KTtwYWRkaW5nOjI0cHggMjZweDt0ZXh0LWFsaWduOmNlbnRlcn0KI25vdGlmeUVtYWlsTG9hZGluZ1BvcHVwIC50aXRsZXtmb250LXNpemU6MjFweDtmb250LXdlaWdodDo4MDA7Y29sb3I6IzFmNjY0YTttYXJnaW4tYm90dG9tOjhweH0KI25vdGlmeUVtYWlsTG9hZGluZ1BvcHVwIC50ZXh0e2ZvbnQtc2l6ZToxNHB4O2xpbmUtaGVpZ2h0OjEuNztjb2xvcjojNTU1fQojbm90aWZ5RW1haWxMb2FkaW5nUG9wdXAgLnNwaW5uZXJ7d2lkdGg6MzRweDtoZWlnaHQ6MzRweDttYXJnaW46MCBhdXRvIDE0cHg7Ym9yZGVyOjRweCBzb2xpZCAjZGNlOWUzO2JvcmRlci10b3AtY29sb3I6IzJlN2Q1Yjtib3JkZXItcmFkaXVzOjUwJTthbmltYXRpb246bm90aWZ5U3BpbiAuOHMgbGluZWFyIGluZmluaXRlfQpAa2V5ZnJhbWVzIG5vdGlmeVNwaW57dG97dHJhbnNmb3JtOnJvdGF0ZSgzNjBkZWcpfX0KPC9zdHlsZT4KPGRpdiBpZD0ibm90aWZ5RW1haWxMb2FkaW5nUG9wdXAiIHJvbGU9InN0YXR1cyIgYXJpYS1saXZlPSJwb2xpdGUiIGFyaWEtbW9kYWw9InRydWUiPgogIDxkaXYgY2xhc3M9ImJveCI+PGRpdiBjbGFzcz0ic3Bpbm5lciI+PC9kaXY+PGRpdiBjbGFzcz0idGl0bGUiPu 現在登録されているメールを確認中ですPC9kaXY+PGRpdiBjbGFzcz0idGV4dCI+確認が終わるまで保存できません。少しお待ちください。</div></div>
+</div>
+<script id="notify-email-popup-confirm-20260831">
+(() => {
+  const codeEl = document.getElementById('emailStudentCode');
+  const saveBtn = document.getElementById('saveEmailBtn');
+  const popup = document.getElementById('notifyEmailLoadingPopup');
+  if (!codeEl || !saveBtn || !popup) return;
+  const showPopup = () => popup.classList.add('show');
+  const hidePopup = () => popup.classList.remove('show');
+  codeEl.addEventListener('input', () => {
+    if (codeEl.value.trim()) showPopup();
+    else hidePopup();
+  });
+  const observer = new MutationObserver(() => {
+    if (!saveBtn.disabled) hidePopup();
+  });
+  observer.observe(saveBtn, { attributes:true, attributeFilter:['disabled'] });
+  const emailMsg = document.getElementById('emailMsg');
+  if (emailMsg) {
+    const msgObserver = new MutationObserver(() => {
+      if (emailMsg.textContent.trim()) hidePopup();
+    });
+    msgObserver.observe(emailMsg, { childList:true, subtree:true, characterData:true });
+  }
+  const originalSave = window.saveNotifyEmails;
+  if (typeof originalSave === 'function') {
+    window.saveNotifyEmails = async function() {
+      if (saveBtn.disabled) return originalSave.apply(this, arguments);
+      const ok = window.confirm('本当に保存しますか？\n\n現在表示されている内容で通知先メールを上書きします。');
+      if (!ok) return;
+      return originalSave.apply(this, arguments);
+    };
+  }
+})();
+</script>
+        run: |
+          import os, base64
+          from pathlib import Path
+          p = Path('student_qr_register.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '<script id="notify-email-popup-confirm-20260831">'
+          if marker not in s:
+              patch = base64.b64decode(os.environ['PATCH_B64']).decode('utf-8')
+              s = s.replace('</body>', patch + '\n</body>', 1)
+              p.write_text(s, encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_register.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Add notification email popup and save confirmation"
+          git push
