@@ -1,0 +1,40 @@
+name: Patch teacher master direct link
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-payroll-sheet-link-20260831.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point email edit button to teacher master tab
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('teacher_qr_create.html')
+          s = p.read_text(encoding='utf-8')
+          old = "https://docs.google.com/spreadsheets/d/1L5aFDXAmfUDkBg8d7X3WqJgMhdMq5tM5sfUZ2G-M58E/edit"
+          new = old + "#gid=2020620808"
+          if new not in s:
+              s = s.replace(old, new)
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit change
+        run: |
+          if git diff --quiet -- teacher_qr_create.html; then
+            echo 'No changes needed'
+            exit 0
+          fi
+          git config user.name 'stepkobetsu-hub'
+          git config user.email 'stepkobetsu@gmail.com'
+          git add teacher_qr_create.html
+          git commit -m 'Open teacher master sheet from email edit button'
+          git push
