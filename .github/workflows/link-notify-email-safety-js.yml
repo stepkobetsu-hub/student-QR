@@ -1,4 +1,4 @@
-name: Link notify email safety JS
+name: Patch student QR email display
 
 on:
   push:
@@ -13,21 +13,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Add script tag
+      - name: Show notification emails below student QR
         shell: python
         run: |
           from pathlib import Path
-          p = Path('student_qr_register.html')
-          s = p.read_text(encoding='utf-8')
-          tag = '<script src="notify_email_safety.js?v=20260831-1"></script>'
-          if tag not in s:
-              s = s.replace('</body>', tag + '\n</body>', 1)
-              p.write_text(s, encoding='utf-8')
+          p=Path('student_qr_create.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('.qr img{width:160px;height:160px}.print{display:none;background:#6a4fa0}', '.qr img{width:160px;height:160px}.qr-mail-box{margin:18px auto 0;max-width:560px;padding:14px 16px;border-top:1px solid #d8e0dc;text-align:left}.qr-mail-title{font-size:13px;font-weight:800;color:#555;margin-bottom:7px}.qr-mail-list{font-size:14px;line-height:1.8;color:#234b3b;word-break:break-all}.qr-mail-list .empty{color:#999}.qr-mail-link{display:inline-block;margin-top:10px;padding:9px 14px;border-radius:8px;background:#2e7d5b;color:#fff;text-decoration:none;font-size:14px;font-weight:800}.print{display:none;background:#6a4fa0}',1)
+          old='<img id="qrImg" alt="QRコード"></div>'
+          new='<img id="qrImg" alt="QRコード"><div class="qr-mail-box"><div class="qr-mail-title">登録済みの通知先メールアドレス</div><div id="qrNotifyEmails" class="qr-mail-list"><span class="empty">確認中...</span></div><a class="qr-mail-link" href="student_qr_register.html#email">メールアドレス登録・変更</a></div></div>'
+          if old not in s: raise SystemExit('QR target missing')
+          s=s.replace(old,new,1)
+          s=s.replace("$('contacts').textContent='';$('qr').classList.remove('show');", "$('contacts').textContent='';if($('qrNotifyEmails'))$('qrNotifyEmails').innerHTML='<span class=\"empty\">確認中...</span>';$('qr').classList.remove('show');",1)
+          marker='function showQR(notice){'
+          helper="""function renderQrNotifyEmails(r){
+  const el=$('qrNotifyEmails');if(!el)return;
+  const all=[];const add=v=>{v=String(v||'').trim();if(v&&!all.some(x=>x.toLowerCase()===v.toLowerCase()))all.push(v)};
+  add(r&&r.guardianEmail);(Array.isArray(r&&r.deliveryEmails)?r.deliveryEmails:[]).forEach(add);(Array.isArray(r&&r.emails)?r.emails:[]).forEach(add);add(r&&r.email);add(r&&r.teacherEmail);
+  if(!all.length){el.innerHTML='<span class=\"empty\">登録なし</span>';return}
+  el.innerHTML=all.map(v=>'<div>・'+v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>').join('');
+}
+"""
+          if 'function renderQrNotifyEmails(' not in s: s=s.replace(marker,helper+marker,1)
+          target="const a=[...new Set((c.emails||[]).map(v=>String(v||'').trim()).filter(Boolean))];$('contacts').textContent=a.length?'登録済みの連絡先：'+a.join(' ／ '):'登録済みの連絡先：なし'"
+          repl=target+";renderQrNotifyEmails(c)"
+          if target not in s: raise SystemExit('notify target missing')
+          s=s.replace(target,repl,1)
+          issue="msg(r.name+' さんの生徒用QRを作成し、☆マスタのAZ列へ登録しました。',true)"
+          s=s.replace(issue,"try{const c=await jsonp({action:'getNotifyEmails',code});renderQrNotifyEmails(c)}catch(e){};"+issue,1)
+          p.write_text(s,encoding='utf-8')
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add student_qr_register.html
+          git add student_qr_create.html
           git diff --cached --quiet && exit 0
-          git commit -m "Load notification email safety UI"
+          git commit -m "Show notification emails under student QR"
           git push
