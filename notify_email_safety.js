@@ -40,6 +40,7 @@
     const emailInputs = [1,2,3,4].map(n => document.getElementById('notifyEmail' + n)).filter(Boolean);
     const emailChecks = [1,2,3,4].map(n => document.getElementById('notifyEnabled' + n)).filter(Boolean);
     let confirmedCode = '';
+    let missingNeedsSave = false;
 
     let saveRow = document.getElementById('emailSaveRow');
     let missingInline = document.getElementById('emailMissingInline');
@@ -56,13 +57,23 @@
       saveBtn.style.marginTop = '0';
       missingInline = document.createElement('div');
       missingInline.id = 'emailMissingInline';
-      missingInline.textContent = 'メールアドレス未登録';
+      missingInline.textContent = '⚠ メールアドレス未登録';
       missingInline.style.display = 'none';
       missingInline.style.color = '#d93025';
-      missingInline.style.fontSize = '19px';
+      missingInline.style.background = '#fff0f0';
+      missingInline.style.border = '2px solid #e53935';
+      missingInline.style.borderRadius = '10px';
+      missingInline.style.padding = '11px 18px';
+      missingInline.style.fontSize = '22px';
       missingInline.style.fontWeight = '900';
+      missingInline.style.lineHeight = '1.25';
       saveRow.appendChild(missingInline);
     }
+
+    const showMissing = () => {
+      if (!missingInline) return;
+      missingInline.style.display = missingNeedsSave && confirmedCode ? 'block' : 'none';
+    };
 
     const ensureConfirmHint = () => {
       if (!searchCountEl) return;
@@ -86,11 +97,12 @@
 
     const clearUnconfirmedSelection = () => {
       confirmedCode = '';
+      missingNeedsSave = false;
       codeEl.value = '';
       emailInputs.forEach(el => { el.value = ''; });
       emailChecks.forEach(el => { el.checked = true; });
       saveBtn.disabled = true;
-      if (missingInline) missingInline.style.display = 'none';
+      showMissing();
       const msg = document.getElementById('emailMsg');
       if (msg) { msg.textContent = ''; msg.className = 'msg'; msg.removeAttribute('style'); }
       setTimeout(ensureConfirmHint, 0);
@@ -113,6 +125,8 @@
         const row = event.target.closest('.email-student-row');
         if (!row) return;
         confirmedCode = String(row.dataset.code || '').trim();
+        missingNeedsSave = false;
+        showMissing();
         ensureConfirmHint();
       }, true);
     }
@@ -143,30 +157,29 @@
     saveObserver.observe(saveBtn, { attributes: true, attributeFilter: ['disabled'] });
 
     const emailMsg = document.getElementById('emailMsg');
-    const emphasizeMissingEmail = () => {
-      if (!emailMsg || !confirmedCode) {
-        if (missingInline) missingInline.style.display = 'none';
-        return;
-      }
-      const allEmpty = emailInputs.every(el => !String(el.value || '').trim());
-      const loaded = /現在登録されているメールを読み込みました|メールアドレス未登録/.test(emailMsg.textContent || '');
-      if (loaded && allEmpty) {
-        if (missingInline) missingInline.style.display = 'block';
+    const inspectMessage = () => {
+      if (!emailMsg || !confirmedCode) { showMissing(); return; }
+      const text = (emailMsg.textContent || '').trim();
+      if (text) hidePopup();
+      if (/メールアドレス未登録/.test(text) || (/現在登録されているメールを読み込みました/.test(text) && emailInputs.every(el => !String(el.value || '').trim()))) {
+        missingNeedsSave = true;
         emailMsg.style.display = 'none';
-      } else {
-        if (missingInline) missingInline.style.display = 'none';
-        if (emailMsg.textContent.trim()) emailMsg.style.display = '';
+      } else if (/保存しました|保存完了|保存しました。/.test(text)) {
+        missingNeedsSave = false;
+        emailMsg.style.display = '';
+      } else if (text) {
+        emailMsg.style.display = '';
       }
+      showMissing();
     };
 
     if (emailMsg) {
-      const msgObserver = new MutationObserver(() => {
-        if (emailMsg.textContent.trim()) hidePopup();
-        setTimeout(emphasizeMissingEmail, 0);
-      });
+      const msgObserver = new MutationObserver(() => setTimeout(inspectMessage, 0));
       msgObserver.observe(emailMsg, { childList: true, subtree: true, characterData: true });
     }
-    emailInputs.forEach(el => el.addEventListener('input', emphasizeMissingEmail));
+
+    // 入力中も警告は消さない。保存成功メッセージを確認した時だけ消す。
+    emailInputs.forEach(el => el.addEventListener('input', showMissing));
 
     const originalSave = window.saveNotifyEmails;
     if (typeof originalSave === 'function' && !originalSave.__confirmWrapped) {
