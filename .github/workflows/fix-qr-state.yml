@@ -1,0 +1,38 @@
+name: Fix QR state handling
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-qr-state.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix QR button state and stale message
+        shell: python
+        run: |
+          from pathlib import Path
+
+          for filename in ['student_qr_create.html','teacher_qr_create.html']:
+              p=Path(filename)
+              s=p.read_text(encoding='utf-8')
+              s=s.replace("$('view').disabled=false;$('issue').disabled=false;setMsg('');student=null;qrData='';currentCode=''", "$('view').disabled=true;$('issue').disabled=true;setMsg('');student=null;qrData='';currentCode=''")
+              s=s.replace("$('view').disabled=false;$('issue').disabled=false;msg('');student=null;qrData='';currentCode=''", "$('view').disabled=true;$('issue').disabled=true;msg('');student=null;qrData='';currentCode=''")
+              s=s.replace("if(!student||!qrData)return setMsg('この講師には現行QRがありません。');$('pill')", "if(!student||!qrData)return setMsg('QR情報を確認中です。番号を入力して少しお待ちください。');setMsg('');$('pill')")
+              s=s.replace("if(!student||!qrData){msg('この生徒には現行QRがありません。');return}$('pill')", "if(!student||!qrData){msg('QR情報を確認中です。番号を入力して少しお待ちください。');return}msg('');$('pill')")
+              s=s.replace("if(qrData){$('view').disabled=false;render(true);showQR(false)}else{$('issue').disabled=false;render(false)}", "if(qrData){$('view').disabled=false;$('issue').disabled=true;render(true);showQR(false)}else{$('view').disabled=true;$('issue').disabled=false;render(false)}")
+              p.write_text(s,encoding='utf-8')
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_create.html teacher_qr_create.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix QR lookup state and stale error message"
+          git push
