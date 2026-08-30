@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply QR page UI patch
+        run: python3 .github/scripts/unify_qr_pages_20260831.py
       - name: Build public artifact
         env:
           MY_QR_API_URL: ${{ vars.MY_QR_API_URL }}
