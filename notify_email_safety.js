@@ -17,6 +17,26 @@
     const emailChecks = [1,2,3,4].map(n => document.getElementById('notifyEnabled' + n)).filter(Boolean);
     let confirmedCode = '';
 
+    const ensureConfirmHint = () => {
+      if (!searchCountEl) return;
+      const text = (searchCountEl.textContent || '').trim();
+      const hasResults = /\d+人見つかりました/.test(text);
+      let hint = searchCountEl.querySelector('.confirm-search-hint');
+      if (!hasResults || confirmedCode) {
+        if (hint) hint.remove();
+        return;
+      }
+      if (!hint) {
+        hint = document.createElement('span');
+        hint.className = 'confirm-search-hint';
+        hint.textContent = '　クリックして確定してください。';
+        searchCountEl.appendChild(hint);
+      }
+      hint.style.color = '#d32f2f';
+      hint.style.fontWeight = '800';
+      hint.style.fontSize = '14px';
+    };
+
     const clearUnconfirmedSelection = () => {
       confirmedCode = '';
       codeEl.value = '';
@@ -25,26 +45,19 @@
       saveBtn.disabled = true;
       const msg = document.getElementById('emailMsg');
       if (msg) { msg.textContent = ''; msg.className = 'msg'; }
+      setTimeout(ensureConfirmHint, 0);
     };
 
     if (searchEl) {
       searchEl.addEventListener('input', () => {
         clearUnconfirmedSelection();
-        setTimeout(() => {
-          const text = (searchCountEl?.textContent || '').trim();
-          if (/人見つかりました/.test(text) && searchCountEl) {
-            if (!searchCountEl.querySelector('.confirm-search-hint')) {
-              const hint = document.createElement('span');
-              hint.className = 'confirm-search-hint';
-              hint.textContent = '　クリックして確定してください。';
-              hint.style.color = '#1267c4';
-              hint.style.fontWeight = '800';
-              hint.style.fontSize = '14px';
-              searchCountEl.appendChild(hint);
-            }
-          }
-        }, 0);
+        setTimeout(ensureConfirmHint, 0);
       }, true);
+    }
+
+    if (searchCountEl) {
+      const countObserver = new MutationObserver(() => ensureConfirmHint());
+      countObserver.observe(searchCountEl, { childList: true, subtree: true, characterData: true });
     }
 
     if (searchListEl) {
@@ -52,6 +65,7 @@
         const row = event.target.closest('.email-student-row');
         if (!row) return;
         confirmedCode = String(row.dataset.code || '').trim();
+        ensureConfirmHint();
       }, true);
     }
 
