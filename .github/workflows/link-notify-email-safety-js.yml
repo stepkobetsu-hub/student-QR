@@ -1,0 +1,33 @@
+name: Link notify email safety JS
+
+on:
+  push:
+    paths:
+      - '.github/workflows/link-notify-email-safety-js.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add script tag
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('student_qr_register.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="notify_email_safety.js?v=20260831-1"></script>'
+          if tag not in s:
+              s = s.replace('</body>', tag + '\n</body>', 1)
+              p.write_text(s, encoding='utf-8')
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add student_qr_register.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Load notification email safety UI"
+          git push
