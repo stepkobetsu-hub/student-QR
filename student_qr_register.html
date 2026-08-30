@@ -2973,5 +2973,72 @@ async function exportAttendanceCsv() {
 
 </script>
 
+<script id="notify-email-load-safe-20260831">
+(() => {
+  const codeEl = document.getElementById('emailStudentCode');
+  const saveBtn = document.getElementById('saveEmailBtn');
+  if (!codeEl || !saveBtn) return;
+  let safeSeq = 0;
+  let safeTimer = null;
+  const originalSave = window.saveNotifyEmails;
+  function setSafeMessage(text, type) {
+    if (typeof window.showEmailMsg === 'function') window.showEmailMsg(text, type);
+  }
+  async function loadRegisteredNotifyEmails() {
+    clearTimeout(safeTimer);
+    const code = codeEl.value.trim();
+    const seq = ++safeSeq;
+    saveBtn.disabled = true;
+    if (!code) return;
+    const info = document.getElementById('emailStudentInfo');
+    const name = document.getElementById('emailStudentName');
+    if (name) name.textContent = '現在登録されているメールを確認中...';
+    if (info) info.classList.add('show');
+    safeTimer = setTimeout(async () => {
+      try {
+        const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
+        if (seq !== safeSeq) return;
+        if (!res || !res.ok) {
+          if (name) name.textContent = (res && res.message) || 'メール情報を取得できませんでした。';
+          setSafeMessage('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+          return;
+        }
+        if (name) name.textContent = res.name || '(氏名なし)';
+        const values = Array.isArray(res.emails) ? res.emails.slice(0, 4).map(v => String(v || '').trim()) : [];
+        while (values.length < 4) values.push('');
+        const guardian = String(res.guardianEmail || '').trim();
+        if (guardian) values[0] = guardian;
+        const delivery = Array.isArray(res.deliveryEmails) ? res.deliveryEmails.map(v => String(v || '').trim()).filter(Boolean) : [];
+        delivery.forEach(mail => {
+          if (values.some(v => v && v.toLowerCase() === mail.toLowerCase())) return;
+          const empty = values.findIndex(v => !v);
+          if (empty >= 0) values[empty] = mail;
+        });
+        const teacherMail = String(res.teacherEmail || res.email || res.mail || '').trim();
+        if (teacherMail && !values[0]) values[0] = teacherMail;
+        notifyEmailEls.forEach((el, i) => { el.value = values[i] || ''; });
+        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
+          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
+        });
+        saveBtn.disabled = false;
+        setSafeMessage('現在登録されているメールを読み込みました。内容を確認してから保存してください。', 'success');
+      } catch (e) {
+        if (seq !== safeSeq) return;
+        if (name) name.textContent = 'メール情報を取得できませんでした。';
+        setSafeMessage('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+      }
+    }, 520);
+  }
+  codeEl.addEventListener('input', loadRegisteredNotifyEmails);
+  saveBtn.disabled = true;
+  window.saveNotifyEmails = async function() {
+    if (saveBtn.disabled) {
+      setSafeMessage('現在登録されているメールの読み込み完了後に保存できます。', 'error');
+      return;
+    }
+    return originalSave.apply(this, arguments);
+  };
+})();
+</script>
 </body>
 </html>
