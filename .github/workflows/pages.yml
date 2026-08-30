@@ -28,6 +28,8 @@ jobs:
         run: python3 .github/scripts/teacher_email_ui_20260831.py
       - name: Match QR print size and email button
         run: python3 .github/scripts/fix_qr_print_and_email_button_20260831.py
+      - name: Bust notify email safety script cache
+        run: python3 .github/scripts/cache_bust_notify_email_20260831.py
       - name: Build public artifact
         env:
           MY_QR_API_URL: ${{ vars.MY_QR_API_URL }}
