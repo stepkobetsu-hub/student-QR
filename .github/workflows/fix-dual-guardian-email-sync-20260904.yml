@@ -1,5 +1,6 @@
 name: Fix dual guardian email sync 20260904
 
+# second push intentionally triggers this workflow after it exists on main
 on:
   push:
     paths:
