@@ -1,0 +1,92 @@
+name: Canonical notification email columns 20260904
+
+on:
+  push:
+    paths:
+      - '.github/workflows/canonical-notification-email-columns-20260904.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Canonicalize notification columns to X BA BB BC
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('gas/コード.js')
+          source = path.read_text(encoding='utf-8')
+
+          old_constants = """const COL_GUARDIAN_EMAIL = 24;   // X列: メールアドレス（保護者）
+const COL_GUARDIAN_EMAIL_2 = 30; // AD列: メールアドレス2
+const COL_QR_DATA = 52;          // AZ列: QRデータ
+const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 旧通知先メール設定（管理画面互換）
+const DELIVERY_EMAIL_COLS = [COL_GUARDIAN_EMAIL, COL_GUARDIAN_EMAIL_2]; // 入退室通知はX列・AD列のみ
+"""
+          new_constants = """const COL_GUARDIAN_EMAIL = 24;   // X列: 通知先メール1（保護者メール）
+const COL_GUARDIAN_EMAIL_2 = 30; // AD列: 旧メールアドレス2（移行互換専用）
+const COL_QR_DATA = 52;          // AZ列: QRデータ
+const COL_NOTIFY_EMAIL_2 = 53;   // BA列: 通知先メール2
+const COL_NOTIFY_EMAIL_3 = 54;   // BB列: 通知先メール3
+const COL_NOTIFY_EMAIL_4 = 55;   // BC列: 通知先メール4
+const COL_NOTIFY_EMAILS = [COL_GUARDIAN_EMAIL, COL_NOTIFY_EMAIL_2, COL_NOTIFY_EMAIL_3, COL_NOTIFY_EMAIL_4];
+const LEGACY_NOTIFY_EMAIL_COLS = [63, 64, 65, 66]; // BK〜BN列: 移行互換専用
+const DELIVERY_EMAIL_COLS = COL_NOTIFY_EMAILS; // 入退室通知の正本は X・BA・BB・BC
+"""
+          if old_constants not in source:
+            raise SystemExit('notification constants block not found')
+          source = source.replace(old_constants, new_constants, 1)
+
+          old_comment = """/**
+ * その生徒の入退室通知先を取得する。
+ * 生徒マスタのX列・AD列だけを正本とし、空欄と重複アドレスを除外する。
+ */"""
+          new_comment = """/**
+ * その生徒の入退室通知先を取得する。
+ * 生徒マスタの X・BA・BB・BC を唯一の正本とし、空欄と重複アドレスを除外する。
+ */"""
+          source = source.replace(old_comment, new_comment, 1)
+
+          start = source.index('function saveNotifyEmails_(code, emails) {')
+          end_marker = '\n}\n\n/**\n * ===================================================================\n * 入退室ログ／ポイント履歴 スプレッドシート 操作'
+          end = source.index(end_marker, start) + 2
+          new_save = """function saveNotifyEmails_(code, emails) {
+  if (!code) return { ok: false, message: '生徒番号を入力してください' };
+  const sheet = getMasterSheet_();
+  const row = findStudentRow_(sheet, code);
+  if (row === -1) return { ok: false, message: '該当する生徒が見つかりません' };
+
+  // 画面表示と実送信で同じ4列を使う。正本は X・BA・BB・BC。
+  const inputEmails = (Array.isArray(emails) ? emails : []).slice(0, 4).map(value => String(value || '').trim());
+  while (inputEmails.length < 4) inputEmails.push('');
+  COL_NOTIFY_EMAILS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
+
+  // 移行期間中だけ、旧本番コードとの互換性のため AD と BK〜BN にもコピーする。
+  // 実送信の正本としては参照しない。
+  sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(inputEmails[1]);
+  LEGACY_NOTIFY_EMAIL_COLS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
+
+  return {
+    ok: true,
+    name: sheet.getRange(row, COL_STUDENT_NAME).getValue(),
+    deliveryEmails: getNotifyEmailsForRow_(sheet, row)
+  };
+}"""
+          source = source[:start] + new_save + source[end:]
+          source = source.replace("const CHECKIN_BUILD_ID = 'dual-guardian-email-sync-v65';", "const CHECKIN_BUILD_ID = 'canonical-notify-columns-v66';", 1)
+          path.write_text(source, encoding='utf-8')
+
+      - name: Commit canonical notification source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gas/コード.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Canonicalize notification emails to X BA BB BC"
+          git push
+
+# trigger: 20260904-001
