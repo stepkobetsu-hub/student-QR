@@ -59,7 +59,7 @@ const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
 const CHECKIN_DUPLICATE_WINDOW_MS = 20 * 1000;
 const CHECKIN_DUPLICATE_GUARD_PREFIX = 'CHECKIN_DUPLICATE_GUARD_V1:';
-const CHECKIN_BUILD_ID = 'canonical-notify-columns-v66';
+const CHECKIN_BUILD_ID = 'canonical-notify-save-v67';
 
 /**
  * ===================================================================
@@ -334,9 +334,7 @@ function saveNotifyEmails_(code, emails) {
   while (inputEmails.length < 4) inputEmails.push('');
   COL_NOTIFY_EMAILS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
 
-  // 移行期間中だけ旧コード互換のため AD と BK〜BN にもコピーする。
-  sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(inputEmails[1]);
-  LEGACY_NOTIFY_EMAIL_COLS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
+  // 保存先は X・BA・BB・BC の4列だけ。AD・BK〜BN には書き込まない。
 
   return { ok: true, name: sheet.getRange(row, COL_STUDENT_NAME).getValue(), deliveryEmails: getNotifyEmailsForRow_(sheet, row) };
 }
