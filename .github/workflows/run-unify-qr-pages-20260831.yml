@@ -11,6 +11,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Canonicalize notification email columns
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('gas/コード.js')
+          s = p.read_text(encoding='utf-8')
+          if "canonical-notify-columns-v66" in s:
+              raise SystemExit(0)
+          old = """const COL_GUARDIAN_EMAIL = 24;   // X列: メールアドレス（保護者）
+          const COL_GUARDIAN_EMAIL_2 = 30; // AD列: メールアドレス2
+          const COL_QR_DATA = 52;          // AZ列: QRデータ
+          const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 旧通知先メール設定（管理画面互換）
+          const DELIVERY_EMAIL_COLS = [COL_GUARDIAN_EMAIL, COL_GUARDIAN_EMAIL_2]; // 入退室通知はX列・AD列のみ
+          """.replace('\n          ', '\n').lstrip()
+          new = """const COL_GUARDIAN_EMAIL = 24;   // X列: 通知先メール1（保護者メール）
+          const COL_GUARDIAN_EMAIL_2 = 30; // AD列: 旧メールアドレス2（移行互換専用）
+          const COL_QR_DATA = 52;          // AZ列: QRデータ
+          const COL_NOTIFY_EMAIL_2 = 53;   // BA列: 通知先メール2
+          const COL_NOTIFY_EMAIL_3 = 54;   // BB列: 通知先メール3
+          const COL_NOTIFY_EMAIL_4 = 55;   // BC列: 通知先メール4
+          const COL_NOTIFY_EMAILS = [COL_GUARDIAN_EMAIL, COL_NOTIFY_EMAIL_2, COL_NOTIFY_EMAIL_3, COL_NOTIFY_EMAIL_4];
+          const LEGACY_NOTIFY_EMAIL_COLS = [63, 64, 65, 66]; // BK〜BN列: 移行互換専用
+          const DELIVERY_EMAIL_COLS = COL_NOTIFY_EMAILS; // 入退室通知の正本は X・BA・BB・BC
+          """.replace('\n          ', '\n').lstrip()
+          if old not in s:
+              raise SystemExit('notification constants block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('生徒マスタのX列・AD列だけを正本とし、空欄と重複アドレスを除外する。', '生徒マスタの X・BA・BB・BC を唯一の正本とし、空欄と重複アドレスを除外する。', 1)
+          start = s.index('function saveNotifyEmails_(code, emails) {')
+          end_marker = '\n}\n\n/**\n * ===================================================================\n * 入退室ログ／ポイント履歴 スプレッドシート 操作'
+          end = s.index(end_marker, start) + 2
+          new_save = """function saveNotifyEmails_(code, emails) {
+            if (!code) return { ok: false, message: '生徒番号を入力してください' };
+            const sheet = getMasterSheet_();
+            const row = findStudentRow_(sheet, code);
+            if (row === -1) return { ok: false, message: '該当する生徒が見つかりません' };
+
+            // 画面表示と実送信で同じ4列を使う。正本は X・BA・BB・BC。
+            const inputEmails = (Array.isArray(emails) ? emails : []).slice(0, 4).map(value => String(value || '').trim());
+            while (inputEmails.length < 4) inputEmails.push('');
+            COL_NOTIFY_EMAILS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
+
+            // 移行期間中だけ旧コード互換のため AD と BK〜BN にもコピーする。
+            sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(inputEmails[1]);
+            LEGACY_NOTIFY_EMAIL_COLS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
+
+            return { ok: true, name: sheet.getRange(row, COL_STUDENT_NAME).getValue(), deliveryEmails: getNotifyEmailsForRow_(sheet, row) };
+          }""".replace('\n          ', '\n').lstrip()
+          s = s[:start] + new_save + s[end:]
+          s = s.replace("const CHECKIN_BUILD_ID = 'dual-guardian-email-sync-v65';", "const CHECKIN_BUILD_ID = 'canonical-notify-columns-v66';", 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit notification backend patch
+        run: |
+          if git diff --quiet -- gas/コード.js; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gas/コード.js
+          git commit -m "Canonicalize notification emails to X BA BB BC"
+          git push
       - name: Apply patch
         run: python3 .github/scripts/unify_qr_pages_20260831.py
       - name: Commit patch
@@ -19,5 +78,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add student_qr_create.html teacher_qr_create.html student_qr_register.html
+          git diff --cached --quiet && exit 0
           git commit -m "Unify QR page layout and email status"
           git push
