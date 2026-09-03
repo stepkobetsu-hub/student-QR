@@ -89,4 +89,4 @@ const DELIVERY_EMAIL_COLS = COL_NOTIFY_EMAILS; // 入退室通知の正本は X�
           git commit -m "Canonicalize notification emails to X BA BB BC"
           git push
 
-# trigger: 20260904-001
+# trigger: 20260904-002
