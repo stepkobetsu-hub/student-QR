@@ -38,11 +38,15 @@ const TEACHER_INDEX_CACHE_VERSION = 'v43-email-p15';
 const COL_STUDENT_ID = 1;      // A列: 生徒番号
 const COL_STUDENT_NAME = 5;    // E列: 生徒氏名
 const COL_SCHOOL = 8;          // H列: 校舎
-const COL_GUARDIAN_EMAIL = 24;   // X列: メールアドレス（保護者）
-const COL_GUARDIAN_EMAIL_2 = 30; // AD列: メールアドレス2
+const COL_GUARDIAN_EMAIL = 24;   // X列: 通知先メール1（保護者メール）
+const COL_GUARDIAN_EMAIL_2 = 30; // AD列: 旧メールアドレス2（移行互換専用）
 const COL_QR_DATA = 52;          // AZ列: QRデータ
-const COL_NOTIFY_EMAILS = [63, 64, 65, 66]; // BK〜BN列: 旧通知先メール設定（管理画面互換）
-const DELIVERY_EMAIL_COLS = [COL_GUARDIAN_EMAIL, COL_GUARDIAN_EMAIL_2]; // 入退室通知はX列・AD列のみ
+const COL_NOTIFY_EMAIL_2 = 53;   // BA列: 通知先メール2
+const COL_NOTIFY_EMAIL_3 = 54;   // BB列: 通知先メール3
+const COL_NOTIFY_EMAIL_4 = 55;   // BC列: 通知先メール4
+const COL_NOTIFY_EMAILS = [COL_GUARDIAN_EMAIL, COL_NOTIFY_EMAIL_2, COL_NOTIFY_EMAIL_3, COL_NOTIFY_EMAIL_4];
+const LEGACY_NOTIFY_EMAIL_COLS = [63, 64, 65, 66]; // BK〜BN列: 移行互換専用
+const DELIVERY_EMAIL_COLS = COL_NOTIFY_EMAILS; // 入退室通知の正本は X・BA・BB・BC
 
 const DEFAULT_FROM_NAME  = 'Step個別指導ステップ';
 const SCHOOL_DISPLAY_NAME = '個別指導ステップ';
@@ -55,7 +59,7 @@ const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
 const CHECKIN_DUPLICATE_WINDOW_MS = 20 * 1000;
 const CHECKIN_DUPLICATE_GUARD_PREFIX = 'CHECKIN_DUPLICATE_GUARD_V1:';
-const CHECKIN_BUILD_ID = 'dual-guardian-email-sync-v65';
+const CHECKIN_BUILD_ID = 'canonical-notify-columns-v66';
 
 /**
  * ===================================================================
@@ -258,7 +262,7 @@ function issueNewStudentQr_(code) {
 
 /**
  * その生徒の入退室通知先を取得する。
- * 生徒マスタのX列・AD列だけを正本とし、空欄と重複アドレスを除外する。
+ * 生徒マスタの X・BA・BB・BC を唯一の正本とし、空欄と重複アドレスを除外する。
  */
 function getNotifyEmailsForRow_(sheet, row) {
   const lastDeliveryCol = Math.max.apply(null, DELIVERY_EMAIL_COLS);
@@ -325,39 +329,16 @@ function saveNotifyEmails_(code, emails) {
   const row = findStudentRow_(sheet, code);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません' };
 
-  const inputEmails = Array.isArray(emails) ? emails : [];
-  COL_NOTIFY_EMAILS.forEach((col, i) => {
-    const value = String(inputEmails[i] || '').trim();
-    sheet.getRange(row, col).setValue(value);
-  });
+  // 画面表示と実送信で同じ4列を使う。正本は X・BA・BB・BC。
+  const inputEmails = (Array.isArray(emails) ? emails : []).slice(0, 4).map(value => String(value || '').trim());
+  while (inputEmails.length < 4) inputEmails.push('');
+  COL_NOTIFY_EMAILS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
 
-  // 管理画面の通知先と、入退室メールが実際に参照する X/AD 列を同期する。
-  // X列（主メール）が既にある場合は勝手に変更せず、登録メールのうち
-  // X列と異なる最初の1件を AD列（2件目）へ反映する。
-  const unique = [];
-  const seen = {};
-  inputEmails.forEach(value => {
-    const email = String(value || '').trim();
-    const key = normalizeDeliveryEmail_(email);
-    if (!email || !key || seen[key]) return;
-    seen[key] = true;
-    unique.push(email);
-  });
+  // 移行期間中だけ旧コード互換のため AD と BK〜BN にもコピーする。
+  sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(inputEmails[1]);
+  LEGACY_NOTIFY_EMAIL_COLS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
 
-  let primary = String(sheet.getRange(row, COL_GUARDIAN_EMAIL).getValue() || '').trim();
-  if (!primary && unique.length) {
-    primary = unique[0];
-    sheet.getRange(row, COL_GUARDIAN_EMAIL).setValue(primary);
-  }
-  const primaryKey = normalizeDeliveryEmail_(primary);
-  const secondary = unique.find(email => normalizeDeliveryEmail_(email) !== primaryKey) || '';
-  sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(secondary);
-
-  return {
-    ok: true,
-    name: sheet.getRange(row, COL_STUDENT_NAME).getValue(),
-    deliveryEmails: getNotifyEmailsForRow_(sheet, row)
-  };
+  return { ok: true, name: sheet.getRange(row, COL_STUDENT_NAME).getValue(), deliveryEmails: getNotifyEmailsForRow_(sheet, row) };
 }
 
 /**
