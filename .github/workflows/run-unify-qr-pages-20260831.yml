@@ -15,18 +15,19 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
           p = Path('gas/コード.js')
           s = p.read_text(encoding='utf-8')
           if "canonical-notify-save-v67" in s:
               raise SystemExit(0)
-          old = """  // 移行期間中だけ旧コード互換のため AD と BK〜BN にもコピーする。
-          sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(inputEmails[1]);
-          LEGACY_NOTIFY_EMAIL_COLS.forEach((col, i) => sheet.getRange(row, col).setValue(inputEmails[i]));
-
-          """.replace('\n          ', '\n')
-          if old not in s:
+          pattern = re.compile(
+              r"\n  // 移行期間中だけ旧コード互換のため AD と BK〜BN にもコピーする。\n"
+              r"  sheet\.getRange\(row, COL_GUARDIAN_EMAIL_2\)\.setValue\(inputEmails\[1\]\);\n"
+              r"  LEGACY_NOTIFY_EMAIL_COLS\.forEach\(\(col, i\) => sheet\.getRange\(row, col\)\.setValue\(inputEmails\[i\]\)\);\n"
+          )
+          s, count = pattern.subn("\n  // 保存先は X・BA・BB・BC の4列だけ。AD・BK〜BN には書き込まない。\n", s, count=1)
+          if count != 1:
               raise SystemExit('legacy notification write block not found')
-          s = s.replace(old, "  // 保存先は X・BA・BB・BC の4列だけ。AD・BK〜BN には書き込まない。\n\n", 1)
           s = s.replace("const CHECKIN_BUILD_ID = 'canonical-notify-columns-v66';", "const CHECKIN_BUILD_ID = 'canonical-notify-save-v67';", 1)
           p.write_text(s, encoding='utf-8')
       - name: Commit notification backend patch
