@@ -55,7 +55,7 @@ const CHECKIN_PHOTO_CACHE_PREFIX = 'CHECKIN_PHOTO_V1:';
 const CHECKIN_PHOTO_CACHE_MAX_CHARS = 95000;
 const CHECKIN_DUPLICATE_WINDOW_MS = 20 * 1000;
 const CHECKIN_DUPLICATE_GUARD_PREFIX = 'CHECKIN_DUPLICATE_GUARD_V1:';
-const CHECKIN_BUILD_ID = 'duplicate-log-canonical-v64';
+const CHECKIN_BUILD_ID = 'dual-guardian-email-sync-v65';
 
 /**
  * ===================================================================
@@ -325,12 +325,39 @@ function saveNotifyEmails_(code, emails) {
   const row = findStudentRow_(sheet, code);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません' };
 
+  const inputEmails = Array.isArray(emails) ? emails : [];
   COL_NOTIFY_EMAILS.forEach((col, i) => {
-    const value = (emails[i] || '').trim();
+    const value = String(inputEmails[i] || '').trim();
     sheet.getRange(row, col).setValue(value);
   });
 
-  return { ok: true, name: sheet.getRange(row, COL_STUDENT_NAME).getValue() };
+  // 管理画面の通知先と、入退室メールが実際に参照する X/AD 列を同期する。
+  // X列（主メール）が既にある場合は勝手に変更せず、登録メールのうち
+  // X列と異なる最初の1件を AD列（2件目）へ反映する。
+  const unique = [];
+  const seen = {};
+  inputEmails.forEach(value => {
+    const email = String(value || '').trim();
+    const key = normalizeDeliveryEmail_(email);
+    if (!email || !key || seen[key]) return;
+    seen[key] = true;
+    unique.push(email);
+  });
+
+  let primary = String(sheet.getRange(row, COL_GUARDIAN_EMAIL).getValue() || '').trim();
+  if (!primary && unique.length) {
+    primary = unique[0];
+    sheet.getRange(row, COL_GUARDIAN_EMAIL).setValue(primary);
+  }
+  const primaryKey = normalizeDeliveryEmail_(primary);
+  const secondary = unique.find(email => normalizeDeliveryEmail_(email) !== primaryKey) || '';
+  sheet.getRange(row, COL_GUARDIAN_EMAIL_2).setValue(secondary);
+
+  return {
+    ok: true,
+    name: sheet.getRange(row, COL_STUDENT_NAME).getValue(),
+    deliveryEmails: getNotifyEmailsForRow_(sheet, row)
+  };
 }
 
 /**
