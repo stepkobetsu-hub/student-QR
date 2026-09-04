@@ -1,8 +1,0 @@
-name: Issue46 placeholder
-on:
-  workflow_dispatch:
-jobs:
-  noop:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Issue #46 implementation is handled by Codex; this workflow is not automatic."
