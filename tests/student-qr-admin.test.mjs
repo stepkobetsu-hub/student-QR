@@ -87,6 +87,15 @@ test('current QR is shown automatically and notification email has single-studen
   assert.match(page, /対象生徒を1人選んでください/);
 });
 
+test('notification email lookup avoids duplicate requests and reuses recent results', () => {
+  assert.match(page, /const notifyEmailCache = new Map\(\)/);
+  assert.match(page, /function getNotifyEmailsFast\(code\)/);
+  assert.match(page, /NOTIFY_EMAIL_CACHE_TTL_MS = 5 \* 60 \* 1000/);
+  assert.match(page, /getNotifyEmailsFast\(code\)\.then/);
+  assert.doesNotMatch(page, /id="notify-email-load-safe-20260831"/);
+  assert.match(page, /if \(!saved \|\| !saved\.sessionToken[\s\S]*?await requireStudentQrAuth\(\)/);
+});
+
 test('email empty results stay hidden and attendance CSV defaults to a selected month', () => {
   assert.match(page, /id="emailStudentSearchList" class="email-student-list hidden"/);
   assert.match(page, /emailStudentSearchListEl\.classList\.add\('hidden'\)/);
