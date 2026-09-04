@@ -9,7 +9,7 @@ const DELIVERY_FAILURE_HEADERS = [
   'アーカイブ状態','アーカイブ日時','アーカイブ実行者'
 ];
 const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時'];
-const BREVO_WEBHOOK_EVENTS = ['delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
+const BREVO_WEBHOOK_EVENTS = ['accepted','delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
 const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
 const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock','deliveryFailureReportSettingsGet','deliveryFailureReportSettingsSave'];
@@ -217,7 +217,7 @@ function handleBrevoWebhook_(body, rawBody, diagnostic) {
       updateWebhookDiagnostic_(diagnostic, { result:'重複イベント', error:'' });
       return { ok: true, duplicate: true };
     }
-    updateDeliveryLogFromWebhook_(logRecord, event, eventDate, String(body.reason || body.error || ''));
+    updateDeliveryLogFromWebhook_(logRecord, event, eventDate, String(body.reason || body.error || ''), email, messageId);
     if (event === 'delivered') {
       updateDeliveredFailureRecords_(email, messageId, eventDate, logRecord);
       updateWebhookDiagnostic_(diagnostic, { result:'配信完了へ更新', error:'' });
@@ -255,7 +255,7 @@ function deliveryDedupeExists_(key) {
 }
 
 function deliveryDisplayState_(event) {
-  return ({ hard_bounce:'恒久不達', soft_bounce:'一時エラー', deferred:'一時エラー', blocked:'ブロック', invalid_email:'無効アドレス', spam:'迷惑メール報告', error:'送信エラー', delivered:'配信完了' })[event] || event;
+  return ({ accepted:'送信受付', hard_bounce:'恒久不達', soft_bounce:'一時エラー', deferred:'一時エラー', blocked:'ブロック', invalid_email:'無効アドレス', spam:'迷惑メール報告', error:'送信エラー', delivered:'配信完了' })[event] || event;
 }
 
 function findStudentsByDeliveryEmail_(email) {
@@ -429,9 +429,16 @@ function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
   }
 }
 
-function updateDeliveryLogFromWebhook_(record, event, eventDate, reason) {
+function updateDeliveryLogFromWebhook_(record, event, eventDate, reason, recipient, messageId) {
   const state = deliveryDisplayState_(event);
   const set = (header, value) => { const idx = record.headers.indexOf(header); if (idx >= 0) record.sheet.getRange(record.row, idx + 1).setValue(value); };
+  const receiptId = String(deliveryLogValue_(record, '受付ID') || '').trim();
+  if (receiptId && typeof updateCheckInRecipientDeliveryState_ === 'function' && updateCheckInRecipientDeliveryState_(receiptId, recipient, messageId, event, eventDate, reason)) {
+    set('最終イベント日時', eventDate); set('配信状態更新日時', new Date());
+    if (event === 'delivered') set('最終配信成功日時', eventDate);
+    if (event !== 'delivered') set('最終エラー理由', reason);
+    return;
+  }
   set('配信状態', state); set('最終イベント日時', eventDate); set('配信状態更新日時', new Date());
   if (event === 'delivered') set('最終配信成功日時', eventDate);
   if (event !== 'delivered') set('最終エラー理由', reason);

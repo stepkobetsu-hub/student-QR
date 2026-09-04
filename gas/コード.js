@@ -1254,7 +1254,7 @@ function classifyTeacherEmail_(value) {
 }
 
 function ensureCheckInLogSchema_(sheet) {
-  return ensureHeaders_(sheet, ['タイムスタンプ','生徒番号','生徒氏名','種別','校舎','メール送信結果','送信先メール','BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時','送信元システム','送信種別','件名','送信時結果','メール送信方式',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER]);
+  return ensureHeaders_(sheet, ['タイムスタンプ','生徒番号','生徒氏名','種別','校舎','メール送信結果','送信先メール','BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時','送信元システム','送信種別','件名','送信時結果','メール送信方式',CHECKIN_RECEIPT_HEADER,CHECKIN_TIMING_HEADER,'送信先別結果']);
 }
 
 function ensureHeaders_(sheet, required) {
@@ -1469,7 +1469,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
     row[12] = 'DUPLICATE_WITHIN_COOLDOWN: 20秒以内の後発受付のためメール送信省略';
     row[15] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
-    updateCheckInLogMailStatus_(receiptId, '重複のため送信省略', [], [], row[12], '');
+    updateCheckInLogMailStatus_(receiptId, '重複のため送信省略', [], [], row[12], '', []);
     cleanupCheckInPhotoRef_(row[11]);
     console.log(JSON.stringify({ event: 'checkin_mail_skipped_duplicate', receiptId: receiptId, priorReceiptId: duplicateMail.receiptId }));
     return { status: 'SKIPPED_DUPLICATE', errorCode: 'DUPLICATE_WITHIN_COOLDOWN', attempts: Number(row[4] || 0), mailSendMs: Date.now() - mailSendStartedAt };
@@ -1547,9 +1547,9 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   row[14] = JSON.stringify(sent.map(recipient => recipient.correlationId).filter(Boolean));
   row[15] = row[3] === 'SENT' ? new Date() : '';
   sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
-  const logStatus = row[3] === 'SENT' ? '送信完了' : (row[3] === 'FAILED' ? '送信エラー' : '送信待ち');
+  const logStatus = checkInRecipientSendSummary_(recipients);
   const provider = Array.from(new Set(recipients.map(recipient => recipient.provider).filter(Boolean))).join(',');
-  updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider);
+  updateCheckInLogMailStatus_(receiptId, logStatus, sent.map(r => r.messageId).filter(Boolean), sent.map(r => r.correlationId).filter(Boolean), row[12], provider, recipients);
   if (row[3] === 'FAILED') notifyCheckInProcessingFailureSafely_({ receiptId: receiptId, name: String(row[7] || ''), type: String(row[8] || ''), error: String(row[12] || 'MAIL_SEND_FAILED') });
   if (row[3] !== 'RETRY' && row[11]) {
     try {
@@ -1608,7 +1608,55 @@ function notifyCheckInProcessingFailureSafely_(failure) {
   }
 }
 
-function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText, provider) {
+function checkInRecipientLabel_(recipient, index) {
+  const label = String(recipient && recipient.label || '').trim();
+  return /^メール[1-4]$/.test(label) ? label : 'メール' + (index + 1);
+}
+
+function checkInRecipientStateLabel_(recipient) {
+  const event = String(recipient && (recipient.deliveryEvent || recipient.status) || '').toLowerCase();
+  if (event === 'delivered') return '配信完了';
+  if (event === 'sent' || event === 'accepted') return '送信受付';
+  if (event === 'soft_bounce' || event === 'deferred') return '一時エラー';
+  if (event === 'hard_bounce') return '恒久不達';
+  if (event === 'blocked') return 'ブロック';
+  if (event === 'invalid_email') return '無効アドレス';
+  if (event === 'spam' || event === 'complaint') return '迷惑メール報告';
+  if (event === 'stopped') return /一時停止/.test(String(recipient.error || '')) ? '一時停止（自動）' : '送信停止';
+  if (event === 'failed' || event === 'error') return '送信エラー';
+  if (event === 'processing') return '送信中';
+  return '送信待ち';
+}
+
+function checkInRecipientSendSummary_(recipients) {
+  const list = Array.isArray(recipients) ? recipients : [];
+  const total = list.length;
+  if (!total) return '通知先なし';
+  const sent = list.filter(recipient => String(recipient.status || '').toUpperCase() === 'SENT').length;
+  const stopped = list.some(recipient => String(recipient.status || '').toUpperCase() === 'STOPPED');
+  const pending = list.some(recipient => ['PENDING','PROCESSING'].indexOf(String(recipient.status || '').toUpperCase()) >= 0);
+  if (sent === total) return '送信成功 ' + sent + '/' + total + '件';
+  if (pending) return '送信待ち ' + sent + '/' + total + '件';
+  if (stopped && sent === 0) return '送信停止 0/' + total + '件';
+  return (sent > 0 ? '一部送信 ' : '送信失敗 ') + sent + '/' + total + '件';
+}
+
+function checkInRecipientDeliverySummary_(recipients) {
+  const list = Array.isArray(recipients) ? recipients : [];
+  if (!list.length) return '通知先なし';
+  const states = list.map(checkInRecipientStateLabel_);
+  const delivered = states.filter(state => state === '配信完了').length;
+  const accepted = states.filter(state => state === '配信完了' || state === '送信受付').length;
+  if (delivered === list.length) return '配信完了 ' + delivered + '/' + list.length + '件';
+  if (accepted === list.length) return delivered ? '一部配信 ' + delivered + '/' + list.length + '件' : '送信受付 ' + list.length + '/' + list.length + '件';
+  return (accepted > 0 ? '一部配信 ' : '配信失敗 ') + delivered + '/' + list.length + '件';
+}
+
+function checkInRecipientDetail_(recipients) {
+  return (Array.isArray(recipients) ? recipients : []).map((recipient, index) => checkInRecipientLabel_(recipient, index) + '：' + checkInRecipientStateLabel_(recipient)).join(' / ');
+}
+
+function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationIds, errorText, provider, recipients) {
   const targets = [
     { sheet: getLogSheet_(), schema: null },
     { sheet: getTeacherLogSheet_(), schema: null }
@@ -1628,7 +1676,13 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
   const schema = target.schema;
   const values = sheet.getRange(match.getRow(), 1, 1, schema.lastColumn).getValues()[0];
   setByHeader_(values, schema.headers, 'メール送信結果', status);
-  setByHeader_(values, schema.headers, '配信状態', status);
+  if (Array.isArray(recipients) && recipients.length) {
+    setByHeader_(values, schema.headers, '送信先メール', recipients.map(recipient => String(recipient.email || '').trim()).filter(Boolean).join(' / '));
+    setByHeader_(values, schema.headers, '送信先別結果', checkInRecipientDetail_(recipients));
+    setByHeader_(values, schema.headers, '配信状態', checkInRecipientDeliverySummary_(recipients));
+  } else {
+    setByHeader_(values, schema.headers, '配信状態', status);
+  }
   setByHeader_(values, schema.headers, 'BrevoメッセージID', JSON.stringify(messageIds || []));
   setByHeader_(values, schema.headers, '照合ID', JSON.stringify(correlationIds || []));
   setByHeader_(values, schema.headers, '最終エラー理由', String(errorText || '').slice(0, 500));
@@ -1643,6 +1697,36 @@ function updateCheckInLogMailStatus_(receiptId, status, messageIds, correlationI
     cached.mailProvider = String(provider || cached.mailProvider || '');
     cacheReceiptStatus_(cached);
   }
+}
+
+function updateCheckInRecipientDeliveryState_(receiptId, email, messageId, event, eventDate, reason) {
+  const receipt = String(receiptId || '').trim();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedMessageId = typeof normalizeBrevoMessageId_ === 'function' ? normalizeBrevoMessageId_(messageId) : String(messageId || '').trim();
+  if (!receipt) return false;
+  const queue = getCheckInMailQueueSheet_();
+  if (queue.getLastRow() < 2) return false;
+  const match = queue.getRange(2, 1, queue.getLastRow() - 1, 1).createTextFinder(receipt).matchEntireCell(true).findNext();
+  if (!match) return false;
+  const row = queue.getRange(match.getRow(), 1, 1, CHECKIN_MAIL_QUEUE_HEADERS.length).getValues()[0];
+  let recipients;
+  try { recipients = JSON.parse(String(row[10] || '[]')); } catch (ignore) { return false; }
+  let changed = false;
+  recipients.forEach(recipient => {
+    const recipientMessageId = typeof normalizeBrevoMessageId_ === 'function' ? normalizeBrevoMessageId_(recipient.messageId) : String(recipient.messageId || '').trim();
+    if ((normalizedMessageId && recipientMessageId === normalizedMessageId) || (normalizedEmail && String(recipient.email || '').trim().toLowerCase() === normalizedEmail)) {
+      recipient.deliveryEvent = String(event || '');
+      recipient.deliveryEventAt = eventDate instanceof Date ? eventDate.toISOString() : String(eventDate || '');
+      recipient.deliveryError = String(reason || '').slice(0, 500);
+      changed = true;
+    }
+  });
+  if (!changed) return false;
+  row[10] = JSON.stringify(recipients);
+  row[2] = new Date();
+  queue.getRange(match.getRow(), 1, 1, row.length).setValues([row]);
+  updateCheckInLogMailStatus_(receipt, checkInRecipientSendSummary_(recipients), recipients.filter(r => r.messageId).map(r => r.messageId), recipients.filter(r => r.correlationId).map(r => r.correlationId), row[12], Array.from(new Set(recipients.map(r => r.provider).filter(Boolean))).join(','), recipients);
+  return true;
 }
 
 function updateCheckInTiming_(attendance, timings) {
