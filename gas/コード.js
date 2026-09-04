@@ -1492,10 +1492,19 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
     } catch (ignore) {}
   }
   recipients.forEach(recipient => {
-    if (['SENT','STOPPED'].includes(recipient.status)) return;
-    if (isDeliveryEmailStopped_(recipient.email)) {
-      recipient.status = 'STOPPED'; recipient.error = '不達メールのため送信停止中'; return;
+    if (recipient.status === 'SENT') return;
+    const stopDecision = typeof claimDeliveryEmailSendDecision_ === 'function'
+      ? claimDeliveryEmailSendDecision_(recipient.email)
+      : { stopped:isDeliveryEmailStopped_(recipient.email), kind:'legacy', retryAt:null };
+    if (stopDecision.stopped) {
+      recipient.status = 'STOPPED';
+      recipient.error = stopDecision.kind === 'temporary'
+        ? '一時停止（自動）' + (stopDecision.retryAt ? '：' + Utilities.formatDate(stopDecision.retryAt, Session.getScriptTimeZone(), 'M/d H:mm') + '以降に再試行' : '')
+        : '不達メールのため送信停止中';
+      return;
     }
+    if (recipient.status === 'STOPPED') recipient.status = 'PENDING';
+    recipient.error = '';
     recipient.status = 'PROCESSING';
     const route = getCheckInMailConfigStatus_();
     recipient.provider = route.provider || 'BREVO';

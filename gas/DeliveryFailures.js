@@ -481,13 +481,63 @@ function shouldStopForTemporaryErrors_(email, messageId, event, eventDate) {
   return Object.keys(ids).length >= threshold;
 }
 
-function isDeliveryEmailStopped_(email) {
+function deliveryFailureDateOrNull_(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function getDeliveryEmailStopDecision_(email, claimRetry) {
   const normalized = normalizeDeliveryEmail_(email);
   const sheet = getDeliveryFailureSheet_();
-  if (sheet.getLastRow() < 2) return false;
+  if (sheet.getLastRow() < 2) return { stopped:false, kind:'none', retryAt:null };
   const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_FAILURE_HEADERS.length).getValues();
-  for (let i = values.length - 1; i >= 0; i--) if (normalizeDeliveryEmail_(values[i][4]) === normalized) return values[i][19] === true || String(values[i][19]).toUpperCase() === 'TRUE';
-  return false;
+  const now = new Date();
+  let manualStop = false;
+  let permanentStop = false;
+  let latestTempError = null;
+  let latestRetry = null;
+  const tempRows = [];
+
+  values.forEach((row, index) => {
+    if (normalizeDeliveryEmail_(row[4]) !== normalized) return;
+    const stopped = row[19] === true || String(row[19]).toUpperCase() === 'TRUE';
+    if (!stopped) return;
+    const event = normalizeBrevoEvent_(row[5]);
+    const state = String(row[6] || '');
+    if (state === '手動停止') manualStop = true;
+    if (DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(event) >= 0) permanentStop = true;
+    if (DELIVERY_TEMP_EVENTS.indexOf(event) >= 0 && state !== '手動停止') {
+      tempRows.push(index + 2);
+      const errorAt = deliveryFailureDateOrNull_(row[31] || row[2]);
+      const retryAt = deliveryFailureDateOrNull_(row[33]);
+      if (errorAt && (!latestTempError || errorAt > latestTempError)) latestTempError = errorAt;
+      if (retryAt && (!latestRetry || retryAt > latestRetry)) latestRetry = retryAt;
+    }
+  });
+
+  if (manualStop) return { stopped:true, kind:'manual', retryAt:null };
+  if (permanentStop) return { stopped:true, kind:'permanent', retryAt:null };
+  if (!tempRows.length) return { stopped:false, kind:'none', retryAt:null };
+
+  const props = PropertiesService.getScriptProperties();
+  const retryHours = Number(props.getProperty('BREVO_TEMP_RETRY_HOURS')) || 24;
+  const base = latestRetry && (!latestTempError || latestRetry > latestTempError) ? latestRetry : latestTempError;
+  const retryAt = new Date((base || now).getTime() + retryHours * 3600000);
+  if (now < retryAt) return { stopped:true, kind:'temporary', retryAt:retryAt };
+
+  if (claimRetry) {
+    tempRows.forEach(row => sheet.getRange(row, 34).setValue(now));
+  }
+  return { stopped:false, kind:'temporary-retry', retryAt:now };
+}
+
+function isDeliveryEmailStopped_(email) {
+  return getDeliveryEmailStopDecision_(email, false).stopped;
+}
+
+function claimDeliveryEmailSendDecision_(email) {
+  return getDeliveryEmailStopDecision_(email, true);
 }
 
 function isDeliveryFailureAdminAction_(action) { return DELIVERY_ADMIN_ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -735,7 +785,11 @@ function deleteDeliveryFailurePermanent_(id, staff) {
 function setDeliveryStopForEmail_(id, stopped, staff) {
   const item = getDeliveryFailureById_(id); const sheet = getDeliveryFailureSheet_();
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, DELIVERY_FAILURE_HEADERS.length).getValues();
-  rows.forEach((row, i) => { if (normalizeDeliveryEmail_(row[4]) === item.email) sheet.getRange(i + 2, 20).setValue(stopped); });
+  rows.forEach((row, i) => {
+    if (normalizeDeliveryEmail_(row[4]) !== item.email) return;
+    sheet.getRange(i + 2, 20).setValue(stopped);
+    if (stopped) sheet.getRange(i + 2, 7).setValue('手動停止');
+  });
   return { ok:true, stopped:stopped };
 }
 
