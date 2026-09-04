@@ -1557,7 +1557,13 @@ function getStudentQrAuthParams() {
 }
 
 async function authorizedJsonp(params) {
-  await requireStudentQrAuth();
+  // 各データAPI側でもsessionTokenを検証するため、通常の照会前に
+  // studentQrVerifyを毎回挟まない。これまでは1回の検索につき
+  // 「ログイン確認→データ取得」の2往復になっていた。
+  const saved = studentQrAuth || getSavedStudentQrAuth();
+  if (!saved || !saved.sessionToken || localStorage.getItem(EXPLICIT_LOGOUT_KEY) === '1') {
+    await requireStudentQrAuth();
+  }
   return jsonp(params);
 }
 
@@ -2609,6 +2615,47 @@ const emailStudentNameEl = document.getElementById('emailStudentName');
 const emailMsgEl = document.getElementById('emailMsg');
 const notifyEmailEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEmail' + n));
 const notifyEnabledEls = [1, 2, 3, 4].map(n => document.getElementById('notifyEnabled' + n));
+const NOTIFY_EMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const notifyEmailCache = new Map();
+
+function getNotifyEmailsFast(code) {
+  const cached = notifyEmailCache.get(code);
+  if (cached && Date.now() - cached.savedAt < NOTIFY_EMAIL_CACHE_TTL_MS) {
+    return cached.promise || Promise.resolve(cached.result);
+  }
+  const promise = authorizedJsonp({ action: 'getNotifyEmails', code })
+    .then(result => {
+      notifyEmailCache.set(code, { savedAt: Date.now(), result });
+      return result;
+    })
+    .catch(error => {
+      notifyEmailCache.delete(code);
+      throw error;
+    });
+  notifyEmailCache.set(code, { savedAt: Date.now(), promise });
+  return promise;
+}
+
+function notifyEmailValues(result) {
+  const values = Array.isArray(result?.emails)
+    ? result.emails.slice(0, 4).map(value => String(value || '').trim())
+    : [];
+  while (values.length < 4) values.push('');
+  const add = (value, preferredIndex = -1) => {
+    const mail = String(value || '').trim();
+    if (!mail || values.some(item => item && item.toLowerCase() === mail.toLowerCase())) return;
+    if (preferredIndex >= 0 && !values[preferredIndex]) values[preferredIndex] = mail;
+    else {
+      const empty = values.findIndex(item => !item);
+      if (empty >= 0) values[empty] = mail;
+    }
+  };
+  const guardian = String(result?.guardianEmail || '').trim();
+  if (guardian) values[0] = guardian;
+  (Array.isArray(result?.deliveryEmails) ? result.deliveryEmails : []).forEach(value => add(value));
+  add(result?.teacherEmail || result?.email || result?.mail, 0);
+  return values;
+}
 
 function filteredEmailStudents() {
   const query = normalizeQrStudentSearch(emailStudentSearchEl.value);
@@ -2664,38 +2711,41 @@ function selectEmailStudent(code) {
 
 emailStudentSearchEl.addEventListener('input', renderEmailStudentSearch);
 
-let emailLookupTimer = null;
 let emailLookupSeq = 0;
 emailStudentCodeEl.addEventListener('input', () => {
-  clearTimeout(emailLookupTimer);
   const code = emailStudentCodeEl.value.trim();
   emailStudentInfoEl.classList.remove('show');
   renderEmailStudentSearch();
   notifyEmailEls.forEach(el => el.value = '');
   notifyEnabledEls.forEach(el => el.checked = true);
+  const saveBtn = document.getElementById('saveEmailBtn');
+  saveBtn.disabled = true;
   if (!code) return;
 
   const seq = ++emailLookupSeq;
-  emailLookupTimer = setTimeout(async () => {
-    try {
-      const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
-      if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
-      if (res.ok) {
-        emailStudentNameEl.textContent = res.name || '(氏名なし)';
-        (Array.isArray(res.emails) ? res.emails : []).forEach((v, i) => {
-          if (notifyEmailEls[i]) notifyEmailEls[i].value = v || '';
-        });
-        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
-          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
-        });
-      } else {
-        emailStudentNameEl.textContent = res.message;
-      }
-      emailStudentInfoEl.classList.add('show');
-    } catch (e) {
-      // 通信中は何もしない
+  emailStudentNameEl.textContent = '現在登録されているメールを確認中...';
+  emailStudentInfoEl.classList.add('show');
+  getNotifyEmailsFast(code).then(res => {
+    if (seq !== emailLookupSeq) return; // 古いリクエストの結果は無視
+    if (!res || !res.ok) {
+      emailStudentNameEl.textContent = res?.message || 'メール情報を取得できませんでした。';
+      showEmailMsg('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+      return;
     }
-  }, 400);
+    emailStudentNameEl.textContent = res.name || '(氏名なし)';
+    notifyEmailValues(res).forEach((value, index) => {
+      if (notifyEmailEls[index]) notifyEmailEls[index].value = value;
+    });
+    (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((value, index) => {
+      if (notifyEnabledEls[index]) notifyEnabledEls[index].checked = (value !== false);
+    });
+    saveBtn.disabled = false;
+    showEmailMsg('現在登録されているメールを読み込みました。内容を確認してから保存してください。', 'success');
+  }).catch(() => {
+    if (seq !== emailLookupSeq) return;
+    emailStudentNameEl.textContent = 'メール情報を取得できませんでした。';
+    showEmailMsg('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
+  });
 });
 
 function showEmailMsg(text, type) {
@@ -2737,6 +2787,10 @@ async function saveNotifyEmails() {
       enabled: JSON.stringify(enabled)
     });
     if (res.ok) {
+      notifyEmailCache.set(code, {
+        savedAt: Date.now(),
+        result: { ok: true, name: res.name || emailStudentNameEl.textContent, emails, enabled }
+      });
       showEmailMsg(
         `${res.name} さんの通知先メールを保存しました。` + (hasDuplicate ? '（同じアドレスが複数あるため、送信時は1通にまとめられます）' : ''),
         'success'
@@ -3024,73 +3078,6 @@ async function exportAttendanceCsv() {
 
 </script>
 
-<script id="notify-email-load-safe-20260831">
-(() => {
-  const codeEl = document.getElementById('emailStudentCode');
-  const saveBtn = document.getElementById('saveEmailBtn');
-  if (!codeEl || !saveBtn) return;
-  let safeSeq = 0;
-  let safeTimer = null;
-  const originalSave = window.saveNotifyEmails;
-  function setSafeMessage(text, type) {
-    if (typeof window.showEmailMsg === 'function') window.showEmailMsg(text, type);
-  }
-  async function loadRegisteredNotifyEmails() {
-    clearTimeout(safeTimer);
-    const code = codeEl.value.trim();
-    const seq = ++safeSeq;
-    saveBtn.disabled = true;
-    if (!code) return;
-    const info = document.getElementById('emailStudentInfo');
-    const name = document.getElementById('emailStudentName');
-    if (name) name.textContent = '現在登録されているメールを確認中...';
-    if (info) info.classList.add('show');
-    safeTimer = setTimeout(async () => {
-      try {
-        const res = await authorizedJsonp({ action: 'getNotifyEmails', code });
-        if (seq !== safeSeq) return;
-        if (!res || !res.ok) {
-          if (name) name.textContent = (res && res.message) || 'メール情報を取得できませんでした。';
-          setSafeMessage('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
-          return;
-        }
-        if (name) name.textContent = res.name || '(氏名なし)';
-        const values = Array.isArray(res.emails) ? res.emails.slice(0, 4).map(v => String(v || '').trim()) : [];
-        while (values.length < 4) values.push('');
-        const guardian = String(res.guardianEmail || '').trim();
-        if (guardian) values[0] = guardian;
-        const delivery = Array.isArray(res.deliveryEmails) ? res.deliveryEmails.map(v => String(v || '').trim()).filter(Boolean) : [];
-        delivery.forEach(mail => {
-          if (values.some(v => v && v.toLowerCase() === mail.toLowerCase())) return;
-          const empty = values.findIndex(v => !v);
-          if (empty >= 0) values[empty] = mail;
-        });
-        const teacherMail = String(res.teacherEmail || res.email || res.mail || '').trim();
-        if (teacherMail && !values[0]) values[0] = teacherMail;
-        notifyEmailEls.forEach((el, i) => { el.value = values[i] || ''; });
-        (Array.isArray(res.enabled) ? res.enabled : [true, true, true, true]).forEach((v, i) => {
-          if (notifyEnabledEls[i]) notifyEnabledEls[i].checked = (v !== false);
-        });
-        saveBtn.disabled = false;
-        setSafeMessage('現在登録されているメールを読み込みました。内容を確認してから保存してください。', 'success');
-      } catch (e) {
-        if (seq !== safeSeq) return;
-        if (name) name.textContent = 'メール情報を取得できませんでした。';
-        setSafeMessage('現在のメールを確認できないため、上書き防止のため保存を停止しています。', 'error');
-      }
-    }, 520);
-  }
-  codeEl.addEventListener('input', loadRegisteredNotifyEmails);
-  saveBtn.disabled = true;
-  window.saveNotifyEmails = async function() {
-    if (saveBtn.disabled) {
-      setSafeMessage('現在登録されているメールの読み込み完了後に保存できます。', 'error');
-      return;
-    }
-    return originalSave.apply(this, arguments);
-  };
-})();
-</script>
 <style id="notify-email-popup-confirm-style">
 #notifyEmailLoadingPopup{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,40,30,.30);z-index:9999;padding:20px}
 #notifyEmailLoadingPopup.show{display:flex}
@@ -3137,7 +3124,7 @@ async function exportAttendanceCsv() {
   }
 })();
 </script>
-<script src="notify_email_safety.js?v=20260831-2"></script>
+<script src="notify_email_safety.js?v=20260904-1"></script>
 
 <script id="qr-tab-persistence-20260831">
 (() => {
