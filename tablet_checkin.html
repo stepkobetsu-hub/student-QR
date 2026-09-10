@@ -238,21 +238,39 @@
   #resultOverlay.rare-variant #resultContent { color:#20242b; background:rgba(255,255,255,.96); border:2px solid #b9d8fb; }
   #resultOverlay.rare-variant #resultType { color:#22a957; }
   #resultOverlay.rare-variant #resultCharacter { width:min(48vw,610px); height:80vh; max-height:80vh; bottom:0; object-fit:contain; object-position:center bottom; filter:drop-shadow(0 10px 16px rgba(70,90,110,.18)); }
-  #resultOverlay.daikichi-variant {
+  #resultOverlay.daikichi-variant,
+  #resultOverlay.chukichi-variant,
+  #resultOverlay.shokichi-variant {
     color:#fff;
     background:#9b170d url('assets/checkin/goodbye-director-daikichi.webp?v=20260910') center center/cover no-repeat;
   }
-  #resultOverlay.exit.daikichi-variant::after { display:none; }
-  #resultOverlay.daikichi-variant #resultContent {
+  #resultOverlay.chukichi-variant {background-image:url('assets/checkin/goodbye-director-chukichi.webp?v=20260910');}
+  #resultOverlay.shokichi-variant {background-image:url('assets/checkin/goodbye-director-shokichi.webp?v=20260910');}
+  #resultOverlay.exit.daikichi-variant::after,
+  #resultOverlay.exit.chukichi-variant::after,
+  #resultOverlay.exit.shokichi-variant::after { display:none; }
+  #resultOverlay.daikichi-variant #resultContent,
+  #resultOverlay.chukichi-variant #resultContent,
+  #resultOverlay.shokichi-variant #resultContent {
     position:absolute; left:3vw; bottom:3vh; width:min(55vw,700px); max-width:none; margin:0;
     padding:14px 22px; color:#fff; background:rgba(111,10,5,.88);
     border:3px solid #ffd75a; box-shadow:0 10px 26px rgba(73,12,0,.4);
   }
-  #resultOverlay.daikichi-variant #resultName {font-size:34px; margin-bottom:3px;}
-  #resultOverlay.daikichi-variant #resultType {font-size:27px; margin-bottom:2px;}
-  #resultOverlay.daikichi-variant #resultSub {font-size:15px; opacity:1; color:#fff4be;}
-  #resultOverlay.daikichi-variant #resultPoints {font-size:14px; margin-top:5px;}
-  #resultOverlay.daikichi-variant #resultCharacter {display:none;}
+  #resultOverlay.daikichi-variant #resultName,
+  #resultOverlay.chukichi-variant #resultName,
+  #resultOverlay.shokichi-variant #resultName {font-size:34px; margin-bottom:3px;}
+  #resultOverlay.daikichi-variant #resultType,
+  #resultOverlay.chukichi-variant #resultType,
+  #resultOverlay.shokichi-variant #resultType {font-size:27px; margin-bottom:2px;}
+  #resultOverlay.daikichi-variant #resultSub,
+  #resultOverlay.chukichi-variant #resultSub,
+  #resultOverlay.shokichi-variant #resultSub {font-size:15px; opacity:1; color:#fff4be;}
+  #resultOverlay.daikichi-variant #resultPoints,
+  #resultOverlay.chukichi-variant #resultPoints,
+  #resultOverlay.shokichi-variant #resultPoints {font-size:14px; margin-top:5px;}
+  #resultOverlay.daikichi-variant #resultCharacter,
+  #resultOverlay.chukichi-variant #resultCharacter,
+  #resultOverlay.shokichi-variant #resultCharacter {display:none;}
   
 #resultOverlay.mascot-variant{color:#183f2d;background:radial-gradient(circle at 12% 18%,#fff59b 0 5px,transparent 6px),radial-gradient(circle at 28% 75%,#ffcf4d 0 7px,transparent 8px),radial-gradient(circle at 78% 17%,#fff4a0 0 6px,transparent 7px),radial-gradient(circle at 89% 67%,#f8b52f 0 5px,transparent 6px),linear-gradient(145deg,#efffdc 0%,#fff9b8 48%,#ffc752 100%)}
 #resultOverlay.exit.mascot-variant:after{display:none}
@@ -596,10 +614,15 @@ const INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000;
 const PHOTO_EXIT_ASSET = 'assets/checkin/goodbye-director-night-fast.webp?v=20260807';
 const RARE_EXIT_ASSET = 'assets/checkin/goodbye-rare-woman.webp?v=20260819';
 const DAIKICHI_EXIT_ASSET = 'assets/checkin/goodbye-director-daikichi.webp?v=20260910';
-const PHOTO_EXIT_PROBABILITY = 0.10;
-const RARE_EXIT_PROBABILITY = 0.05;
-const MASCOT_EXIT_PROBABILITY = 0.05;
-const DAIKICHI_EXIT_PROBABILITY = 0.02;
+const CHUKICHI_EXIT_ASSET = 'assets/checkin/goodbye-director-chukichi.webp?v=20260910';
+const SHOKICHI_EXIT_ASSET = 'assets/checkin/goodbye-director-shokichi.webp?v=20260910';
+// 画面確認中：おみくじ3種を各30%。確認後は各2%へ戻す。
+const PHOTO_EXIT_PROBABILITY = 0;
+const RARE_EXIT_PROBABILITY = 0;
+const MASCOT_EXIT_PROBABILITY = 0;
+const DAIKICHI_EXIT_PROBABILITY = 0.30;
+const CHUKICHI_EXIT_PROBABILITY = 0.30;
+const SHOKICHI_EXIT_PROBABILITY = 0.30;
 
 // 結果表示は短いため、軽量な写真版を起動時に読み込んでおく。
 const exitPhotoPreload = new Image();
@@ -615,6 +638,12 @@ if (typeof rareExitPreload.decode === 'function') void rareExitPreload.decode().
 const daikichiExitPreload = new Image();
 daikichiExitPreload.decoding = 'async';
 daikichiExitPreload.src = DAIKICHI_EXIT_ASSET;
+const chukichiExitPreload = new Image();
+chukichiExitPreload.decoding = 'async';
+chukichiExitPreload.src = CHUKICHI_EXIT_ASSET;
+const shokichiExitPreload = new Image();
+shokichiExitPreload.decoding = 'async';
+shokichiExitPreload.src = SHOKICHI_EXIT_ASSET;
 
 // 時計表示
 function updateClock() {
@@ -1291,6 +1320,8 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     const useRareExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY;
     const usePhotoExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && !useRareExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY;
     const useDaikichiExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && !useRareExitVariant && !usePhotoExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY + DAIKICHI_EXIT_PROBABILITY;
+    const useChukichiExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && !useRareExitVariant && !usePhotoExitVariant && !useDaikichiExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY + DAIKICHI_EXIT_PROBABILITY + CHUKICHI_EXIT_PROBABILITY;
+    const useShokichiExitVariant = !isCooldownDuplicate && type === '退室' && !useMascotExitVariant && !useRareExitVariant && !usePhotoExitVariant && !useDaikichiExitVariant && !useChukichiExitVariant && exitVariantRoll < MASCOT_EXIT_PROBABILITY + RARE_EXIT_PROBABILITY + PHOTO_EXIT_PROBABILITY + DAIKICHI_EXIT_PROBABILITY + CHUKICHI_EXIT_PROBABILITY + SHOKICHI_EXIT_PROBABILITY;
     resultOverlay.className = isCooldownDuplicate
       ? ('show duplicate' + (type === '退室' ? ' duplicate-exit' : ''))
       : (mailStatus === 'FAILED' ? 'show warning' : 'show ' + (type === '入室' ? 'entry' : 'exit'));
@@ -1298,11 +1329,13 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     if (useRareExitVariant) resultOverlay.classList.add('rare-variant');
     if (useMascotExitVariant) resultOverlay.classList.add('mascot-variant');
     if (useDaikichiExitVariant) resultOverlay.classList.add('daikichi-variant');
+    if (useChukichiExitVariant) resultOverlay.classList.add('chukichi-variant');
+    if (useShokichiExitVariant) resultOverlay.classList.add('shokichi-variant');
     resultIcon.textContent = '';
     if (useMascotExitVariant) {
       resultMascot.style.display = 'block';
       resultCharacter.style.display = 'none';
-    } else if (useDaikichiExitVariant) {
+    } else if (useDaikichiExitVariant || useChukichiExitVariant || useShokichiExitVariant) {
       resultMascot.style.display = 'none';
       resultCharacter.style.display = 'none';
     } else {
@@ -1324,7 +1357,7 @@ function showResult(ok, name, type, label, mailStatus, totalPoints, errorMsg, is
     resultTime.textContent = label;
     resultSub.textContent = isCooldownDuplicate
       ? '20秒以内の重複読取のため、記録とメール送信は追加していません'
-      : (useDaikichiExitVariant ? '今日もよく頑張りました！ 大吉です！' : (useMascotExitVariant ? 'また明日も来るんだぞ！' : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider)))));
+      : (useDaikichiExitVariant ? '今日もよく頑張りました！ 大吉です！' : (useChukichiExitVariant ? '今日もよく頑張りました！ 中吉です！' : (useShokichiExitVariant ? '今日もよく頑張りました！ 小吉です！' : (useMascotExitVariant ? 'また明日も来るんだぞ！' : (useRareExitVariant ? 'また明日も頑張ろうね！' : (duplicate ? 'すでに同じ受付を処理済みです' : mailStatusText(mailStatus, errorCode, mailProvider)))))));
     if (typeof totalPoints === 'number') {
       resultPoints.textContent = '⭐ 現在のポイント: ' + totalPoints + 'pt';
       resultPoints.style.display = 'inline-block';
