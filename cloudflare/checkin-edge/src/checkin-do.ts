@@ -95,6 +95,7 @@ export interface LegacyWriteItem {
   photoBase64: string;
   clientTimingsJson: string;
   attempts: number;
+  attendanceType?: CheckinType;
 }
 
 interface LegacyResultRow {
@@ -142,6 +143,7 @@ export async function postLegacyCheckin(
       edgeToken: item.edgeToken,
       clientTimings: JSON.parse(item.clientTimingsJson) as Record<string, unknown>,
       retry: item.attempts > 0,
+      attendanceType: item.attendanceType,
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -448,18 +450,20 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       const writeAction = this.env.CHECKIN_WRITE_ACTION || "checkIn";
       const edgeToken = this.env.ROSTER_SOURCE_TOKEN;
       if (!writeUrl || !edgeToken) throw new Error("CHECKIN_WRITE_NOT_CONFIGURED");
+      const receipt = this.ctx.storage.sql.exec<{ accepted_at: number; type: CheckinType }>(
+        "SELECT accepted_at, type FROM receipts WHERE receipt_id = ?",
+        item.receipt_id,
+      ).toArray()[0];
       const result = await postLegacyCheckin(writeUrl, {
         action: writeAction,
         receiptId: item.receipt_id,
-        acceptedAt: this.ctx.storage.sql.exec<{ accepted_at: number }>(
-          "SELECT accepted_at FROM receipts WHERE receipt_id = ?",
-          item.receipt_id,
-        ).toArray()[0]?.accepted_at ?? Date.now(),
+        acceptedAt: receipt?.accepted_at ?? Date.now(),
         edgeToken,
         qrKey: item.qr_key,
         photoBase64: item.photo_base64,
         clientTimingsJson: item.client_timings_json,
         attempts: item.attempts,
+        attendanceType: receipt?.type,
       });
       this.ctx.storage.transactionSync(() => {
         this.ctx.storage.sql.exec("DELETE FROM legacy_outbox WHERE receipt_id = ?", item.receipt_id);
