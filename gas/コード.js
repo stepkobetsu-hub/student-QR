@@ -995,13 +995,22 @@ function isWithinCheckInDuplicateWindow_(lastStampMs, currentStampMs) {
   return last > 0 && current >= last && current - last < CHECKIN_DUPLICATE_WINDOW_MS;
 }
 
+function isStudentAttendanceType_(type) {
+  const normalized = String(type || '').trim();
+  return normalized === '入室' || normalized === '退室';
+}
+
 function getLatestStudentAttendanceLog_(logSheet, code) {
   const lastRow = logSheet.getLastRow();
   if (lastRow < 2) return null;
   const rows = logSheet.getRange(2, 1, lastRow - 1, 4).getValues();
   for (let index = rows.length - 1; index >= 0; index--) {
     const row = rows[index];
-    if (row[0] instanceof Date && String(row[1]).trim() === String(code).trim()) {
+    if (
+      row[0] instanceof Date &&
+      String(row[1]).trim() === String(code).trim() &&
+      isStudentAttendanceType_(row[3])
+    ) {
       return {
         stampMs: row[0].getTime(),
         type: String(row[3] || ''),
@@ -1042,7 +1051,14 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   if (!state) {
     const logRows = logSheet.getLastRow() < 2 ? [] : logSheet.getRange(2, 1, logSheet.getLastRow() - 1, 4).getValues();
     const pointRows = pointsSheet.getLastRow() < 2 ? [] : pointsSheet.getRange(2, 1, pointsSheet.getLastRow() - 1, 5).getValues();
-    const todayRows = logRows.filter(row => row[0] instanceof Date && String(row[1]).trim() === code && Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr);
+    // STEP配信の「未到着連絡」など、同じログシートに保存される通知行は
+    // 入退室回数に含めない。QRで記録された「入室」「退室」だけを状態判定に使う。
+    const todayRows = logRows.filter(row =>
+      row[0] instanceof Date &&
+      String(row[1]).trim() === code &&
+      Utilities.formatDate(row[0], 'Asia/Tokyo', 'yyyy-MM-dd') === todayStr &&
+      isStudentAttendanceType_(row[3])
+    );
     const stampTimes = todayRows.map(row => row[0].getTime()).filter(value => Number.isFinite(value)).sort((a, b) => a - b);
     const entries = todayRows.filter(row => row[3] === '入室' && row[0] instanceof Date);
     const lastTodayRow = todayRows.reduce((latest, row) => {
