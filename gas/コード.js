@@ -143,7 +143,7 @@ function doPost(e) {
     } else if (action === 'edgeCheckInProbe') {
       result = handleEdgeCheckInProbe_(body);
     } else if (action === 'checkIn') {
-      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true, body.acceptedAt, body.edgeToken);
+      result = handleCheckIn_(body.qrData, body.photoBase64, body.receiptId, body.clientTimings, body.retry === true, body.acceptedAt, body.edgeToken, body.attendanceType);
     } else if (action === 'getReceiptStatus') {
       result = getReceiptStatus_(body.receiptId);
     } else if (action === 'sendQrPdf') {
@@ -752,7 +752,7 @@ function handleTeacherCheckIn_(teacherRow, teacherMasterSheet) {
  * 入退室処理のメイン（タブレットから呼ばれる）
  * ===================================================================
  */
-function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry, acceptedAt, edgeToken) {
+function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry, acceptedAt, edgeToken, attendanceType) {
   const trace = createCheckInTrace_(receiptId);
   const qr = String(qrData || '').trim();
   const receipt = String(receiptId || '').trim();
@@ -819,7 +819,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry, 
         traceMark_(trace, 'sharedDuplicateGuard');
         attendance = recentAttendance;
       } else {
-        attendance = saveStudentAttendance_(studentValues, receipt, trace, notifyEmails.length > 0, acceptedDate);
+        attendance = saveStudentAttendance_(studentValues, receipt, trace, notifyEmails.length > 0, acceptedDate, resolveTrustedEdgeAttendanceType_(attendanceType, edgeToken, false));
         if (!attendance.duplicate) rememberSharedDuplicateAttendance_('student', code, attendance, acceptedDate.getTime());
       }
     } else {
@@ -829,7 +829,7 @@ function handleCheckIn_(qrData, photoBase64, receiptId, clientTimings, isRetry, 
         traceMark_(trace, 'sharedDuplicateGuard');
         attendance = recentAttendance;
       } else {
-        attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code, acceptedDate);
+        attendance = saveTeacherAttendance_(teacher, receipt, trace, teacherEmailState.code, acceptedDate, resolveTrustedEdgeAttendanceType_(attendanceType, edgeToken, true));
         if (!attendance.duplicate) rememberSharedDuplicateAttendance_('teacher', teacher.code, attendance, acceptedDate.getTime());
       }
       attendance.notificationCode = teacherEmailState.code === 'OK' ? '' : teacherEmailState.code;
@@ -927,6 +927,15 @@ function resolveTrustedEdgeAcceptedAt_(acceptedAt, edgeToken) {
   if (!Number.isFinite(timestamp)) return new Date(receivedAt);
   if (timestamp < receivedAt - 36 * 60 * 60 * 1000 || timestamp > receivedAt + 5 * 60 * 1000) return new Date(receivedAt);
   return new Date(timestamp);
+}
+
+function resolveTrustedEdgeAttendanceType_(attendanceType, edgeToken, isTeacher) {
+  const expected = String(PropertiesService.getScriptProperties().getProperty('CHECKIN_EDGE_ROSTER_TOKEN') || '');
+  const provided = String(edgeToken || '');
+  if (!expected || !provided || !constantTimeCheckInTextEqual_(expected, provided)) return '';
+  const type = String(attendanceType || '').trim();
+  const allowed = isTeacher ? ['出勤', '退勤'] : ['入室', '退室'];
+  return allowed.indexOf(type) !== -1 ? type : '';
 }
 
 function constantTimeCheckInTextEqual_(leftText, rightText) {
@@ -1036,7 +1045,7 @@ function getLatestTeacherAttendanceFromLog_(logSheet, code) {
   return { stampMs: values[0].getTime(), type: String(values[3] || ''), row: row };
 }
 
-function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets, acceptedDate) {
+function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets, acceptedDate, trustedAttendanceType) {
   const code = String(values[COL_STUDENT_ID - 1] || '').trim();
   const name = String(values[COL_STUDENT_NAME - 1] || '').trim();
   const school = String(values[COL_SCHOOL - 1] || '').trim();
@@ -1100,7 +1109,9 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
     };
   }
 
-  const type = state.count % 2 === 0 ? '入室' : '退室';
+  // Cloudflare側で画面表示に使った判定を、ログとメールでも同じ正本として使う。
+  // これにより、画面は入室なのにメールだけ退室になる二重判定のずれを防ぐ。
+  const type = trustedAttendanceType || (state.count % 2 === 0 ? '入室' : '退室');
   const settings = getPointSettings_();
   const alreadyAwarded = !!state.awarded;
   traceMark_(trace, 'attendanceDecision');
@@ -1147,7 +1158,7 @@ function saveStudentAttendance_(values, receiptId, trace, hasNotificationTargets
   return { receiptId: receiptId, subjectId: code, isTeacher: false, name: name, school: school, type: type, label: Utilities.formatDate(now, 'Asia/Tokyo', 'M月d日H時mm分'), totalPoints: totalPoints, logRow: logRow, maskedSubjectId: maskCheckInId_(code) };
 }
 
-function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode, acceptedDate) {
+function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode, acceptedDate, trustedAttendanceType) {
   const code = String(teacher.code || '').trim();
   const name = String(teacher.name || '').trim();
   const sheet = getTeacherLogSheet_();
@@ -1199,7 +1210,7 @@ function saveTeacherAttendance_(teacher, receiptId, trace, emailStateCode, accep
       duplicate: true
     };
   }
-  const type = state.count % 2 === 0 ? '出勤' : '退勤';
+  const type = trustedAttendanceType || (state.count % 2 === 0 ? '出勤' : '退勤');
   traceMark_(trace, 'attendanceDecision');
   const record = new Array(schema.lastColumn).fill('');
   setByHeader_(record, schema.headers, 'タイムスタンプ', now);
@@ -1340,8 +1351,8 @@ function cacheReceiptStatus_(result) {
   if (!result || !result.receiptId || !result.attendanceSaved) return;
   CacheService.getScriptCache().put(receiptCacheKey_(result.receiptId), JSON.stringify(result), 21600);
 }
-// V2: 生徒状態に当日の最初の打刻時刻を保持する。V1キャッシュは再利用しない。
-function dailyCheckInStateKey_(kind, code, date) { return 'CHECKIN_DAY_V2:' + kind + ':' + shortCheckInHash_(code) + ':' + date; }
+// V3: 未到着連絡を数えた旧キャッシュを再利用せず、Cloudflare判定との整合も取り直す。
+function dailyCheckInStateKey_(kind, code, date) { return 'CHECKIN_DAY_V3:' + kind + ':' + shortCheckInHash_(code) + ':' + date; }
 function parseCheckInCache_(raw) { if (!raw) return null; try { return JSON.parse(raw); } catch (ignore) { return null; } }
 
 function getCheckInMailQueueSheet_() {
