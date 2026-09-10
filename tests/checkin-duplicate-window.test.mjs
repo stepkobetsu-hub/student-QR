@@ -68,6 +68,18 @@ test('latest saved row in 入退室ログ2 is canonical for duplicate timing', (
   assert.match(main, /isWithinCheckInDuplicateWindow_\(duplicateBaseStampMs, now\.getTime\(\)\)/);
 });
 
+test('STEP配信の未到着連絡は生徒の入退室回数と重複判定から除外する', () => {
+  const context = {};
+  vm.runInNewContext(main, context);
+
+  assert.equal(context.isStudentAttendanceType_('入室'), true);
+  assert.equal(context.isStudentAttendanceType_('退室'), true);
+  assert.equal(context.isStudentAttendanceType_('未到着連絡'), false);
+  assert.equal(context.isStudentAttendanceType_('通常配信'), false);
+  assert.match(main, /function getLatestStudentAttendanceLog_[\s\S]*isStudentAttendanceType_\(row\[3\]\)/);
+  assert.match(main, /const todayRows = logRows\.filter\([\s\S]*isStudentAttendanceType_\(row\[3\]\)/);
+});
+
 test('tablet separates entry, exit, and duplicate result displays', () => {
   assert.match(tablet, /#resultOverlay\.entry/);
   assert.match(tablet, /#resultOverlay\.exit/);
