@@ -80,6 +80,17 @@ test('STEP配信の未到着連絡は生徒の入退室回数と重複判定か�
   assert.match(main, /const todayRows = logRows\.filter\([\s\S]*isStudentAttendanceType_\(row\[3\]\)/);
 });
 
+test('画面表示と保護者メールはCloudflareで確定した同じ入退室種別を使う', () => {
+  const edge = fs.readFileSync(new URL('../cloudflare/checkin-edge/src/checkin-do.ts', import.meta.url), 'utf8');
+
+  assert.match(edge, /attendanceType: receipt\?\.type/);
+  assert.match(edge, /attendanceType: item\.attendanceType/);
+  assert.match(main, /body\.attendanceType/);
+  assert.match(main, /resolveTrustedEdgeAttendanceType_/);
+  assert.match(main, /const type = trustedAttendanceType \|\| \(state\.count % 2 === 0 \? '入室' : '退室'\)/);
+  assert.match(main, /CHECKIN_DAY_V3/);
+});
+
 test('tablet separates entry, exit, and duplicate result displays', () => {
   assert.match(tablet, /#resultOverlay\.entry/);
   assert.match(tablet, /#resultOverlay\.exit/);
