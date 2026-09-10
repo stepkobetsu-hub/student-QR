@@ -31,6 +31,7 @@ describe("postLegacyCheckin", () => {
         edgeToken: "test-edge-token",
         clientTimings: { scanMs: 20 },
         retry: false,
+        attendanceType: "入室",
       });
       return new Response(JSON.stringify({
         ok: true,
@@ -50,6 +51,7 @@ describe("postLegacyCheckin", () => {
       photoBase64: "data:image/jpeg;base64,dGVzdA==",
       clientTimingsJson: JSON.stringify({ scanMs: 20 }),
       attempts: 0,
+      attendanceType: "入室",
     }, fetcher);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
