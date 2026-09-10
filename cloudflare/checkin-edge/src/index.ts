@@ -107,7 +107,12 @@ export default {
     const url = new URL(request.url);
     try {
       if (request.method === "GET" && url.pathname === "/health") {
-        return json({ ok: true, service: "step-checkin-edge", environment: env.ENVIRONMENT }, 200, origin, env);
+        return json({
+          ok: true,
+          service: "step-checkin-edge",
+          environment: env.ENVIRONMENT,
+          build: "2026-09-10-attendance-type-source",
+        }, 200, origin, env);
       }
       if (request.method === "GET" && (url.pathname === "/legacy-tablet" || url.pathname === "/legacy-tablet/")) {
         const headers = new Headers({
