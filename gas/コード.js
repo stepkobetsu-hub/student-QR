@@ -232,9 +232,24 @@ function getStudent_(code) {
 }
 
 function saveStudentQrData_(code, qrData) {
-  if (!code || !qrData) return { ok: false, message: '生徒番号とQRデータの両方を入力してください' };
+  const target = String(code || '').trim();
+  if (!target || !qrData) return { ok: false, message: '生徒・講師番号とQRデータの両方を入力してください' };
+
+  // 7000番台は講師マスターQ列を正本とする。
+  if (/^7\d{3}$/.test(target)) {
+    const teacherSheet = getTeacherMasterSheet_();
+    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
+    teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
+    return {
+      ok: true,
+      isTeacher: true,
+      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue()
+    };
+  }
+
   const sheet = getMasterSheet_();
-  const row = findStudentRow_(sheet, code);
+  const row = findStudentRow_(sheet, target);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
 
   sheet.getRange(row, COL_QR_DATA).setValue(qrData);
@@ -246,17 +261,33 @@ function saveStudentQrData_(code, qrData) {
  * 発行と同時にAZ列に自動保存し、QR画像のURLを返す
  */
 function issueNewStudentQr_(code) {
-  if (!code) return { ok: false, message: '生徒番号を入力してください' };
-  const sheet = getMasterSheet_();
-  const row = findStudentRow_(sheet, code);
-  if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
+  const target = String(code || '').trim();
+  if (!target) return { ok: false, message: '生徒・講師番号を入力してください' };
 
-  const qrData = 'STEP-' + String(code).trim();
-  sheet.getRange(row, COL_QR_DATA).setValue(qrData);
-
-  const name = sheet.getRange(row, COL_STUDENT_NAME).getValue();
+  const qrData = 'STEP-' + target;
   const qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
 
+  // 7000番台は講師マスターQ列へ保存する。
+  if (/^7\d{3}$/.test(target)) {
+    const teacherSheet = getTeacherMasterSheet_();
+    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
+    teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
+    return {
+      ok: true,
+      isTeacher: true,
+      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue(),
+      qrData: qrData,
+      qrImageUrl: qrImageUrl
+    };
+  }
+
+  const sheet = getMasterSheet_();
+  const row = findStudentRow_(sheet, target);
+  if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
+
+  sheet.getRange(row, COL_QR_DATA).setValue(qrData);
+  const name = sheet.getRange(row, COL_STUDENT_NAME).getValue();
   return { ok: true, name: name, qrData: qrData, qrImageUrl: qrImageUrl };
 }
 
