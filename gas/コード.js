@@ -2285,7 +2285,7 @@ function getTeacherBadgeRoster_() {
  * Private profile fields: only the existing teacher master, never logs/properties.
  */
 const TR_PREFIX_ = 'TR_V1_';
-const TR_BUILD_ = 'teacher-registration-20260912-aj';
+const TR_BUILD_ = 'teacher-registration-20260912-password-change';
 const TR_SHEET_ID_ = '1L5aFDXAmfUDkBg8d7X3WqJgMhdMq5tM5sfUZ2G-M58E';
 const TR_TAB_ID_ = 2020620808;
 
@@ -2509,6 +2509,28 @@ function trSave_(body){
   trWriteRow_(sheet,row,trApply_(original,fields,row,false,session.code));
   return {ok:true,code:session.code,profile:trProfile_(sheet,row)};
 }
+function trChangePassword_(body){
+  const session=trSession_(body);
+  trRate_('PASSWORD_'+session.code,10,15*60*1000);
+  const sheet=trSheet_(),row=trFind_(sheet,session.code),a=trRead_('ACCOUNT_'+session.code);
+  let current=String(sheet.getRange(row,36).getDisplayValues()[0][0]||'').trim();
+  if(/^\d{1,3}$/.test(current))current=current.padStart(4,'0');
+  if(current){
+    if(typeof body.currentPassword!=='string'||!trEqual_(current,body.currentPassword))trError_('現在のパスワードを確認してください。');
+  }else if(!a||!a.verifier||!trEqual_(a.verifier,trVerifier_(String(body.currentProof||''),a.salt))){
+    trError_('現在のパスワードを確認してください。');
+  }
+  const next=body.newPassword;
+  if(typeof next!=='string'||next.length<4||next.length>128||next!==next.trim()||/[\u0000-\u001f\u007f]/.test(next))trError_('新しいパスワードは前後の空白を入れず、4文字以上128文字以内で設定してください。');
+  // Invalidate existing registration sessions before writing; keep old verifier for recovery if the sheet write fails.
+  trWrite_('ACCOUNT_'+session.code,Object.assign({},a,{version:a.version+1}));
+  // A leading apostrophe stores literal text, including zeros and formula-like characters.
+  sheet.getRange(row,36).setNumberFormat('@');
+  sheet.getRange(row,36).setValues([["'"+next]]);
+  SpreadsheetApp.flush();
+  trRemove_('RATE_PASSWORD_'+session.code);
+  return {ok:true,code:session.code};
+}
 function handleTeacherRegistration_(body){
   let lock;
   try{
@@ -2527,6 +2549,7 @@ function handleTeacherRegistration_(body){
     if(action==='teacherRegistrationEnroll')return trEnroll_(body);
     if(action==='teacherRegistrationLogin')return trLogin_(body);
     if(action==='teacherRegistrationSave')return trSave_(body);
+    if(action==='teacherRegistrationChangePassword')return trChangePassword_(body);
     if(action==='teacherRegistrationProfile'){const s=trSession_(body),sheet=trSheet_();return {ok:true,profile:trProfile_(sheet,trFind_(sheet,s.code))};}
     if(action==='teacherRegistrationLogout'){const token=String(body.token||'');if(/^[a-f0-9]{64}$/.test(token))trRemove_('SESSION_'+trHash_(token));return {ok:true};}
     trError_('不明な操作です。');
