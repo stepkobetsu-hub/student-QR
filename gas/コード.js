@@ -2285,7 +2285,7 @@ function getTeacherBadgeRoster_() {
  * Private profile fields: only the existing teacher master, never logs/properties.
  */
 const TR_PREFIX_ = 'TR_V1_';
-const TR_BUILD_ = 'teacher-registration-20260912-v1';
+const TR_BUILD_ = 'teacher-registration-20260912-aj';
 const TR_SHEET_ID_ = '1L5aFDXAmfUDkBg8d7X3WqJgMhdMq5tM5sfUZ2G-M58E';
 const TR_TAB_ID_ = 2020620808;
 
@@ -2485,9 +2485,16 @@ function trEnroll_(body){
 function trLogin_(body){
   const code=trCode_(body.teacherCode);
   trRate_('LOGIN_'+code,10,15*60*1000);
-  const a=trRead_('ACCOUNT_'+code);
-  if(!a||!trEqual_(a.verifier,trVerifier_(String(body.proof||''),a.salt)))trError_('講師番号またはパスワードを確認してください。');
   const sheet=trSheet_(),row=trFind_(sheet,code);
+  let a=trRead_('ACCOUNT_'+code);
+  let masterPassword=String(sheet.getRange(row,36).getDisplayValues()[0][0]||'').trim();
+  if(/^\d{1,3}$/.test(masterPassword))masterPassword=masterPassword.padStart(4,'0');
+  if(masterPassword){
+    if(typeof body.password!=='string'||!body.password||body.password.length>128||!trEqual_(masterPassword,body.password))trError_('講師番号またはパスワードを確認してください。');
+    if(!a){a={version:1,salt:trHash_('teacher-registration-dummy:'+code).slice(0,32)};trWrite_('ACCOUNT_'+code,a);}
+  }else if(!a||!a.verifier||!trEqual_(a.verifier,trVerifier_(String(body.proof||''),a.salt))){
+    trError_('講師番号またはパスワードを確認してください。');
+  }
   trRemove_('RATE_LOGIN_'+code);
   return {ok:true,code:code,token:trNewSession_(code),profile:trProfile_(sheet,row)};
 }
