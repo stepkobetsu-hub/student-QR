@@ -2558,3 +2558,86 @@ function handleTeacherRegistration_(body){
     return {ok:false,message:e.trUser?e.message:'保存できませんでした。少し待ってから再度お試しください。'};
   }finally{if(lock&&lock.hasLock())lock.releaseLock();}
 }
+
+/**
+ * 2026-09-13: 管理者通知に加え、変更した講師本人へ安全な確認メールを個別送信する。
+ * 本人向けではパスワードとマイナンバーの実値を表示しない。
+ */
+function trAuditSendOne_(recipients, subject, message) {
+  if (!recipients || !recipients.length) return;
+  let delivered = false;
+  const apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
+  if (apiKey) {
+    try {
+      const response = UrlFetchApp.fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {'api-key': apiKey, accept: 'application/json'},
+        payload: JSON.stringify({
+          sender: {name: '個別指導STEP 講師登録・変更', email: 'admin@educrest.jp'},
+          to: recipients.map(function(email) { return {email: email}; }),
+          subject: subject,
+          textContent: message
+        }),
+        muteHttpExceptions: true
+      });
+      const status = response.getResponseCode();
+      delivered = status >= 200 && status < 300;
+    } catch (e) {
+      console.error('Brevo teacher audit notification failed: ' + String(e && e.message || e));
+    }
+  }
+  if (!delivered) {
+    MailApp.sendEmail({
+      to: recipients.join(','),
+      subject: subject,
+      body: message,
+      name: '個別指導STEP 講師登録・変更'
+    });
+  }
+}
+
+function trAuditTeacherChanges_(changes) {
+  return (changes || []).map(function(line) {
+    const text = String(line || '');
+    if (/パスワード/.test(text)) return 'パスワード：変更しました（安全のため値は表示しません）';
+    if (/マイナンバー/.test(text)) return 'マイナンバー：登録状態を更新しました（安全のため番号は表示しません）';
+    return text;
+  }).filter(function(line, index, all) {
+    return all.indexOf(line) === index;
+  });
+}
+
+function trAuditSend_(kind, code, row, changes) {
+  if (!changes || !changes.length) return;
+  const name = String(row[1] || '').replace(/\s+/g, '');
+  const teacher = String(code) + ' ' + name + '先生';
+  const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy年M月d日 HH:mm:ss');
+  const adminMessage = [
+    teacher, '', '操作：' + kind, '日時：' + timestamp,
+    '', '変更内容'
+  ].concat(changes).concat([
+    '', 'このメールは講師登録・変更アプリから自動送信されています。'
+  ]).join('\n');
+  const adminRecipients = ['mintcocoajasmine@gmail.com', 'admin@educrest.jp'];
+  trAuditSendOne_(adminRecipients, '【STEP】講師情報変更通知 ' + teacher, adminMessage);
+
+  const teacherEmail = String(row[15] || '').trim();
+  const validTeacherEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(teacherEmail);
+  if (!validTeacherEmail || adminRecipients.indexOf(teacherEmail.toLowerCase()) !== -1) return;
+
+  const teacherChanges = trAuditTeacherChanges_(changes);
+  const teacherMessage = [
+    name + '先生', '',
+    '講師登録・変更アプリで、次の内容を受け付けました。',
+    '操作：' + kind,
+    '日時：' + timestamp,
+    '', '変更内容'
+  ].concat(teacherChanges).concat([
+    '',
+    'この操作に心当たりがない場合は、管理者へご連絡ください。',
+    'このメールは講師登録・変更アプリから自動送信されています。'
+  ]).join('\n');
+  trAuditSendOne_([teacherEmail], '【STEP】登録・変更内容の確認 ' + teacher, teacherMessage);
+}
+
