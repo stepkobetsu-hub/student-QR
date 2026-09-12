@@ -1,0 +1,107 @@
+name: Fix teacher QR issuance backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-teacher-qr-issue-20260912.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch teacher QR save and issue handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('gas/コード.js')
+          s = p.read_text(encoding='utf-8')
+
+          save_func = r'''function saveStudentQrData_(code, qrData) {
+            const target = String(code || '').trim();
+            if (!target || !qrData) return { ok: false, message: '生徒・講師番号とQRデータの両方を入力してください' };
+
+            // 7000番台は講師マスターQ列を正本とする。
+            if (/^7\d{3}$/.test(target)) {
+              const teacherSheet = getTeacherMasterSheet_();
+              const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+              if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
+              teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
+              return {
+                ok: true,
+                isTeacher: true,
+                name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue()
+              };
+            }
+
+            const sheet = getMasterSheet_();
+            const row = findStudentRow_(sheet, target);
+            if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
+
+            sheet.getRange(row, COL_QR_DATA).setValue(qrData);
+            return { ok: true, name: sheet.getRange(row, COL_STUDENT_NAME).getValue() };
+          }'''
+
+          issue_func = r'''function issueNewStudentQr_(code) {
+            const target = String(code || '').trim();
+            if (!target) return { ok: false, message: '生徒・講師番号を入力してください' };
+
+            const qrData = 'STEP-' + target;
+            const qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
+
+            // 7000番台は講師マスターQ列へ保存する。
+            if (/^7\d{3}$/.test(target)) {
+              const teacherSheet = getTeacherMasterSheet_();
+              const teacherRow = findTeacherRowByCode_(teacherSheet, target);
+              if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
+              teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
+              return {
+                ok: true,
+                isTeacher: true,
+                name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue(),
+                qrData: qrData,
+                qrImageUrl: qrImageUrl
+              };
+            }
+
+            const sheet = getMasterSheet_();
+            const row = findStudentRow_(sheet, target);
+            if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
+
+            sheet.getRange(row, COL_QR_DATA).setValue(qrData);
+            const name = sheet.getRange(row, COL_STUDENT_NAME).getValue();
+            return { ok: true, name: name, qrData: qrData, qrImageUrl: qrImageUrl };
+          }'''
+
+          s, n1 = re.subn(
+              r"function saveStudentQrData_\(code, qrData\) \{.*?\n\}\n\n/\*\*\n \* 新規生徒のQR",
+              save_func + "\n\n/**\n * 新規生徒のQR",
+              s,
+              count=1,
+              flags=re.S,
+          )
+          s, n2 = re.subn(
+              r"function issueNewStudentQr_\(code\) \{.*?\n\}\n\n/\*\*\n \* その生徒の入退室通知先",
+              issue_func + "\n\n/**\n * その生徒の入退室通知先",
+              s,
+              count=1,
+              flags=re.S,
+          )
+          if n1 != 1 or n2 != 1:
+              raise SystemExit(f'patch target mismatch: save={n1}, issue={n2}')
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit backend fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'gas/コード.js'
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix teacher QR registration for 7000-series codes'
+          git push
