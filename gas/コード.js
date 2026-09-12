@@ -1,4 +1,3 @@
-
 /**
  * ===================================================================
  * 入退室管理システム 統合バックエンド (GAS)
@@ -83,6 +82,8 @@ function doGet(e) {
       requireQrStaffSession_(params);
       if (action === 'getStudent') {
         result = getStudent_(params.code);
+      } else if (action === 'getTeacherBadgeRoster') {
+        result = getTeacherBadgeRoster_();
       } else if (action === 'saveQrData') {
         result = saveStudentQrData_(params.code, params.qrData);
       } else if (action === 'issueNewQr') {
@@ -138,6 +139,9 @@ function doPost(e) {
       result = handleMyQrApiAction_(body);
     } else if (typeof isBrevoWebhookRequest_ === 'function' && isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
+    } else if (action === 'getTeacherBadgeRoster') {
+      requireQrStaffSession_(body);
+      result = getTeacherBadgeRoster_();
     } else if (action === 'edgeRosterExport') {
       result = exportEdgeRoster_(body.token);
     } else if (action === 'edgeCheckInProbe') {
@@ -232,24 +236,19 @@ function getStudent_(code) {
 }
 
 function saveStudentQrData_(code, qrData) {
-  const target = String(code || '').trim();
-  if (!target || !qrData) return { ok: false, message: '生徒・講師番号とQRデータの両方を入力してください' };
-
-  // 7000番台は講師マスターQ列を正本とする。
-  if (/^7\d{3}$/.test(target)) {
-    const teacherSheet = getTeacherMasterSheet_();
-    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
-    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
-    teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
-    return {
-      ok: true,
-      isTeacher: true,
-      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue()
-    };
+  const teacherCode = String(code || '').trim();
+  if (/^7\d{3}$/.test(teacherCode)) {
+    const value = String(qrData || '').trim();
+    if (!isValidCheckInQrFormat_(value)) return { ok: false, message: 'QRデータの形式を確認してください' };
+    const sheet = getTeacherMasterSheet_();
+    const row = findTeacherRowByCode_(sheet, teacherCode);
+    if (row === -1) return { ok: false, message: '該当する講師が見つかりません' };
+    sheet.getRange(row, TEACHER_COL_QR).setValue(value);
+    return { ok: true, isTeacher: true, name: sheet.getRange(row, TEACHER_COL_NAME).getValue() };
   }
-
+  if (!code || !qrData) return { ok: false, message: '生徒番号とQRデータの両方を入力してください' };
   const sheet = getMasterSheet_();
-  const row = findStudentRow_(sheet, target);
+  const row = findStudentRow_(sheet, code);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
 
   sheet.getRange(row, COL_QR_DATA).setValue(qrData);
@@ -261,33 +260,32 @@ function saveStudentQrData_(code, qrData) {
  * 発行と同時にAZ列に自動保存し、QR画像のURLを返す
  */
 function issueNewStudentQr_(code) {
-  const target = String(code || '').trim();
-  if (!target) return { ok: false, message: '生徒・講師番号を入力してください' };
-
-  const qrData = 'STEP-' + target;
-  const qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
-
-  // 7000番台は講師マスターQ列へ保存する。
-  if (/^7\d{3}$/.test(target)) {
-    const teacherSheet = getTeacherMasterSheet_();
-    const teacherRow = findTeacherRowByCode_(teacherSheet, target);
-    if (teacherRow === -1) return { ok: false, message: '該当する講師が見つかりません（講師番号を確認してください）' };
-    teacherSheet.getRange(teacherRow, TEACHER_COL_QR).setValue(qrData);
-    return {
-      ok: true,
-      isTeacher: true,
-      name: teacherSheet.getRange(teacherRow, TEACHER_COL_NAME).getValue(),
-      qrData: qrData,
-      qrImageUrl: qrImageUrl
-    };
+  const teacherCode = String(code || '').trim();
+  if (/^7\d{3}$/.test(teacherCode)) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const sheet = getTeacherMasterSheet_();
+      const row = findTeacherRowByCode_(sheet, teacherCode);
+      if (row === -1) return { ok: false, message: '該当する講師が見つかりません' };
+      const existing = String(sheet.getRange(row, TEACHER_COL_QR).getValue() || '').trim();
+      const qrData = existing || 'STEP-' + teacherCode;
+      if (!existing) sheet.getRange(row, TEACHER_COL_QR).setValue(qrData);
+      return { ok: true, isTeacher: true, name: sheet.getRange(row, TEACHER_COL_NAME).getValue(), qrData: qrData,
+        qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData) };
+    } finally { lock.releaseLock(); }
   }
-
+  if (!code) return { ok: false, message: '生徒番号を入力してください' };
   const sheet = getMasterSheet_();
-  const row = findStudentRow_(sheet, target);
+  const row = findStudentRow_(sheet, code);
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません（生徒番号を確認してください）' };
 
+  const qrData = 'STEP-' + String(code).trim();
   sheet.getRange(row, COL_QR_DATA).setValue(qrData);
+
   const name = sheet.getRange(row, COL_STUDENT_NAME).getValue();
+  const qrImageUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
+
   return { ok: true, name: name, qrData: qrData, qrImageUrl: qrImageUrl };
 }
 
@@ -665,7 +663,7 @@ function sendQrPdfEmail_(code, toEmail, pdfBase64) {
   if (row === -1) return { ok: false, message: '該当する生徒が見つかりません' };
 
   const name = masterSheet.getRange(row, COL_STUDENT_NAME).getValue();
-  const subject = name + 'さんのQRコードのご案内';
+  const subject = name + 'さんのQRコードのご案��';
   const htmlBody =
     '<p>' + name + 'さんの入退室用QRコードです。</p>' +
     '<p>添付のPDFを印刷してご利用ください。</p>' +
@@ -2256,4 +2254,22 @@ function checkPointSettings() {
 function testCheckIn() {
   const result = handleCheckIn_('86188224121444524682906451', null);
   Logger.log(JSON.stringify(result));
+}
+
+/** Authenticated badge roster. Read only A:D and Q; never return contact/payroll data. */
+function getTeacherBadgeRoster_() {
+  const sheet = getTeacherMasterSheet_();
+  const count = sheet.getLastRow();
+  const rows = count ? sheet.getRange(1, 1, count, 4).getDisplayValues() : [];
+  const qrs = count ? sheet.getRange(1, TEACHER_COL_QR, count, 1).getDisplayValues() : [];
+  const seen = {};
+  const teachers = [];
+  rows.forEach(function(row, i) {
+    const code = String(row[0] || '').trim();
+    if (!/^7\d{3}$/.test(code) || String(row[3]).trim() !== '1') return;
+    if (seen[code]) throw new Error('講師コードが重複しています。管理者へ連絡してください。');
+    seen[code] = true;
+    teachers.push({ code: code, name: String(row[1] || '').trim(), reading: String(row[2] || '').trim(), qrData: String(qrs[i][0] || '').trim() });
+  });
+  return { ok: true, teachers: teachers, fetchedAt: new Date().toISOString() };
 }
