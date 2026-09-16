@@ -34,7 +34,9 @@ test('both tablet pages stop the camera after five inactive hours and resume on 
   for (const page of [modern, compat]) {
     assert.match(page, /5 \* 60 \* 60 \* 1000/);
     assert.match(page, /id="idleOverlay"/);
-    assert.match(page, /画面をタップすると再開します/);
+    assert.match(page, /故障ではありません/);
+    assert.match(page, /画面をタップしてください/);
+    assert.match(page, /タップするとQR読み取りを再開します/);
     assert.match(page, /function enterRestMode\(\)/);
     assert.match(page, /function stopCameraStream\(\)/);
     assert.match(page, /track\.stop\(\)/);

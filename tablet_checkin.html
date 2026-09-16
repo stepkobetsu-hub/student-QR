@@ -488,9 +488,22 @@
     cursor: pointer;
   }
   #idleOverlay.show { display: flex; }
-  #idleOverlay .idle-icon { font-size: 58px; line-height: 1; }
-  #idleOverlay .idle-title { margin-top: 22px; font-size: 34px; font-weight: bold; }
-  #idleOverlay .idle-help { margin-top: 16px; font-size: 21px; color: #cbd5df; }
+  #idleOverlay .idle-icon { font-size: 64px; line-height: 1; }
+  #idleOverlay .idle-title { margin-top: 18px; font-size: 38px; font-weight: bold; }
+  #idleOverlay .idle-note { margin-top: 14px; font-size: 24px; font-weight: bold; color: #d9e2ec; }
+  #idleOverlay .idle-help {
+    margin-top: 22px;
+    padding: 20px 34px;
+    border: 4px solid #fff;
+    border-radius: 18px;
+    background: #ffd740;
+    color: #171717;
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 900;
+    line-height: 1.25;
+    box-shadow: 0 0 0 7px rgba(255,215,64,.2), 0 10px 28px rgba(0,0,0,.4);
+  }
+  #idleOverlay .idle-sub { margin-top: 18px; font-size: 24px; font-weight: bold; color: #fff; }
 </style>
 </head>
 <body>
@@ -543,7 +556,9 @@
   <button id="idleOverlay" type="button" aria-label="画面をタップしてQR読取を再開">
     <span class="idle-icon" aria-hidden="true">☾</span>
     <span class="idle-title">休止中</span>
-    <span class="idle-help">画面をタップすると再開します</span>
+    <span class="idle-note">故障ではありません</span>
+    <span class="idle-help">画面をタップしてください</span>
+    <span class="idle-sub">タップするとQR読み取りを再開します</span>
   </button>
 </div>
 
