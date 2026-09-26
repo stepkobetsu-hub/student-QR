@@ -56,4 +56,5 @@ test('manager page defaults to unresolved and renders recovered status in green'
   assert.match(page, /value="recovered">復旧済み/);
   assert.match(page, /recoveredBadge/);
   assert.match(page, /その後配信成功/);
+  assert.match(page, /filter\(x=>\$\('includeArchived'\)\.checked\|\|!x\.archived\)/);
 });
