@@ -67,12 +67,21 @@ function readDeliveryQueueRecipientsByReceipt_() {
 }
 
 function readNormalDeliveryHistoryForEmail_(email) {
-  const targetEmail = normalizeDeliveryEmail_(email);
+  return readNormalDeliveryHistoryForEmails_([email])[normalizeDeliveryEmail_(email)] || [];
+}
+
+function readNormalDeliveryHistoryForEmails_(emails) {
+  const targets = {};
+  (emails || []).forEach(function(email) {
+    const normalized = normalizeDeliveryEmail_(email);
+    if (normalized) targets[normalized] = [];
+  });
+  const targetEmails = Object.keys(targets);
+  if (!targetEmails.length) return targets;
   const queueRecipientsByReceipt = readDeliveryQueueRecipientsByReceipt_();
   const sheets = typeof getDeliveryHistorySourceSheets_ === 'function'
     ? getDeliveryHistorySourceSheets_('ログ')
     : [getDeliveryFailureLogSheet_()];
-  const results = [];
   sheets.forEach(function(sheet) {
     if (!sheet || sheet.getLastRow() < 2) return;
     const values = sheet.getDataRange().getValues();
@@ -80,14 +89,18 @@ function readNormalDeliveryHistoryForEmail_(email) {
     values.slice(1).forEach(function(row, index) {
       const receiptId = String(deliveryHistoryCell_(row, headers, ['受付ID']) || '').trim();
       const queueRecipients = queueRecipientsByReceipt[receiptId] || [];
-      if (!deliveryHistoryRowHasEmail_(row, targetEmail) && queueRecipients.indexOf(targetEmail) < 0) return;
+      const rowText = row.map(function(value) { return String(value == null ? '' : value).toLowerCase(); }).join('\n');
+      const matchedEmails = targetEmails.filter(function(email) {
+        return rowText.indexOf(email) >= 0 || queueRecipients.indexOf(email) >= 0;
+      });
+      if (!matchedEmails.length) return;
       const occurredAt = deliveryHistoryCell_(row, headers, ['受付日時','タイムスタンプ','登録日時','送信完了日時','更新日時']);
       const occurredDate = deliveryHistoryDate_(occurredAt);
       if (!occurredDate) return;
       const deliveredAt = deliveryHistoryCell_(row, headers, ['最終配信成功日時','送信完了日時']);
       const status = String(deliveryHistoryCell_(row, headers, ['配信状態','状態','メール送信結果']) || '').trim();
       const mailType = String(deliveryHistoryCell_(row, headers, ['送信種別','種別']) || '').trim();
-      results.push({
+      const entry = {
         kind:'send',
         row:index + 2,
         occurredAt:occurredDate,
@@ -100,10 +113,11 @@ function readNormalDeliveryHistoryForEmail_(email) {
         studentId:String(deliveryHistoryCell_(row, headers, ['生徒番号']) || ''),
         mailType:mailType || '送信',
         sourceSystem:String(deliveryHistoryCell_(row, headers, ['送信元システム']) || '')
-      });
+      };
+      matchedEmails.forEach(function(email) { targets[email].push(entry); });
     });
   });
-  return results;
+  return targets;
 }
 
 function deliveryRecoveryTokens_(value) {
@@ -139,11 +153,11 @@ function annotateDeliveryFailureRecovery_(items) {
   const temporary = items.filter(function(item) {
     return DELIVERY_TEMP_EVENTS.indexOf(normalizeBrevoEvent_(item.event)) >= 0;
   });
+  const emails = temporary.map(function(item) { return normalizeDeliveryEmail_(item.email); }).filter(Boolean);
+  const rawHistoryByEmail = readNormalDeliveryHistoryForEmails_(emails);
   const historyByEmail = {};
-  temporary.forEach(function(item) {
-    const email = normalizeDeliveryEmail_(item.email);
-    if (!email || historyByEmail[email]) return;
-    historyByEmail[email] = readNormalDeliveryHistoryForEmail_(email).filter(function(entry) {
+  Object.keys(rawHistoryByEmail).forEach(function(email) {
+    historyByEmail[email] = rawHistoryByEmail[email].filter(function(entry) {
       return entry.delivered || /配信完了|delivered|送信完了|送信成功|成功/i.test(String(entry.status || ''));
     }).map(function(entry) { return Object.assign({email:email}, entry); });
   });

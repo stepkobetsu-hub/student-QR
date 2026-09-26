@@ -14,7 +14,7 @@ function recoveryContext(entries) {
   };
   vm.runInNewContext(backend, context);
   vm.runInNewContext(history, context);
-  context.readNormalDeliveryHistoryForEmail_ = () => entries;
+  context.readNormalDeliveryHistoryForEmails_ = emails => Object.fromEntries(emails.map(email => [email, entries]));
   return context;
 }
 
