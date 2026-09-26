@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>生徒・講師QR／入退室管理 | Step個別指導ステップ</title>
+<title>生徒用QRまとめて印刷 | Step個別指導ステップ</title>
 <style>
   :root {
     --main-color: #2e7d5b;
@@ -793,7 +793,7 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
 <body>
 
 <div class="auth-card hidden" id="loginPanel">
-  <h1>生徒・講師QR／入退室管理</h1>
+  <h1 id="qrPageTitle">生徒用QRまとめて印刷</h1>
   <div class="auth-note">権限を持つスタッフ専用ページです。</div>
   <form id="loginForm">
     <label for="loginId">ID</label>
@@ -809,7 +809,7 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
   <div class="app-header">
     <div>
       <h1>生徒・講師QR／入退室管理</h1>
-      <div class="subtitle">既存カードの登録・新規QRの発行ができます</div>
+      <div class="subtitle" id="qrPageSubtitle">複数の生徒を選んでQRコードをまとめて確認・印刷できます</div>
     </div>
     <div class="header-actions">
       <div class="staff-badge" id="loginStaffLabel"></div>
@@ -842,7 +842,7 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
   <div class="workspace-shell">
   <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn" onclick="location.href='student_qr_manager_v2.html'">← QR管理トップ</button>
-    <button type="button" class="tab-btn active" id="tabCheckBtn" onclick="switchTab('check')">生徒用QR確認・印刷</button>
+    <button type="button" class="tab-btn active" id="tabCheckBtn" onclick="switchTab('check')">生徒用QRまとめて印刷</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="location.href='student_qr_create.html'">生徒用QR発行・変更</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール変更・追加</button>
   </nav>
@@ -879,10 +879,10 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
   </div>
 
   <!-- ② 現在登録されているQRを確認するパネル -->
-  <div class="tab-panel active" id="panelCheck" data-title="生徒用QR確認・印刷">
+  <div class="tab-panel active" id="panelCheck" data-title="生徒用QRまとめて印刷">
     <div class="panel-primary">
     <div class="check-panel-header">
-      <h2>QR確認対象生徒</h2>
+      <h2>生徒用QRまとめて印刷</h2>
       <button type="button" onclick="loadQrStudentRoster(true)" style="background:#0873c9;">生徒情報を更新</button>
     </div>
 
@@ -1827,6 +1827,12 @@ async function stopScanner() {
 function switchTab(tab) {
   if (tab === 'existing' || tab === 'points' || tab === 'csv' || tab === 'new') tab = 'check';
   const isExisting = false;
+  const pageTitle = document.getElementById('qrPageTitle');
+  const pageSubtitle = document.getElementById('qrPageSubtitle');
+  if (pageTitle) pageTitle.textContent = tab === 'email' ? '通知先メール変更・追加' : '生徒用QRまとめて印刷';
+  if (pageSubtitle) pageSubtitle.textContent = tab === 'email'
+    ? '生徒の入退室通知メールを変更・追加できます'
+    : '複数の生徒を選んでQRコードをまとめて確認・印刷できます';
   const isCheck = tab === 'check';
   const isNew = tab === 'new';
   const isEmail = tab === 'email';
