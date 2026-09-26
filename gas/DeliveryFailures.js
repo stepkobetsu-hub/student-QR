@@ -734,9 +734,10 @@ function handleDeliveryFailureAdminAction_(body) {
     const sheet = getDeliveryFailureSheet_();
     const values = sheet.getDataRange().getValues();
     const header = values.length ? values[0].map(String) : [];
-    const allItems = values.slice(1)
+    const rawItems = values.slice(1)
       .filter(row => row.some(value => value !== '' && value !== null))
       .map(row => deliveryRowToObjectByHeaders_(row, header));
+    const allItems = typeof annotateDeliveryFailureRecovery_ === 'function' ? annotateDeliveryFailureRecovery_(rawItems) : rawItems;
     const filteredItems = filterDeliveryFailureItems_(allItems, body || {});
     const activeItems = allItems.filter(item => !item.archived);
     return {
@@ -747,7 +748,11 @@ function handleDeliveryFailureAdminAction_(body) {
       staff: {name:staff.name,level:staff.level}
     };
   }
-  if (action === 'deliveryFailureSummary') return {ok:true,summary:deliveryFailureSummary_(readDeliveryFailureItems_())};
+  if (action === 'deliveryFailureSummary') {
+    const rawItems = readDeliveryFailureItems_();
+    const items = typeof annotateDeliveryFailureRecovery_ === 'function' ? annotateDeliveryFailureRecovery_(rawItems) : rawItems;
+    return {ok:true,summary:deliveryFailureSummary_(items)};
+  }
   if (action === 'deliveryFailureDetail') {
     const item = getDeliveryFailureById_(body.id);
     return {ok:true,item:item,history:getDeliveryAddressHistory_(item)};
@@ -841,6 +846,9 @@ function filterDeliveryFailureItems_(items,filter) {
     if (sourceQ && sourceQ !== 'ALL' && item.sourceSystem !== sourceQ) return false;
     if (filter.unconfirmedOnly && item.confirmStatus === '確認済み') return false;
     if (filter.stoppedOnly && !item.stopped) return false;
+    const resolution = String(filter.resolution || 'unresolved');
+    if (resolution === 'unresolved' && item.recovered) return false;
+    if (resolution === 'recovered' && !item.recovered) return false;
     return true;
   }).reverse();
 }
@@ -850,7 +858,7 @@ function deliveryFailureSummary_(items) {
   let unconfirmed=0,stopped=0,today=0;
   items.forEach(item=>{
     const serious=isMajorDeliveryFailure_(item.event,item.state,item.stopped);
-    if(serious&&item.confirmStatus!=='確認済み')unconfirmed++;
+    if(serious&&!item.recovered&&item.confirmStatus!=='確認済み')unconfirmed++;
     if(item.stopped)stopped++;
     const occurred=item.occurredAt instanceof Date?item.occurredAt:new Date(item.occurredAt);
     if(!isNaN(occurred.getTime())&&occurred>=start)today++;
@@ -859,7 +867,8 @@ function deliveryFailureSummary_(items) {
 }
 
 function listDeliveryFailuresWithSummary_(filter) {
-  const all=readDeliveryFailureItems_();
+  const raw=readDeliveryFailureItems_();
+  const all=typeof annotateDeliveryFailureRecovery_==='function'?annotateDeliveryFailureRecovery_(raw):raw;
   return {items:filterDeliveryFailureItems_(all,filter||{}),summary:deliveryFailureSummary_(all)};
 }
 

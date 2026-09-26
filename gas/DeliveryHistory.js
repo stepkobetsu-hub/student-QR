@@ -106,6 +106,63 @@ function readNormalDeliveryHistoryForEmail_(email) {
   return results;
 }
 
+function deliveryRecoveryTokens_(value) {
+  return String(value || '').split(/[\s,、\n]+/).map(function(token) { return token.trim(); }).filter(Boolean);
+}
+
+function deliveryRecoveryHasIntersection_(left, right) {
+  const rightTokens = deliveryRecoveryTokens_(right);
+  return deliveryRecoveryTokens_(left).some(function(token) { return rightTokens.indexOf(token) >= 0; });
+}
+
+function deliveryRecoverySource_(value) {
+  const source = String(value || '').replace(/\u3000/g, '').trim().toUpperCase();
+  return source || 'QR_ATTENDANCE';
+}
+
+function deliveryRecoveryEntryMatchesFailure_(entry, item) {
+  if (!entry || !item) return false;
+  if (normalizeDeliveryEmail_(entry.email || item.email) !== normalizeDeliveryEmail_(item.email)) return false;
+  const itemSource = deliveryRecoverySource_(item.sourceSystem);
+  const entrySource = deliveryRecoverySource_(entry.sourceSystem);
+  if (itemSource !== entrySource) return false;
+  const itemIds = deliveryRecoveryTokens_(item.studentIds);
+  const entryIds = deliveryRecoveryTokens_(entry.studentId);
+  if (itemIds.length) return entryIds.length > 0 && deliveryRecoveryHasIntersection_(item.studentIds, entry.studentId);
+  const itemNames = deliveryRecoveryTokens_(item.studentNames);
+  const entryNames = deliveryRecoveryTokens_(entry.studentName);
+  if (itemNames.length) return entryNames.length > 0 && deliveryRecoveryHasIntersection_(item.studentNames, entry.studentName);
+  return true;
+}
+
+function annotateDeliveryFailureRecovery_(items) {
+  const temporary = items.filter(function(item) {
+    return DELIVERY_TEMP_EVENTS.indexOf(normalizeBrevoEvent_(item.event)) >= 0;
+  });
+  const historyByEmail = {};
+  temporary.forEach(function(item) {
+    const email = normalizeDeliveryEmail_(item.email);
+    if (!email || historyByEmail[email]) return;
+    historyByEmail[email] = readNormalDeliveryHistoryForEmail_(email).filter(function(entry) {
+      return entry.delivered || /配信完了|delivered|送信完了|送信成功|成功/i.test(String(entry.status || ''));
+    }).map(function(entry) { return Object.assign({email:email}, entry); });
+  });
+  return items.map(function(item) {
+    const event = normalizeBrevoEvent_(item.event);
+    if (DELIVERY_TEMP_EVENTS.indexOf(event) < 0) return Object.assign({}, item, {recovered:false,recoveredAt:''});
+    const errorAt = deliveryHistoryDate_(item.lastOccurredAt || item.occurredAt);
+    const match = (historyByEmail[normalizeDeliveryEmail_(item.email)] || []).filter(function(entry) {
+      const deliveredAt = deliveryHistoryDate_(entry.finalAt) || deliveryHistoryDate_(entry.occurredAt);
+      return errorAt && deliveredAt && deliveredAt.getTime() > errorAt.getTime() && deliveryRecoveryEntryMatchesFailure_(entry, item);
+    }).sort(function(a, b) {
+      const aDate = deliveryHistoryDate_(a.finalAt) || deliveryHistoryDate_(a.occurredAt);
+      const bDate = deliveryHistoryDate_(b.finalAt) || deliveryHistoryDate_(b.occurredAt);
+      return aDate.getTime() - bDate.getTime();
+    })[0];
+    return Object.assign({}, item, {recovered:Boolean(match),recoveredAt:match ? (match.finalAt || match.occurredAt) : ''});
+  });
+}
+
 function deliveryFailureToHistoryItem_(item) {
   return {
     kind:'error',
@@ -153,7 +210,8 @@ function getDeliveryAddressHistory_(item) {
   const earliestErrorDate = errorDates.length ? new Date(Math.min.apply(null, errorDates.map(function(date) { return date.getTime(); }))) : deliveryHistoryDate_(item.firstOccurredAt || item.occurredAt);
   const latestErrorDate = errorDates.length ? new Date(Math.max.apply(null, errorDates.map(function(date) { return date.getTime(); }))) : deliveryHistoryDate_(item.lastOccurredAt || item.occurredAt);
   const successful = normal.filter(function(entry) {
-    return entry.delivered || /配信完了|delivered|送信完了|送信成功|成功/i.test(String(entry.status || ''));
+    return (entry.delivered || /配信完了|delivered|送信完了|送信成功|成功/i.test(String(entry.status || ''))) &&
+      deliveryRecoveryEntryMatchesFailure_(Object.assign({email:email}, entry), item);
   });
   const afterLatest = successful.filter(function(entry) {
     const date = deliveryHistoryDate_(entry.finalAt) || deliveryHistoryDate_(entry.occurredAt);
