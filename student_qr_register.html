@@ -1831,12 +1831,12 @@ function switchTab(tab) {
   const isPoints = tab === 'points';
   const isCsv = tab === 'csv';
 
-  document.getElementById('tabExistingBtn').classList.toggle('active', isExisting);
-  document.getElementById('tabCheckBtn').classList.toggle('active', isCheck);
-  document.getElementById('tabNewBtn').classList.toggle('active', isNew);
-  document.getElementById('tabEmailBtn').classList.toggle('active', isEmail);
-  document.getElementById('tabPointsBtn').classList.toggle('active', isPoints);
-  document.getElementById('tabCsvBtn').classList.toggle('active', isCsv);
+  document.getElementById('tabExistingBtn')?.classList.toggle('active', isExisting);
+  document.getElementById('tabCheckBtn')?.classList.toggle('active', isCheck);
+  document.getElementById('tabNewBtn')?.classList.toggle('active', isNew);
+  document.getElementById('tabEmailBtn')?.classList.toggle('active', isEmail);
+  document.getElementById('tabPointsBtn')?.classList.toggle('active', isPoints);
+  document.getElementById('tabCsvBtn')?.classList.toggle('active', isCsv);
   document.getElementById('panelExisting').classList.toggle('active', isExisting);
   document.getElementById('panelCheck').classList.toggle('active', isCheck);
   document.getElementById('panelNew').classList.toggle('active', isNew);
