@@ -16,13 +16,16 @@
 <header class="head"><div><h1>生徒用QR発行・変更</h1><div class="sub">生徒用QRの確認・新規作成・印刷ができます</div></div><div class="user"><span id="userName"></span><button class="logout" id="logout">ログアウト</button></div></header>
 <div class="page-shell"><nav class="side-menu" aria-label="管理機能メニュー"><a href="student_qr_manager_v2.html">← QR管理トップ</a><a class="active" href="student_qr_create.html">生徒用QR発行・変更</a><a href="student_qr_register.html#check">生徒用QR確認・印刷</a><a href="student_qr_register.html#email">通知先メールの変更・追加</a></nav><div class="content-main"><main class="panel"><h2 style="margin:0 0 22px;color:#234b3b;font-size:22px;border-bottom:1px solid #e7ece9;padding-bottom:14px">生徒用QR発行・変更</h2>
 <label>生徒番号</label><input id="studentCode" placeholder="例: 1331" inputmode="numeric" autocomplete="off"><div class="hint">生徒番号を入力すると、☆マスタのAZ列に生徒用QRが登録済みか確認します。</div>
-<div id="info" class="info"><div id="studentName" class="name"></div><div id="school"></div></div><div style="margin-top:16px;padding:14px 16px;border:1px solid #cfe0d7;border-radius:10px;background:#f4faf7"><div style="font-weight:800;color:#234b3b;margin-bottom:6px">通知先メール</div><div class="hint" style="margin:0 0 10px">生徒の入退室通知メールを追加・変更する場合はこちらから開きます。</div><a class="qr-mail-link" href="student_qr_register.html#email">通知先メールの変更・追加</a></div>
+<div id="info" class="info"><div id="studentName" class="name"></div><div id="school"></div></div>
 <div id="status" class="status"><div id="statusTitle" class="status-title"></div><div id="statusDetail" class="status-detail"></div><div id="contacts" class="contacts" style="display:none"></div><div id="qrMailBox" class="qr-mail-box"><div class="qr-mail-title">登録済みの通知先メールアドレス</div><div id="qrNotifyEmails" class="qr-mail-list"></div><div class="qr-actions"><a class="qr-mail-link" href="student_qr_register.html#email">メールアドレス登録・変更</a></div></div></div>
 <div class="actions"><button id="view" class="current">登録済みQRを表示</button><button id="issue" class="issue">生徒用QRを作成してAZ列へ登録</button></div>
 <div id="message" class="msg"></div>
 <div id="qr" class="qr"><div id="pill" class="pill"></div><div class="school">個別指導ステップ</div><div id="code" class="code"></div><div id="student" class="student"></div><img id="qrImg" alt="QRコード"></div>
 <div class="qr-actions"><button id="print" class="print">QRコード印刷</button></div>
 <div id="pdf" class="pdf"><label>このQRをPDFでメール送信</label><input id="email" placeholder="送信先メールアドレス"><button id="send">📧 PDFをメールで送る</button><div id="pdfMsg" class="msg"></div></div>
+<div style="margin-top:28px;padding-top:14px;border-top:1px solid #e6ece9;text-align:right">
+  <a href="student_qr_register.html#email" style="display:inline-block;padding:7px 11px;border:1px solid #b9cfc4;border-radius:8px;background:#f7faf8;color:#3c6854;text-decoration:none;font-size:12px;font-weight:700">通知先メールの変更・追加</a>
+</div>
 </main></div></div></div>
 <script>
 const API='https://script.google.com/macros/s/AKfycbzYpm-16ahuZ3BRFKRT-iSvR9nThsYcTOhxplyBp4bZmVmehfTYZEEl18THzJasypOsTQ/exec',AUTH='https://script.google.com/macros/s/AKfycbypkUc0MqZ07E7pZRglNPeRM56WbCcuWaLpRzi9bVFcPklHDxaaLC7GfzG6ozTGCbEX/exec';
