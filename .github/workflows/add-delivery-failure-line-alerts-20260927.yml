@@ -1,31 +1,23 @@
-name: Add delivery failure LINE alerts
+name: Verify delivery failure LINE alerts
 on:
   push:
     branches: [main]
     paths:
+      - 'gas/DeliveryFailures.js'
+      - 'delivery_failures.html'
       - '.github/workflows/add-delivery-failure-line-alerts-20260927.yml'
-      - '.github/scripts/add_delivery_failure_line_alerts_20260927.py'
 permissions:
-  contents: write
+  contents: read
 jobs:
-  patch:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply delivery failure LINE alert patch
-        run: python3 .github/scripts/add_delivery_failure_line_alerts_20260927.py
       - name: Syntax and feature checks
         run: |
           node --check gas/DeliveryFailures.js
           grep -q "notifyDeliveryFailureLineSafely_" gas/DeliveryFailures.js
           grep -q "DELIVERY_FAILURE_LINE_SESSION_TOKEN" gas/DeliveryFailures.js
+          grep -q "deliveryFailureLineSettingsSave" gas/DeliveryFailures.js
           grep -q "LINE未達通知設定" delivery_failures.html
           grep -q "7001" delivery_failures.html
-      - name: Commit changes
-        run: |
-          if git diff --quiet; then exit 0; fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add gas/DeliveryFailures.js delivery_failures.html
-          git commit -m 'Add LINE alerts for delivery failures'
-          git push
