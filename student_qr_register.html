@@ -786,6 +786,7 @@
 
 <style id="hide-duplicate-email-selection-ui">
 label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:none !important; }
+#panelExisting{display:none!important}
 </style>
 
 </head>
@@ -841,13 +842,13 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
   <div class="workspace-shell">
   <nav class="tabs" aria-label="管理機能メニュー">
     <button type="button" class="tab-btn" onclick="location.href='student_qr_manager_v2.html'">← QR管理トップ</button>
-    <button type="button" class="tab-btn" id="tabCheckBtn" onclick="switchTab('check')">生徒用QR確認・印刷</button>
+    <button type="button" class="tab-btn active" id="tabCheckBtn" onclick="switchTab('check')">生徒用QR確認・印刷</button>
     <button type="button" class="tab-btn" id="tabNewBtn" onclick="location.href='student_qr_create.html'">生徒用QR発行・変更</button>
     <button type="button" class="tab-btn" id="tabEmailBtn" onclick="switchTab('email')">通知先メール変更・追加</button>
   </nav>
 
   <!-- ① 既存の入退くんQRを登録するパネル -->
-  <div class="tab-panel active" id="panelExisting" data-title="入退くんＱＲ取込">
+  <div class="tab-panel" id="panelExisting" data-title="入退くんＱＲ取込">
     <div class="panel-form-width">
     <label for="studentCode">① 生徒・講師番号</label>
     <input type="text" id="studentCode" placeholder="例: 1001" inputmode="numeric" autocomplete="off">
@@ -878,7 +879,7 @@ label[for="emailStudentCode"], #emailStudentCode, #emailStudentInfo { display:no
   </div>
 
   <!-- ② 現在登録されているQRを確認するパネル -->
-  <div class="tab-panel" id="panelCheck" data-title="生徒用QR確認・印刷">
+  <div class="tab-panel active" id="panelCheck" data-title="生徒用QR確認・印刷">
     <div class="panel-primary">
     <div class="check-panel-header">
       <h2>QR確認対象生徒</h2>
@@ -1824,7 +1825,8 @@ async function stopScanner() {
 // タブ切り替え
 // ===================================================================
 function switchTab(tab) {
-  const isExisting = tab === 'existing';
+  if (tab === 'existing' || tab === 'points' || tab === 'csv' || tab === 'new') tab = 'check';
+  const isExisting = false;
   const isCheck = tab === 'check';
   const isNew = tab === 'new';
   const isEmail = tab === 'email';
@@ -3125,12 +3127,12 @@ async function exportAttendanceCsv() {
 
 <script id="qr-tab-persistence-20260831">
 (() => {
-  const validTabs=new Set(['existing','check','email','points','csv']);
-  const hashTab=()=>{const value=(location.hash||'').replace(/^#/,'').trim();return validTabs.has(value)?value:null;};
+  const validTabs=new Set(['check','email']);
+  const hashTab=()=>{const value=(location.hash||'').replace(/^#/,'').trim();return validTabs.has(value)?value:'check';};
   const originalSwitchTab=window.switchTab;
   if(typeof originalSwitchTab!=='function') return;
-  window.switchTab=function(tab){originalSwitchTab(tab);if(validTabs.has(tab))history.replaceState(null,'','#'+tab);};
-  const restore=()=>{const tab=hashTab();if(tab)originalSwitchTab(tab);};
+  window.switchTab=function(tab){const target=validTabs.has(tab)?tab:'check';originalSwitchTab(target);history.replaceState(null,'','#'+target);};
+  const restore=()=>{const tab=hashTab();originalSwitchTab(tab);if(!location.hash)history.replaceState(null,'','#'+tab);};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',restore,{once:true});else restore();
   window.addEventListener('hashchange',restore);
 })();
