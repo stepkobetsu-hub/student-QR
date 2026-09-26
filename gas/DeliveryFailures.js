@@ -6,16 +6,20 @@ const DELIVERY_FAILURE_HEADERS = [
   '該当通知欄','該当生徒一覧','兄弟を含む関連生徒一覧','送信停止','確認状態','確認者','確認日時',
   '送信再開者','送信再開日時','本人確認済み','本人確認内容','最終配信成功日時','元JSON',
   '送信元システム','初回発生日時','最終発生日時','発生回数','再送日時','管理者通知済み','管理者通知日時',
-  'アーカイブ状態','アーカイブ日時','アーカイブ実行者'
+  'アーカイブ状態','アーカイブ日時','アーカイブ実行者','LINE通知済み','LINE通知日時','LINE通知結果'
 ];
 const DELIVERY_LOG_EXTRA_HEADERS = ['BrevoメッセージID','照合ID','配信状態','最終イベント日時','最終配信成功日時','最終エラー理由','配信状態更新日時'];
 const BREVO_WEBHOOK_EVENTS = ['accepted','delivered','hard_bounce','soft_bounce','blocked','invalid_email','deferred','spam','complaint','error'];
 const DELIVERY_IMMEDIATE_STOP_EVENTS = ['hard_bounce','blocked','invalid_email','spam'];
 const DELIVERY_TEMP_EVENTS = ['soft_bounce','deferred','error'];
-const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock','deliveryFailureReportSettingsGet','deliveryFailureReportSettingsSave'];
+const DELIVERY_ADMIN_ACTIONS = ['deliveryFailuresList','deliveryFailureSummary','deliveryFailureDetail','deliveryFailureConfirm','deliveryFailureArchive','deliveryFailureUnarchive','deliveryFailureDeletePermanent','deliveryFailureResume','deliveryFailureStop','deliveryFailureSpamResume','deliveryFailureRelatedStudents','deliveryFailureBrevoUnblock','deliveryFailureReportSettingsGet','deliveryFailureReportSettingsSave','deliveryFailureLineSettingsGet','deliveryFailureLineSettingsSave','deliveryFailureLineTest'];
 const DELIVERY_FAILURE_REPORT_EMAILS_PROPERTY = 'DELIVERY_FAILURE_REPORT_EMAILS';
 const DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS = 4;
 const DELIVERY_FAILURE_MANAGER_URL = 'https://stepkobetsu-hub.github.io/student-QR/delivery_failures.html';
+const DELIVERY_FAILURE_LINE_API_URL = 'https://jbiolkvegexkqjcwtyye.supabase.co/functions/v1/line-teacher-api';
+const DELIVERY_FAILURE_LINE_SESSION_PROPERTY = 'DELIVERY_FAILURE_LINE_SESSION_TOKEN';
+const DELIVERY_FAILURE_LINE_CODES_PROPERTY = 'DELIVERY_FAILURE_LINE_TEACHER_CODES';
+const DELIVERY_FAILURE_LINE_DEFAULT_CODES = ['7001'];
 const WEBHOOK_DIAGNOSTIC_SHEET_NAME = 'Webhook診断';
 const WEBHOOK_DIAGNOSTIC_HEADERS = ['受信日時','tokenMatched','event','recipient','messageId','messageId取得元','照合結果','処理結果','エラー概要'];
 
@@ -227,6 +231,7 @@ function handleBrevoWebhook_(body, rawBody, diagnostic) {
     const stopped = DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(event) >= 0 || shouldStopForTemporaryErrors_(email, messageId, event, eventDate);
     const upsertResult = appendDeliveryFailure_(body, rawBody, dedupeKey, eventDate, correlationId, matches, stopped, logRecord);
     notifyDeliveryFailureAdministratorSafely_(upsertResult);
+    notifyDeliveryFailureLineSafely_(upsertResult);
     updateWebhookDiagnostic_(diagnostic, { result:'不達イベント記録', error:'' });
     return { ok: true, stopped: stopped };
   } catch (error) {
@@ -383,6 +388,143 @@ function saveDeliveryFailureReportEmails_(input, staff) {
   props.setProperty('DELIVERY_FAILURE_ADMIN_EMAIL', emails[0]);
   Logger.log(JSON.stringify({action:'deliveryFailureReportSettingsSave',savedAt:new Date(),savedBy:staff.name,recipientCount:emails.length}));
   return {ok:true,emails:emails,maxRecipients:DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS,savedBy:staff.name};
+}
+
+
+function normalizeDeliveryFailureLineCodes_(input) {
+  let values = input;
+  if (!Array.isArray(values)) {
+    const text = String(values || '').trim();
+    if (!text) values = DELIVERY_FAILURE_LINE_DEFAULT_CODES.slice();
+    else {
+      try {
+        const parsed = JSON.parse(text);
+        values = Array.isArray(parsed) ? parsed : text.split(/[\\s,;]+/);
+      } catch (ignore) {
+        values = text.split(/[\\s,;]+/);
+      }
+    }
+  }
+  const result = [];
+  values.forEach(function(value) {
+    const code = String(value || '').trim();
+    if (/^7\\d{3}$/.test(code) && result.indexOf(code) < 0) result.push(code);
+  });
+  return result.length ? result : DELIVERY_FAILURE_LINE_DEFAULT_CODES.slice();
+}
+
+function getDeliveryFailureLineSettings_() {
+  const props = PropertiesService.getScriptProperties();
+  const token = String(props.getProperty(DELIVERY_FAILURE_LINE_SESSION_PROPERTY) || '').trim();
+  const codes = normalizeDeliveryFailureLineCodes_(props.getProperty(DELIVERY_FAILURE_LINE_CODES_PROPERTY) || '');
+  return { configured:!!token, teacherCodes:codes };
+}
+
+function callDeliveryFailureLineApi_(payload) {
+  const response = UrlFetchApp.fetch(DELIVERY_FAILURE_LINE_API_URL, {
+    method:'post',
+    contentType:'application/json',
+    payload:JSON.stringify(payload || {}),
+    muteHttpExceptions:true
+  });
+  const status = response.getResponseCode();
+  const text = response.getContentText();
+  let data = {};
+  try { data = JSON.parse(text || '{}'); } catch (ignore) {}
+  if (status < 200 || status >= 300 || data.ok === false) {
+    const error = new Error(String(data.error || data.message || ('LINE通知APIでエラーが発生しました (' + status + ')')));
+    error.status = status;
+    throw error;
+  }
+  return data;
+}
+
+function saveDeliveryFailureLineSettings_(sessionToken, teacherCodes, staff) {
+  const token = String(sessionToken || '').trim();
+  if (!token) throw new Error('LINE通知用セッションがありません');
+  const codes = normalizeDeliveryFailureLineCodes_(teacherCodes);
+  callDeliveryFailureLineApi_({action:'health',systemPortalSessionToken:token});
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty(DELIVERY_FAILURE_LINE_SESSION_PROPERTY, token);
+  props.setProperty(DELIVERY_FAILURE_LINE_CODES_PROPERTY, JSON.stringify(codes));
+  Logger.log(JSON.stringify({action:'deliveryFailureLineSettingsSave',savedAt:new Date(),savedBy:staff.name,teacherCodes:codes}));
+  return {ok:true,configured:true,teacherCodes:codes,savedBy:staff.name};
+}
+
+function deliveryFailureLineMessage_(value) {
+  const event = normalizeBrevoEvent_(value('イベント種別'));
+  const state = String(value('表示用状態') || '');
+  const source = deliveryFailureSourceLabel_(String(value('送信元システム')));
+  const mailType = String(value('該当通知欄') || value('件名') || 'メール');
+  const isTemporary = ['soft_bounce','deferred','error'].indexOf(event) >= 0;
+  return [
+    isTemporary ? '⚠️ 入退室メールで一時エラーが発生しました' : '🚨 入退室メールが未達になりました',
+    '',
+    '生徒：' + String(value('生徒氏名') || '-'),
+    '生徒番号：' + String(value('生徒番号') || '-'),
+    '校舎：' + String(value('校舎') || '-'),
+    'メール区分：' + mailType,
+    '送信元：' + source,
+    '宛先：' + String(value('メールアドレス') || '-'),
+    '状態：' + state + ' (' + event + ')',
+    '理由：' + String(value('理由') || '-'),
+    '発生：' + String(value('最終発生日時') || value('発生日時') || ''),
+    '',
+    isTemporary ? '現時点では配信完了を確認できていません。' : '保護者への配信完了を確認できていません。',
+    '不達メール管理： ' + DELIVERY_FAILURE_MANAGER_URL
+  ].join('\\n');
+}
+
+function notifyDeliveryFailureLineSafely_(upsertResult) {
+  let sheet, headers, row, resultIndex = -1;
+  try {
+    if (!upsertResult || !upsertResult.row) return {ok:true,skipped:true};
+    const settings = getDeliveryFailureLineSettings_();
+    if (!settings.configured) return {ok:true,skipped:true,reason:'line_not_configured'};
+    sheet = getDeliveryFailureSheet_();
+    headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String);
+    row = sheet.getRange(upsertResult.row,1,1,headers.length).getValues()[0];
+    const value = name => { const i=headers.indexOf(name); return i >= 0 ? row[i] : ''; };
+    const notificationKey = [String(value('管理ID')),String(value('BrevoメッセージID')),String(value('イベント種別'))].join('|');
+    const sentIndex = headers.indexOf('LINE通知済み');
+    const sentAtIndex = headers.indexOf('LINE通知日時');
+    resultIndex = headers.indexOf('LINE通知結果');
+    if (sentIndex >= 0 && String(row[sentIndex] || '') === notificationKey) return {ok:true,duplicate:true};
+    const data = callDeliveryFailureLineApi_({
+      action:'send',
+      systemPortalSessionToken:String(PropertiesService.getScriptProperties().getProperty(DELIVERY_FAILURE_LINE_SESSION_PROPERTY) || ''),
+      teacherCodes:settings.teacherCodes,
+      message:deliveryFailureLineMessage_(value),
+      imageDataUrl:'',
+      imageName:'',
+      includeCallRequest:false
+    });
+    if (sentIndex >= 0) sheet.getRange(upsertResult.row,sentIndex+1).setValue(notificationKey);
+    if (sentAtIndex >= 0) sheet.getRange(upsertResult.row,sentAtIndex+1).setValue(new Date());
+    if (resultIndex >= 0) sheet.getRange(upsertResult.row,resultIndex+1).setValue('成功 ' + Number(data.sentCount || 0) + '件');
+    return {ok:true,notified:true,sentCount:Number(data.sentCount || 0),teacherCodes:settings.teacherCodes};
+  } catch (error) {
+    try {
+      if (sheet && resultIndex >= 0 && upsertResult && upsertResult.row) sheet.getRange(upsertResult.row,resultIndex+1).setValue('失敗: ' + String(error && error.message || error).slice(0,300));
+    } catch (ignore) {}
+    Logger.log('不達メールLINE通知に失敗しました: ' + String(error && error.message || error));
+    return {ok:false,error:String(error && error.message || error)};
+  }
+}
+
+function testDeliveryFailureLine_(staff) {
+  const settings = getDeliveryFailureLineSettings_();
+  if (!settings.configured) throw new Error('LINE通知設定がまだありません');
+  const data = callDeliveryFailureLineApi_({
+    action:'send',
+    systemPortalSessionToken:String(PropertiesService.getScriptProperties().getProperty(DELIVERY_FAILURE_LINE_SESSION_PROPERTY) || ''),
+    teacherCodes:settings.teacherCodes,
+    message:'✅ 不達メールLINE通知のテストです。\\n設定者：' + staff.name + '\\n今後、入退室メール等で不達・一時エラーが発生するとこのLINEへ通知します。',
+    imageDataUrl:'',
+    imageName:'',
+    includeCallRequest:false
+  });
+  return {ok:true,sentCount:Number(data.sentCount || 0),teacherCodes:settings.teacherCodes};
 }
 
 function notifyDeliveryFailureAdministratorSafely_(upsertResult) {
@@ -577,6 +719,15 @@ function handleDeliveryFailureAdminAction_(body) {
       return {ok:true,emails:getDeliveryFailureReportEmails_(),maxRecipients:DELIVERY_FAILURE_REPORT_MAX_RECIPIENTS,staff:{name:settingsStaff.name,level:settingsStaff.level}};
     }
     return saveDeliveryFailureReportEmails_(body.emails, settingsStaff);
+  }
+  if (action === 'deliveryFailureLineSettingsGet' || action === 'deliveryFailureLineSettingsSave' || action === 'deliveryFailureLineTest') {
+    const lineStaff = verifyDeliveryStaff_(body, ['2','3','4']);
+    if (action === 'deliveryFailureLineSettingsGet') {
+      const settings = getDeliveryFailureLineSettings_();
+      return {ok:true,configured:settings.configured,teacherCodes:settings.teacherCodes,staff:{name:lineStaff.name,level:lineStaff.level}};
+    }
+    if (action === 'deliveryFailureLineSettingsSave') return saveDeliveryFailureLineSettings_(body.sessionToken, body.teacherCodes, lineStaff);
+    return testDeliveryFailureLine_(lineStaff);
   }
   const staff = verifyDeliveryStaff_(body, viewLevels);
   if (action === 'deliveryFailuresList') {
