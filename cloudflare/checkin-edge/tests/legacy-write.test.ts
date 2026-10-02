@@ -56,8 +56,8 @@ describe("postLegacyCheckin", () => {
     }, fetcher);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(LEGACY_WRITE_TIMEOUT_MS).toBe(120_000);
-    expect(timeout).toHaveBeenCalledWith(120_000);
+    expect(LEGACY_WRITE_TIMEOUT_MS).toBe(300_000);
+    expect(timeout).toHaveBeenCalledWith(300_000);
     expect(result.totalPoints).toBe(12);
     timeout.mockRestore();
   });

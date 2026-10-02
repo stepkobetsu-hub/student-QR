@@ -111,7 +111,7 @@ interface RosterRefreshRow {
 }
 
 const LEGACY_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000];
-export const LEGACY_WRITE_TIMEOUT_MS = 120_000;
+export const LEGACY_WRITE_TIMEOUT_MS = 300_000;
 export const LEGACY_ALARM_MAX_ITEMS = 8;
 export const LEGACY_ALARM_TIME_BUDGET_MS = 4 * 60_000;
 const APPS_SCRIPT_RECEIPT_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|qr-[a-z0-9-]{10,80})$/i;
