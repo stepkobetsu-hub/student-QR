@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { appsScriptReceiptId, LEGACY_WRITE_TIMEOUT_MS, postLegacyCheckin } from "../src/checkin-do";
+import {
+  appsScriptReceiptId,
+  LEGACY_BUSY_RETRY_DELAY_MS,
+  LEGACY_WRITE_TIMEOUT_MS,
+  legacyRetryDelayMs,
+  postLegacyCheckin,
+} from "../src/checkin-do";
 
 describe("appsScriptReceiptId", () => {
   it("keeps receipt IDs already accepted by Apps Script", async () => {
@@ -114,5 +120,17 @@ describe("postLegacyCheckin", () => {
       receiptId: "legacy-probe-receipt",
       probe: true,
     });
+  });
+});
+
+describe("legacyRetryDelayMs", () => {
+  it("keeps Apps Script lock contention on a short retry cadence", () => {
+    expect(legacyRetryDelayMs("BUSY", 1)).toBe(LEGACY_BUSY_RETRY_DELAY_MS);
+    expect(legacyRetryDelayMs("BUSY", 8)).toBe(LEGACY_BUSY_RETRY_DELAY_MS);
+  });
+
+  it("retains exponential backoff for other failures", () => {
+    expect(legacyRetryDelayMs("CHECKIN_WRITE_FAILED", 1)).toBe(5_000);
+    expect(legacyRetryDelayMs("CHECKIN_WRITE_FAILED", 5)).toBe(15 * 60_000);
   });
 });

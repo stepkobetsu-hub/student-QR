@@ -111,9 +111,18 @@ interface RosterRefreshRow {
 }
 
 const LEGACY_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000];
+export const LEGACY_BUSY_RETRY_DELAY_MS = 15_000;
 export const LEGACY_WRITE_TIMEOUT_MS = 300_000;
 export const LEGACY_ALARM_MAX_ITEMS = 8;
 export const LEGACY_ALARM_TIME_BUDGET_MS = 4 * 60_000;
+
+export function legacyRetryDelayMs(message: string, attempts: number): number {
+  // Apps Script returns BUSY while its short-lived document lock is held. A
+  // long exponential delay turns a few seconds of contention into a visible
+  // check-in/mail backlog, so keep this particular retry close to the lock.
+  if (message === "BUSY") return LEGACY_BUSY_RETRY_DELAY_MS;
+  return LEGACY_RETRY_DELAYS_MS[Math.min(attempts - 1, LEGACY_RETRY_DELAYS_MS.length - 1)];
+}
 const APPS_SCRIPT_RECEIPT_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|qr-[a-z0-9-]{10,80})$/i;
 
 export async function appsScriptReceiptId(receiptId: string): Promise<string> {
@@ -503,9 +512,8 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       console.log(JSON.stringify({ event: "legacy_checkin_committed", receiptId: item.receipt_id }));
     } catch (error) {
       const attempts = item.attempts + 1;
-      const delay = LEGACY_RETRY_DELAYS_MS[Math.min(attempts - 1, LEGACY_RETRY_DELAYS_MS.length - 1)];
-      const nextAttemptAt = Date.now() + delay;
       const message = error instanceof Error ? error.message : "CHECKIN_WRITE_FAILED";
+      const nextAttemptAt = Date.now() + legacyRetryDelayMs(message, attempts);
       this.ctx.storage.sql.exec(
         `UPDATE legacy_outbox
          SET attempts = ?, next_attempt_at = ?, last_error = ?
