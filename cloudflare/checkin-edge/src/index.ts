@@ -111,7 +111,7 @@ export default {
           ok: true,
           service: "step-checkin-edge",
           environment: env.ENVIRONMENT,
-          build: "2026-09-10-attendance-type-source",
+          build: "2026-10-02-legacy-outbox-recovery",
         }, 200, origin, env);
       }
       if (request.method === "GET" && (url.pathname === "/legacy-tablet" || url.pathname === "/legacy-tablet/")) {

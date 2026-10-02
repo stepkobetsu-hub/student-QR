@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { appsScriptReceiptId, postLegacyCheckin } from "../src/checkin-do";
+import { appsScriptReceiptId, LEGACY_WRITE_TIMEOUT_MS, postLegacyCheckin } from "../src/checkin-do";
 
 describe("appsScriptReceiptId", () => {
   it("keeps receipt IDs already accepted by Apps Script", async () => {
@@ -19,6 +19,7 @@ describe("appsScriptReceiptId", () => {
 
 describe("postLegacyCheckin", () => {
   it("sends a legacy tablet receipt in the format accepted by Apps Script", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(init?.headers).toEqual({ "Content-Type": "text/plain;charset=utf-8" });
@@ -55,7 +56,10 @@ describe("postLegacyCheckin", () => {
     }, fetcher);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(LEGACY_WRITE_TIMEOUT_MS).toBe(120_000);
+    expect(timeout).toHaveBeenCalledWith(120_000);
     expect(result.totalPoints).toBe(12);
+    timeout.mockRestore();
   });
 
   it("retries when Apps Script has not saved attendance", async () => {

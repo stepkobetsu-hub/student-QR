@@ -111,6 +111,9 @@ interface RosterRefreshRow {
 }
 
 const LEGACY_RETRY_DELAYS_MS = [5_000, 15_000, 60_000, 5 * 60_000, 15 * 60_000];
+export const LEGACY_WRITE_TIMEOUT_MS = 120_000;
+export const LEGACY_ALARM_MAX_ITEMS = 8;
+export const LEGACY_ALARM_TIME_BUDGET_MS = 4 * 60_000;
 const APPS_SCRIPT_RECEIPT_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f-]{27,36}|qr-[a-z0-9-]{10,80})$/i;
 
 export async function appsScriptReceiptId(receiptId: string): Promise<string> {
@@ -145,7 +148,11 @@ export async function postLegacyCheckin(
       retry: item.attempts > 0,
       attendanceType: item.attendanceType,
     }),
-    signal: AbortSignal.timeout(20_000),
+    // Apps Script can legitimately take longer than 20 seconds while reading the
+    // attendance sheets.  Aborting that request starts the long retry schedule
+    // even though the script may still commit the receipt.  Keep the stable
+    // receipt ID and allow enough time for the authoritative write to answer.
+    signal: AbortSignal.timeout(LEGACY_WRITE_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`CHECKIN_WRITE_HTTP_${response.status}`);
   const result = await response.json<Record<string, unknown>>();
@@ -439,12 +446,27 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
   }
 
   async alarm(): Promise<void> {
-    const item = this.oldestOutbox();
-    if (!item) return;
-    if (item.next_attempt_at > Date.now()) {
-      await this.ctx.storage.setAlarm(item.next_attempt_at);
-      return;
+    const startedAt = Date.now();
+    let processed = 0;
+    while (processed < LEGACY_ALARM_MAX_ITEMS && Date.now() - startedAt < LEGACY_ALARM_TIME_BUDGET_MS) {
+      const item = this.oldestOutbox();
+      if (!item || item.next_attempt_at > Date.now()) break;
+      await this.processLegacyOutboxItem(item);
+      processed += 1;
     }
+    await this.scheduleOldestOutbox();
+    const remaining = this.ctx.storage.sql.exec<{ count: number }>(
+      "SELECT COUNT(*) AS count FROM legacy_outbox",
+    ).toArray()[0]?.count ?? 0;
+    console.log(JSON.stringify({
+      event: "legacy_outbox_drain",
+      processed,
+      remaining,
+      durationMs: Date.now() - startedAt,
+    }));
+  }
+
+  private async processLegacyOutboxItem(item: LegacyOutboxRow): Promise<void> {
     try {
       const writeUrl = this.env.CHECKIN_WRITE_URL;
       const writeAction = this.env.CHECKIN_WRITE_ACTION || "checkIn";
@@ -495,7 +517,6 @@ export class CampusCheckin extends DurableObject<CheckinEnv> {
       );
       console.error(JSON.stringify({ event: "legacy_checkin_retry", receiptId: item.receipt_id, attempts, code: message }));
     }
-    await this.scheduleOldestOutbox();
   }
 
   private legacyWriteEnabled(): boolean {
