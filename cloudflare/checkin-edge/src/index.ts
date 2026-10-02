@@ -201,11 +201,20 @@ export default {
           return json({ ok: false, code: "UNAUTHORIZED" }, 401, origin, env);
         }
         const alternate = alternateCampus(campus);
+        const stub = env.CAMPUS_CHECKIN.getByName(campus);
+        const alternateStub = alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined;
         const status = await getLegacyStatusWithCampusFallback(
-          env.CAMPUS_CHECKIN.getByName(campus),
+          stub,
           body.receiptId,
-          alternate ? env.CAMPUS_CHECKIN.getByName(alternate) : undefined,
+          alternateStub,
         );
+        if (status.ok && (status.state === "PENDING" || status.state === "RETRYING")) {
+          ctx.waitUntil(scheduleLegacyOutboxes(
+            alternateStub ? [stub, alternateStub] : [stub],
+            campus,
+            body.receiptId,
+          ));
+        }
         return json(receiptStatusClientResponse(status), status.ok ? 200 : 404, origin, env);
       }
       if (request.method === "POST" && url.pathname === "/v1/admin/sync-roster") {
