@@ -221,7 +221,8 @@ function handleBrevoWebhook_(body, rawBody, diagnostic) {
       updateWebhookDiagnostic_(diagnostic, { result:'重複イベント', error:'' });
       return { ok: true, duplicate: true };
     }
-    updateDeliveryLogFromWebhook_(logRecord, event, eventDate, String(body.reason || body.error || ''), email, messageId);
+    const applied = updateDeliveryLogFromWebhook_(logRecord, event, eventDate, String(body.reason || body.error || ''), email, messageId);
+    if (applied && applied.ignored) return { ok:true, ignored:true };
     if (event === 'delivered') {
       updateDeliveredFailureRecords_(email, messageId, eventDate, logRecord);
       updateWebhookDiagnostic_(diagnostic, { result:'配信完了へ更新', error:'' });
@@ -575,7 +576,9 @@ function updateDeliveryLogFromWebhook_(record, event, eventDate, reason, recipie
   const state = deliveryDisplayState_(event);
   const set = (header, value) => { const idx = record.headers.indexOf(header); if (idx >= 0) record.sheet.getRange(record.row, idx + 1).setValue(value); };
   const receiptId = String(deliveryLogValue_(record, '受付ID') || '').trim();
-  if (receiptId && typeof updateCheckInRecipientDeliveryState_ === 'function' && updateCheckInRecipientDeliveryState_(receiptId, recipient, messageId, event, eventDate, reason)) {
+  const recipientUpdate = receiptId && typeof updateCheckInRecipientDeliveryState_ === 'function' && updateCheckInRecipientDeliveryState_(receiptId, recipient, messageId, event, eventDate, reason);
+  if (recipientUpdate && recipientUpdate.ignored) return recipientUpdate;
+  if (recipientUpdate) {
     set('最終イベント日時', eventDate); set('配信状態更新日時', new Date());
     if (event === 'delivered') set('最終配信成功日時', eventDate);
     if (event !== 'delivered') set('最終エラー理由', reason);
@@ -636,7 +639,7 @@ function deliveryFailureDateOrNull_(value) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function getDeliveryEmailStopDecision_(email, claimRetry) {
+function getDeliveryEmailStopDecision_(email, claimRetry, provider) {
   const normalized = normalizeDeliveryEmail_(email);
   const sheet = getDeliveryFailureSheet_();
   if (sheet.getLastRow() < 2) return { stopped:false, kind:'none', retryAt:null };
@@ -657,6 +660,9 @@ function getDeliveryEmailStopDecision_(email, claimRetry) {
     if (state === '手動停止') manualStop = true;
     if (DELIVERY_IMMEDIATE_STOP_EVENTS.indexOf(event) >= 0) permanentStop = true;
     if (DELIVERY_TEMP_EVENTS.indexOf(event) >= 0 && state !== '手動停止') {
+      // A Brevo temporary suppression must not block a new Postmark pilot notification.
+      // Manual/permanent stops above still apply across all providers.
+      if (provider === 'POSTMARK' && String(row[7] || '').indexOf('postmark:') !== 0) return;
       tempRows.push(index + 2);
       const errorAt = deliveryFailureDateOrNull_(row[31] || row[2]);
       const retryAt = deliveryFailureDateOrNull_(row[33]);
@@ -685,8 +691,8 @@ function isDeliveryEmailStopped_(email) {
   return getDeliveryEmailStopDecision_(email, false).stopped;
 }
 
-function claimDeliveryEmailSendDecision_(email) {
-  return getDeliveryEmailStopDecision_(email, true);
+function claimDeliveryEmailSendDecision_(email, provider) {
+  return getDeliveryEmailStopDecision_(email, true, provider);
 }
 
 function isDeliveryFailureAdminAction_(action) { return DELIVERY_ADMIN_ACTIONS.indexOf(String(action || '')) >= 0; }
