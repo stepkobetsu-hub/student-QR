@@ -139,6 +139,8 @@ function doPost(e) {
       result = handlePointManagerApiAction_(body);
     } else if (typeof isMyQrApiAction_ === 'function' && isMyQrApiAction_(action)) {
       result = handleMyQrApiAction_(body);
+    } else if (typeof isPostmarkWebhookCandidate_ === 'function' && isPostmarkWebhookCandidate_(e, body)) {
+      result = handlePostmarkWebhookRequest_(e, body);
     } else if (typeof isBrevoWebhookRequest_ === 'function' && isBrevoWebhookRequest_(e, body)) {
       result = handleBrevoWebhook_(body, rawBody);
     } else if (action === 'getTeacherBadgeRoster') {
@@ -1557,7 +1559,7 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
   recipients.forEach(recipient => {
     if (recipient.status === 'SENT') return;
     const stopDecision = typeof claimDeliveryEmailSendDecision_ === 'function'
-      ? claimDeliveryEmailSendDecision_(recipient.email)
+      ? claimDeliveryEmailSendDecision_(recipient.email, typeof postmarkPilotEligible_ === 'function' && postmarkPilotEligible_(recipient.email, String(row[8]), row[9]) ? 'POSTMARK' : '')
       : { stopped:isDeliveryEmailStopped_(recipient.email), kind:'legacy', retryAt:null };
     if (stopDecision.stopped) {
       recipient.status = 'STOPPED';
@@ -1570,8 +1572,8 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
     recipient.error = '';
     recipient.status = 'PROCESSING';
     const route = getCheckInMailConfigStatus_();
-    recipient.provider = route.provider || 'BREVO';
-    if (route.provider === 'MAILAPP_FALLBACK') {
+    recipient.provider = typeof postmarkPilotEligible_ === 'function' && postmarkPilotEligible_(recipient.email, String(row[8]), row[9]) ? 'POSTMARK' : (route.provider || 'BREVO');
+    if (recipient.provider === 'MAILAPP_FALLBACK') {
       if (recipient.mailAppAttemptedAt) {
         recipient.status = 'STOPPED';
         recipient.error = 'MAILAPP_DELIVERY_UNCERTAIN: MailApp送信済みの可能性があるため再送を停止';
@@ -1590,11 +1592,11 @@ function processCheckInMailQueueRow_(sheet, rowNumber, row) {
       recipient.correlationId = sent && sent.correlationId || '';
       recipient.provider = sent && sent.provider || recipient.provider;
       recipient.error = sent && sent.error ? String(sent.errorCode || 'BREVO_SEND_FAILED') + ': ' + sanitizeCheckInError_(sent.error) : '';
-      if (recipient.provider === 'MAILAPP_FALLBACK' && recipient.status === 'FAILED') recipient.status = 'STOPPED';
+      if ((recipient.provider === 'MAILAPP_FALLBACK' || (recipient.provider === 'POSTMARK' && sent && sent.retrySafe === false)) && recipient.status === 'FAILED') recipient.status = 'STOPPED';
     } catch (error) {
       if (recipient.provider === 'MAILAPP_FALLBACK') recipient.mailAppCompletedAt = new Date().toISOString();
       const cleanError = sanitizeCheckInError_(error);
-      recipient.status = 'FAILED'; recipient.error = (/timed?\s*out/i.test(cleanError) ? 'BREVO_API_TIMEOUT' : 'BREVO_SEND_FAILED') + ': ' + cleanError;
+      recipient.status = recipient.provider === 'POSTMARK' ? 'STOPPED' : 'FAILED'; recipient.error = (recipient.provider === 'POSTMARK' ? 'POSTMARK_DELIVERY_UNCERTAIN' : (/timed?\s*out/i.test(cleanError) ? 'BREVO_API_TIMEOUT' : 'BREVO_SEND_FAILED')) + ': ' + cleanError;
     }
     row[10] = JSON.stringify(recipients); row[2] = new Date();
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
@@ -1915,16 +1917,18 @@ function updateCheckInRecipientDeliveryState_(receiptId, email, messageId, event
   let recipients;
   try { recipients = JSON.parse(String(row[10] || '[]')); } catch (ignore) { return false; }
   let changed = false;
+  let ignored = false;
   recipients.forEach(recipient => {
     const recipientMessageId = typeof normalizeBrevoMessageId_ === 'function' ? normalizeBrevoMessageId_(recipient.messageId) : String(recipient.messageId || '').trim();
-    if ((normalizedMessageId && recipientMessageId === normalizedMessageId) || (normalizedEmail && String(recipient.email || '').trim().toLowerCase() === normalizedEmail)) {
+    if ((normalizedMessageId ? recipientMessageId === normalizedMessageId : (normalizedEmail && String(recipient.email || '').trim().toLowerCase() === normalizedEmail))) {
+      if (typeof shouldApplyDeliveryEvent_ === 'function' && !shouldApplyDeliveryEvent_(recipient.deliveryEvent, recipient.deliveryEventAt, event, eventDate)) { ignored = true; return; }
       recipient.deliveryEvent = String(event || '');
       recipient.deliveryEventAt = eventDate instanceof Date ? eventDate.toISOString() : String(eventDate || '');
       recipient.deliveryError = String(reason || '').slice(0, 500);
       changed = true;
     }
   });
-  if (!changed) return false;
+  if (!changed) return ignored ? { ignored:true } : false;
   row[10] = JSON.stringify(recipients);
   row[2] = new Date();
   queue.getRange(match.getRow(), 1, 1, row.length).setValues([row]);
@@ -2181,6 +2185,8 @@ function maskEmailDomain_(email) {
 
 function checkInMailErrorCode_(value) {
   const text = String(value || '');
+  const postmark = text.match(/POSTMARK_[A-Z_]+/);
+  if (postmark) return postmark[0];
   const known = ['MAILAPP_FALLBACK_ACTIVE','MAILAPP_SEND_FAILED','MAILAPP_DELIVERY_UNCERTAIN','BREVO_API_KEY_MISSING','MAIL_QUEUE_CREATE_FAILED','MAIL_WORKER_NOT_RUNNING','BREVO_AUTH_FAILED','BREVO_SEND_REJECTED','SENDER_CONFIG_INVALID','RECIPIENT_INVALID','PHOTO_PROCESS_FAILED','BREVO_API_TIMEOUT','TEACHER_EMAIL_INVALID','BREVO_SEND_FAILED'];
   for (let i = 0; i < known.length; i++) if (text.indexOf(known[i]) >= 0) return known[i];
   return text ? 'BREVO_SEND_FAILED' : '';
@@ -2307,6 +2313,13 @@ function sendCheckInEmail_(studentName, guardianEmail, photoBase64, type, now, r
     options.attachmentName = studentName + '_' + type + '_' + Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMdd_HHmm') + '.jpg';
   }
 
+  if (typeof postmarkPilotEligible_ === 'function' && postmarkPilotEligible_(guardianEmail, type, now)) {
+    const sent = sendEmailViaPostmarkPilot_(guardianEmail, subject, htmlBody, options);
+    if (sent.errorCode !== 'POSTMARK_PILOT_BUDGET_EXHAUSTED') return sent;
+    // Budget rejection occurs before a request/reservation: only this definitely-unsent case may use Brevo.
+    const stop = typeof claimDeliveryEmailSendDecision_ === 'function' ? claimDeliveryEmailSendDecision_(guardianEmail) : { stopped:true };
+    if (stop.stopped) return postmarkPilotFailure_('POSTMARK_BUDGET_BREVO_STOPPED', options.correlationId);
+  }
   return sendEmailViaBrevo(guardianEmail, subject, htmlBody, options);
 }
 
